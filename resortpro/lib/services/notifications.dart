@@ -219,6 +219,9 @@ class UserNotifications extends ChangeNotifier {
 
   int get unreadCount => items.where((n) => n['is_read'] != true).length;
 
+  /// Pinakabagong dumating na notification (realtime). Ginagamit ng in-app banner.
+  final ValueNotifier<Map<String, dynamic>?> latest = ValueNotifier(null);
+
   /// Simulan pagka-login: load, realtime, at background check.
   Future<void> start() async {
     final uid = _db.auth.currentUser?.id;
@@ -293,12 +296,19 @@ class UserNotifications extends ChangeNotifier {
             notifyListeners();
 
             final id = (row['id'] as num?)?.toInt() ?? 0;
-            await LocalNotifier.show(
-              id: id % 100000,
-              title: notificationTitle(row),
-              body: notificationBody(row),
-              payload: 'notification:$id',
-            );
+            final foreground =
+                WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+            if (foreground) {
+              // Bukas ang app: in-app banner ang lalabas (hindi na phone notification).
+              latest.value = row;
+            } else {
+              await LocalNotifier.show(
+                id: id % 100000,
+                title: notificationTitle(row),
+                body: notificationBody(row),
+                payload: 'notification:$id',
+              );
+            }
             await _saveLastId(uid, id);
           },
         )

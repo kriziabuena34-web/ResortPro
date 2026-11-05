@@ -1,0 +1,59 @@
+# Libreng hosting ng ResortPro Admin sa GitHub Pages.
+# Tuwing may push sa "main" na may binago sa resortpro_admin/, kusang ibi-build
+# at ia-upload ang admin. Makikita sa:
+#   https://kriziabuena34-web.github.io/ResortPro/
+name: Deploy Admin to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'resortpro_admin/**'
+      - '.github/workflows/deploy-admin.yml'
+  workflow_dispatch: # para ma-run nang mano-mano sa Actions tab
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: resortpro_admin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.4 # kapareho ng nasa computer
+          cache: true
+
+      - run: flutter pub get
+
+      # Ang base-href ay pangalan ng repo (dahil nasa /ResortPro/ ang site).
+      - run: flutter build web --release --base-href /ResortPro/
+
+      # Para hindi mag-404 kapag ni-refresh ang page.
+      - run: cp build/web/index.html build/web/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: resortpro_admin/build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

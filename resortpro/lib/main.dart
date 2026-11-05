@@ -1,31 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'config.dart';
-import 'screens/home_page.dart';
-import 'screens/sign_in_page.dart';
-import 'services/notifications.dart';
+import 'screens/splash_screen.dart';
+import 'theme/app_theme.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await Supabase.initialize(
-    url: supabaseUrl,
-    anonKey: supabaseAnonKey,
-  );
-
-  // Phone notifications + background check (gumagana kahit sarado ang app)
-  try {
-    await LocalNotifier.init();
-    await BackgroundCheck.initialize();
-  } catch (_) {
-    // Hindi dapat pigilan ng notification setup ang pagbukas ng app.
-  }
-
+  // Ang loading screen na ang mag-i-initialize ng Supabase at notifications,
+  // habang ipinapakita ang progress (alon + life ring).
   runApp(const MyApp());
 }
 
-final supabase = Supabase.instance.client;
+SupabaseClient get supabase => Supabase.instance.client;
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -35,16 +21,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'ResortPro',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.teal,
-        ),
-        useMaterial3: true,
-      ),
-      // Kapag naka-login pa, diretso na sa home (hal. galing sa notification).
-      home: Supabase.instance.client.auth.currentSession != null
-          ? const HomePage()
-          : const SignInPage(),
+      // Iisang design system kasama ng admin panel.
+      theme: buildAppTheme(),
+      home: const SplashScreen(),
     );
   }
 }

@@ -1,22 +1,15 @@
 import 'package:flutter/material.dart';
 
-class DataPrivacyPage extends StatelessWidget {
-  const DataPrivacyPage({super.key});
+/// Laman ng Data Privacy (RA 10173). Ipinapakita sa Terms & Conditions page,
+/// sa tab na "Data Privacy".
+class DataPrivacyContent extends StatelessWidget {
+  const DataPrivacyContent({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Terms & Data Privacy')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+    return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'ResortPro Terms & Data Privacy',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
             const Text(
               'In compliance with the Data Privacy Act of 2012 (Republic Act No. 10173)',
               style: TextStyle(fontSize: 13, color: Colors.grey, fontStyle: FontStyle.italic),
@@ -113,7 +106,7 @@ class DataPrivacyPage extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: const Color(0xFFEDF7F5),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
@@ -122,10 +115,7 @@ class DataPrivacyPage extends StatelessWidget {
                 style: TextStyle(fontSize: 12.5, height: 1.4),
               ),
             ),
-            const SizedBox(height: 40),
           ],
-        ),
-      ),
     );
   }
 

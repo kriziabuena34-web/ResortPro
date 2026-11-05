@@ -4,7 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../l10n/app_strings.dart';
 import '../../services/admin_data.dart';
 import '../../services/booking_workflow.dart';
+import '../../services/receipt.dart';
 import '../../widgets/admin_widgets.dart';
+import '../../widgets/payment_entry.dart';
 
 /// Gumawa ng booking para sa walk-in o phone na guest (pwedeng walang account).
 /// Ibinabalik ang true kapag na-save.
@@ -48,7 +50,7 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
   final _eventType = TextEditingController();
   final _total = TextEditingController();
   final _payment = TextEditingController(text: '0');
-  String _method = 'cash';
+  PaymentDetails _payDetails = const PaymentDetails(method: 'cash');
   final _notes = TextEditingController();
 
   bool _saving = false;
@@ -66,6 +68,14 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
 
   Map<String, dynamic>? get _package =>
       _packageId == null ? null : widget.data.packageById(_packageId);
+
+  String _guestDisplayName() {
+    if (!_existingClient) return _guestName.text.trim();
+    final c = widget.data.clients.where((c) => '${c['id']}' == _clientId).firstOrNull;
+    if (c == null) return '—';
+    final name = '${c['google_display_name'] ?? '${c['first_name'] ?? ''} ${c['last_name'] ?? ''}'}'.trim();
+    return name.isEmpty ? '—' : name;
+  }
 
   Future<void> _checkAvailability() async {
     final pkg = _package;
@@ -155,6 +165,11 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
       setState(() => _error = tr('overBalance', {'amount': peso(total)}));
       return;
     }
+    final payError = _payDetails.validate(paid);
+    if (payError != null) {
+      setState(() => _error = tr(payError));
+      return;
+    }
 
     setState(() => _saving = true);
     try {
@@ -178,24 +193,59 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
           .select()
           .single();
 
+      final d = _payDetails;
+      Map<String, dynamic>? payment;
       if (paid > 0) {
-        await supabase.from('payments').insert({
-          'booking_id': booking['id'],
-          'amount': paid,
-          'method': _method,
-          'kind': fullyPaid ? 'balance' : 'downpayment',
-          'received_by': supabase.auth.currentUser?.id,
-          'status': 'verified',
-        });
+        payment = await supabase
+            .from('payments')
+            .insert({
+              'booking_id': booking['id'],
+              'amount': paid,
+              'method': d.method,
+              'kind': fullyPaid ? 'balance' : 'downpayment',
+              'received_by': supabase.auth.currentUser?.id,
+              'status': 'verified',
+              if (!d.isCash) 'reference_no': d.reference,
+            })
+            .select()
+            .single();
       }
 
       await BookingWorkflow.log(
         booking['id'],
         'created',
         toStatus: '${booking['status']}',
-        note: '${sourceLabel(_source)}${paid > 0 ? ' · ${peso(paid)} ${methodLabel(_method)}' : ''}',
+        note: [
+          sourceLabel(_source),
+          if (paid > 0) '${peso(paid)} ${methodLabel(d.method)}',
+          if (!d.isCash && d.reference.isNotEmpty) 'Ref ${d.reference}',
+          if (d.isCash && d.cashReceived != null)
+            '${tr('peCashReceived')} ${peso(d.cashReceived!)}, ${tr('rcChange')} ${peso(d.changeFor(paid))}',
+        ].join(' · '),
       );
 
+      if (!mounted) return;
+      // Resibo (kapag may bayad)
+      if (payment != null) {
+        await showPaymentReceipt(
+          context,
+          PaymentReceipt(
+            paymentId: payment['id'],
+            date: DateTime.now(),
+            guest: _guestDisplayName(),
+            packageName: '${pkg['name']}',
+            bookingDate: _date,
+            source: _source,
+            amount: paid,
+            method: d.method,
+            reference: d.isCash ? '' : d.reference,
+            cashReceived: d.isCash ? d.cashReceived : null,
+            totalAmount: total,
+            paidSoFar: paid,
+            staff: supabase.auth.currentUser?.email ?? 'Admin',
+          ),
+        );
+      }
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
@@ -401,21 +451,18 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                       controller: _payment,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(labelText: tr('nbPaidNow'), prefixText: '₱ '),
+                      onChanged: (_) => setState(() {}),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: _method,
-                decoration: InputDecoration(labelText: tr('paymentMethod')),
-                items: const [
-                  DropdownMenuItem(value: 'cash', child: Text('Cash')),
-                  DropdownMenuItem(value: 'gcash', child: Text('GCash')),
-                  DropdownMenuItem(value: 'maya', child: Text('Maya')),
-                ],
-                onChanged: (v) => setState(() => _method = v ?? 'cash'),
-              ),
+              // Paraan ng bayad: Cash (may sukli) / GCash / Maya (may reference number)
+              if ((double.tryParse(_payment.text.replaceAll(',', '')) ?? 0) > 0)
+                PaymentEntry(
+                  amount: double.tryParse(_payment.text.replaceAll(',', '')) ?? 0,
+                  onChanged: (d) => _payDetails = d,
+                ),
               const SizedBox(height: 12),
               TextField(
                 controller: _notes,

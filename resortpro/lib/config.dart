@@ -16,3 +16,13 @@ const mayaNumber = '09628828792';
 
 /// Ilang porsyento ng total ang kailangang downpayment.
 const downpaymentRate = 0.5;
+
+// ---------------------------------------------------------------------------
+// Lokasyon ng resort para sa Resort Map.
+// Ang nakalagay ay gitna ng Brgy. Maulawin, Pagsanjan (galing sa PhilAtlas).
+// Para sa eksaktong pin: buksan ang Google Maps, i-long press ang resort,
+// at kopyahin dito ang dalawang numero (latitude, longitude).
+// ---------------------------------------------------------------------------
+const resortLatitude = 14.2697;
+const resortLongitude = 121.4538;
+const resortAddress = 'Brgy. Maulawin, Tramo St., Pagsanjan, Laguna';

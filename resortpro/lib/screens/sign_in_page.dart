@@ -1,11 +1,18 @@
+import 'dart:async';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_page.dart';
-import 'data_privacy_page.dart';
+import 'info_pages.dart';
+import '../theme/app_theme.dart';
 
 class SignInPage extends StatefulWidget {
-  const SignInPage({super.key});
+  const SignInPage({super.key, this.openAccountPicker = false});
+
+  /// True kapag galing sa "Switch Account": kusang ipapakita ang Google account picker.
+  final bool openAccountPicker;
 
   @override
   State<SignInPage> createState() => _SignInPageState();
@@ -23,19 +30,43 @@ class _SignInPageState extends State<SignInPage> {
   static bool _googleInitialized = false;
 
   // ---------- EASY SETTINGS ----------
-  // Logo opacity: 1.0 = solid, lower = more see-through
-  static const double _logoOpacity = 1.0;
-  // Logo corner radius: 0 = sharp corners, bigger = rounder
-  static const double _logoCornerRadius = 30;
-  // Logo size
-  static const double _logoWidth = 300;
-  static const double _logoHeight = 220;
-  // Photo darkness: lower = brighter photo
-  static const double _gradientTopAlpha = 0.35;
-  static const double _gradientBottomAlpha = 0.75;
-  // Welcome card opacity: 1.0 = solid, lower = more see-through
-  static const double _cardAlpha = 0.0;
+  // Laki ng logo (bilog)
+  static const double _logoSize = 150;
+  // Dilim ng litrato: mas mababa = mas maliwanag
+  static const double _gradientTopAlpha = 0.25;
+  static const double _gradientBottomAlpha = 0.88;
+  // Ilang segundo bago lumipat ang litrato
+  static const int _slideSeconds = 5;
   // -----------------------------------
+
+  // Litrato ng resort para sa slideshow. Uunahin ang Gallery ng admin
+  // (kapag may "show on landing"), tapos ang mga litratong kasama ng app.
+  List<ImageProvider> _slides = const [
+    AssetImage('assets/images/pic1.jpg'),
+    AssetImage('assets/images/pic2.jpg'),
+    AssetImage('assets/images/pic3.jpg'),
+    AssetImage('assets/images/pic4.jpg'),
+    AssetImage('assets/images/pool.jpg'),
+  ];
+
+  Future<void> _loadGallery() async {
+    try {
+      final rows = await supabase
+          .from('gallery_images')
+          .select('image_url')
+          .eq('show_on_landing', true)
+          .order('sort_order')
+          .limit(6);
+      final urls = [
+        for (final r in rows)
+          if ('${r['image_url'] ?? ''}'.isNotEmpty) '${r['image_url']}',
+      ];
+      if (urls.isEmpty || !mounted) return;
+      setState(() => _slides = [for (final u in urls) NetworkImage(u), ..._slides]);
+    } catch (_) {
+      // Walang internet o gallery: mananatili ang mga litrato ng app.
+    }
+  }
 
   Future<void> _ensureGoogleInitialized() async {
     if (_googleInitialized) return;
@@ -71,6 +102,15 @@ class _SignInPageState extends State<SignInPage> {
     return 'Sign-in failed: $e';
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _loadGallery();
+    if (widget.openAccountPicker) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _handleGoogleSignIn());
+    }
+  }
+
   Future<void> _handleGoogleSignIn() async {
     setState(() => _isSigningIn = true);
 
@@ -99,6 +139,8 @@ class _SignInPageState extends State<SignInPage> {
         );
       }
     } on GoogleSignInException catch (e) {
+      // Isinara lang ang account picker (pinindot sa labas o Back): walang error na ipapakita.
+      if (e.code == GoogleSignInExceptionCode.canceled) return;
       _showMessage(_friendlyGoogleError(e));
     } catch (e) {
       _showMessage('Sign-in failed: $e');
@@ -115,23 +157,20 @@ class _SignInPageState extends State<SignInPage> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // BACKGROUND PHOTO
-          Image.asset(
-            'assets/images/pool.jpg',
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) =>
-                Container(color: colorScheme.primary),
-          ),
+          // BACKGROUND: SLIDESHOW NG RESORT (dahan-dahang zoom at palit)
+          _ResortSlideshow(images: _slides, seconds: _slideSeconds),
 
-          // DARK GRADIENT OVERLAY (keeps the text readable)
+          // GRADIENT OVERLAY (para mabasa ang text)
           DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
+                stops: const [0, 0.45, 1],
                 colors: [
-                  Colors.black.withValues(alpha: _gradientTopAlpha),
-                  Colors.black.withValues(alpha: _gradientBottomAlpha),
+                  AppColors.ink.withValues(alpha: _gradientTopAlpha),
+                  AppColors.ink.withValues(alpha: 0.15),
+                  AppColors.ink.withValues(alpha: _gradientBottomAlpha),
                 ],
               ),
             ),
@@ -147,47 +186,46 @@ class _SignInPageState extends State<SignInPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // LOGO (transparent PNG, no frame)
-                          ClipRRect(
-                            borderRadius:
-                            BorderRadius.circular(_logoCornerRadius),
-                            child: Opacity(
-                              opacity: _logoOpacity,
-                              child: Image.asset(
-                                'assets/images/backless.png',
-                                width: _logoWidth,
-                                height: _logoHeight,
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) =>
-                                const SizedBox(
-                                  width: _logoWidth,
-                                  height: _logoHeight,
-                                  child: Icon(
-                                    Icons.hotel,
-                                    color: Colors.white,
-                                    size: 64,
-                                  ),
-                                ),
-                              ),
+                          // LOGO sa puting bilog (para lumabas ang puting letra ng logo)
+                          Container(
+                            width: _logoSize,
+                            height: _logoSize,
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white,
+                              boxShadow: [
+                                BoxShadow(color: Color(0x66000000), blurRadius: 30, offset: Offset(0, 12)),
+                              ],
+                            ),
+                            child: Image.asset(
+                              'assets/images/backless.png',
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const Icon(Icons.hotel, color: AppColors.primary, size: 64),
                             ),
                           ),
-                          const SizedBox(height: 1),
+                          const SizedBox(height: 18),
                           const Text(
                             'ResortPro',
                             style: TextStyle(
-                              color: Colors.tealAccent,
+                              color: Colors.white,
                               fontSize: 34,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                              shadows: [Shadow(color: Color(0x88000000), blurRadius: 12)],
                             ),
                           ),
-                          const SizedBox(height: 1),
-                          Text(
+                          const SizedBox(height: 2),
+                          const Text(
                             'Your booking companion',
                             style: TextStyle(
-                              color: Colors.tealAccent.withValues(alpha: 0.85),
-                              fontSize: 16,
+                              color: AppColors.accent,
+                              fontSize: 15,
                               fontStyle: FontStyle.italic,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.3,
+                              shadows: [Shadow(color: Color(0x88000000), blurRadius: 10)],
                             ),
                           ),
                         ],
@@ -196,15 +234,20 @@ class _SignInPageState extends State<SignInPage> {
                   ),
                 ),
 
-                // BOTTOM: WELCOME CARD
-                Container(
+                // BOTTOM: WELCOME CARD (dark glass)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                      child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+                  padding: const EdgeInsets.fromLTRB(24, 26, 24, 20),
                   decoration: BoxDecoration(
-                    color: colorScheme.surface.withValues(alpha: _cardAlpha),
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(32),
-                    ),
+                    color: AppColors.ink.withValues(alpha: 0.38),
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -272,7 +315,7 @@ class _SignInPageState extends State<SignInPage> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const DataPrivacyPage(),
+                              builder: (context) => const TermsPage(initialTab: 1),
                             ),
                           );
                         },
@@ -292,7 +335,7 @@ class _SignInPageState extends State<SignInPage> {
                                 style: TextStyle(
                                   decoration: TextDecoration.underline,
                                   fontWeight: FontWeight.w600,
-                                  color: colorScheme.primary,
+                                  color: const Color(0xFF5EEAD4),
                                 ),
                               ),
                               const TextSpan(text: '.'),
@@ -303,10 +346,86 @@ class _SignInPageState extends State<SignInPage> {
                     ],
                   ),
                 ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Slideshow ng resort: dahan-dahang nagpapalit ang litrato (fade) habang
+/// mabagal na nag-zo-zoom (Ken Burns effect).
+class _ResortSlideshow extends StatefulWidget {
+  const _ResortSlideshow({required this.images, required this.seconds});
+
+  final List<ImageProvider> images;
+  final int seconds;
+
+  @override
+  State<_ResortSlideshow> createState() => _ResortSlideshowState();
+}
+
+class _ResortSlideshowState extends State<_ResortSlideshow> {
+  int _index = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(Duration(seconds: widget.seconds), (_) {
+      if (!mounted || widget.images.length < 2) return;
+      setState(() => _index = (_index + 1) % widget.images.length);
+      // I-preload ang susunod para walang patlang.
+      precacheImage(widget.images[(_index + 1) % widget.images.length], context);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _ResortSlideshow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_index >= widget.images.length) _index = 0;
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.images.isEmpty) return const ColoredBox(color: AppColors.ink);
+    final image = widget.images[_index % widget.images.length];
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 1400),
+      switchInCurve: Curves.easeInOut,
+      switchOutCurve: Curves.easeInOut,
+      layoutBuilder: (current, previous) => Stack(
+        fit: StackFit.expand,
+        children: [...previous, ?current],
+      ),
+      child: TweenAnimationBuilder<double>(
+        key: ValueKey(_index),
+        tween: Tween(begin: 1.0, end: 1.12),
+        duration: Duration(seconds: widget.seconds + 2),
+        builder: (context, scale, child) => Transform.scale(
+          scale: scale,
+          alignment: _index.isEven ? Alignment.centerLeft : Alignment.centerRight,
+          child: child,
+        ),
+        child: Image(
+          image: image,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (context, error, stack) => const ColoredBox(color: AppColors.ink),
+        ),
       ),
     );
   }

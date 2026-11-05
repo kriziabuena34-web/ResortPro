@@ -4,9 +4,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../l10n/app_strings.dart';
 import '../../services/admin_data.dart';
 import '../../services/booking_workflow.dart';
+import '../../services/receipt.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/admin_widgets.dart';
 import '../../widgets/list_controls.dart';
+import '../../widgets/payment_entry.dart';
 import 'new_booking_dialog.dart';
 
 /// Booking management: search, filters, sort, workflow (confirm →
@@ -150,17 +152,32 @@ class _BookingsPageState extends State<BookingsPage> {
     }
   }
 
-  Future<void> _recordPayment(Map<String, dynamic> booking, double amount, String method) {
+  Future<void> _recordPayment(Map<String, dynamic> booking, double amount, PaymentDetails details) {
+    final method = details.method;
     return _runBusy(booking, () async {
       try {
-        await supabase.from('payments').insert({
-          'booking_id': booking['id'],
-          'amount': amount,
-          'method': method,
-          'kind': 'balance',
-          'received_by': supabase.auth.currentUser!.id,
-        });
+        final payment = await supabase
+            .from('payments')
+            .insert({
+              'booking_id': booking['id'],
+              'amount': amount,
+              'method': method,
+              'kind': 'balance',
+              'received_by': supabase.auth.currentUser!.id,
+              if (!details.isCash) 'reference_no': details.reference,
+            })
+            .select()
+            .single();
+        final paidBefore = paidOf(booking);
         final fullyPaid = await BookingWorkflow.afterPayment(booking, amount, method);
+        if (details.isCash && details.cashReceived != null) {
+          await BookingWorkflow.log(
+            booking['id'],
+            'note',
+            note: '${tr('peCashReceived')} ${peso(details.cashReceived!)}, '
+                '${tr('rcChange')} ${peso(details.changeFor(amount))}',
+          );
+        }
 
         if (!mounted) return;
         showToast(
@@ -169,6 +186,25 @@ class _BookingsPageState extends State<BookingsPage> {
               ? tr('recordedFull')
               : tr('recordedPartial', {'amount': peso(remainingOf(booking) - amount)}),
         );
+        await showPaymentReceipt(
+          context,
+          PaymentReceipt(
+            paymentId: payment['id'],
+            date: DateTime.now(),
+            guest: clientNameOf(booking),
+            packageName: packageNameOf(booking),
+            bookingDate: bookingDateOf(booking),
+            source: bookingSourceOf(booking),
+            amount: amount,
+            method: method,
+            reference: details.isCash ? '' : details.reference,
+            cashReceived: details.isCash ? details.cashReceived : null,
+            totalAmount: totalOf(booking),
+            paidSoFar: paidBefore + amount,
+            staff: supabase.auth.currentUser?.email ?? 'Admin',
+          ),
+        );
+        if (!mounted) return;
         await widget.onChanged();
       } catch (e) {
         if (!mounted) return;
@@ -295,7 +331,7 @@ class _BookingsPageState extends State<BookingsPage> {
   void _showRecordPaymentDialog(Map<String, dynamic> booking) {
     final remaining = remainingOf(booking);
     final amountController = TextEditingController(text: remaining.toStringAsFixed(0));
-    String method = 'cash';
+    PaymentDetails details = const PaymentDetails(method: 'cash');
     String? error;
 
     showDialog(
@@ -324,17 +360,14 @@ class _BookingsPageState extends State<BookingsPage> {
                     prefixText: '₱ ',
                     errorText: error,
                   ),
+                  onChanged: (_) => setDialogState(() {}),
                 ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  initialValue: method,
-                  decoration: InputDecoration(labelText: tr('paymentMethod')),
-                  items: const [
-                    DropdownMenuItem(value: 'cash', child: Text('Cash')),
-                    DropdownMenuItem(value: 'gcash', child: Text('GCash')),
-                    DropdownMenuItem(value: 'maya', child: Text('Maya')),
-                  ],
-                  onChanged: (value) => setDialogState(() => method = value ?? 'cash'),
+                Text(tr('paymentMethod'), style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                PaymentEntry(
+                  amount: double.tryParse(amountController.text.replaceAll(',', '')) ?? 0,
+                  onChanged: (d) => details = d,
                 ),
               ],
             ),
@@ -355,8 +388,13 @@ class _BookingsPageState extends State<BookingsPage> {
                   setDialogState(() => error = tr('overBalance', {'amount': peso(remaining)}));
                   return;
                 }
+                final payError = details.validate(amount);
+                if (payError != null) {
+                  setDialogState(() => error = tr(payError));
+                  return;
+                }
                 Navigator.pop(dialogContext);
-                _recordPayment(booking, amount, method);
+                _recordPayment(booking, amount, details);
               },
               child: Text(tr('record')),
             ),

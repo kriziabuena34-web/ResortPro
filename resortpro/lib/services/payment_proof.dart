@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config.dart';
+import '../screens/info_pages.dart';
 import '../utils/format.dart';
 
 /// Ang laman ng proof of payment na ipapasa ng client.
@@ -229,6 +230,8 @@ class _PayBalanceSheetState extends State<_PayBalanceSheet> {
   Future<void> _submit() async {
     final proof = _proof;
     if (proof == null) return;
+    // Lalabas ang Terms and Conditions bago i-submit ang bayad.
+    if (!await showTermsAgreement(context) || !mounted) return;
     setState(() => _submitting = true);
     try {
       await submitPaymentProof(

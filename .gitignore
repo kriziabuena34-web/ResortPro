@@ -13,3 +13,5 @@ setup_github.ps1
 **/.flutter-plugins-dependencies
 **/.idea/
 *.iml
+devices.json
+devices.json

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kulay ng unang screen (kapareho ng loading screen ng app) -->
+    <color name="splash_background">#0B1B2B</color>
+</resources>

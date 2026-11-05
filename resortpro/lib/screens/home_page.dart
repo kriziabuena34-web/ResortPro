@@ -4,12 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/notifications.dart';
+import '../theme/app_theme.dart';
 import '../utils/format.dart';
+import '../widgets/notification_banner.dart';
+import '../widgets/ui_kit.dart';
 import 'account_page.dart';
 import 'booking_page.dart';
 import 'my_booking_page.dart';
+import 'info_pages.dart';
 import 'my_receipt_list_page.dart';
 import 'notifications_page.dart';
+import 'resort_map_page.dart';
+import 'sign_in_page.dart';
+import '../services/session.dart';
 
 // PACKAGE MODEL
 
@@ -90,29 +97,19 @@ class _HomePageState extends State<HomePage> {
 
   final PageController _carouselController = PageController();
   final ScrollController _scrollController = ScrollController();
-  final ValueNotifier<double> _appBarFade = ValueNotifier<double>(0);
   final supabase = Supabase.instance.client;
 
-  // ---------- EASY SETTINGS (HEADER) ----------
-  // Header color when you are at the top of the page
-  static const Color _appBarColor = Color(0xFF238B45);
-  // Title and icon color at the top (white) and when faded (dark green)
-  static const Color _appBarTextColor = Colors.white;
-  static const Color _appBarFadedTextColor = Color(0xFF00441B);
-  // How far you scroll (in pixels) before the header is fully faded
-  static const double _fadeDistance = 150;
-  // How solid the header is when fully faded: 1.0 = no fade, lower = lighter
-  static const double _appBarFadedAlpha = 0.65;
-  // --------------------------------------------
+  /// Para sa "Book a stay" button: dito mag-i-scroll (Package Offered).
+  final _packagesKey = GlobalKey();
 
   // ---------- EASY SETTINGS (SPACING) ----------
   // Left/right margin shared by every section on the page
-  static const double _pagePadding = 20;
+  static const double _pagePadding = 16;
   // Space above the first item and below the last item
   static const double _topSpace = 16;
   static const double _bottomSpace = 32;
   // Space between big sections (Resort Info, Packages, Contact...)
-  static const double _sectionGap = 32;
+  static const double _sectionGap = 28;
   // Space between a section title and its content
   static const double _titleGap = 12;
   // Vertical space between package cards (each card gets half on top/bottom)
@@ -146,15 +143,16 @@ class _HomePageState extends State<HomePage> {
   String _packageSort = 'default'; // default, low, high
 
   // Bottom navigation: Home, Bookings, Alerts, Account (+ More sheet)
-  static const _tabTitles = ["Aryana's Guests House", 'My Bookings', 'Notifications', 'Account'];
-  static const _alertsTab = 2;
+  // Bottom navigation: Home, Bookings, Account, More (sheet).
+  static const _tabTitles = ["Aryana's Guests House", 'My Bookings', 'Account'];
+  static const _moreTab = 3;
 
   final _notifications = UserNotifications.instance;
 
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
+    _notifications.latest.addListener(_onRealtimeNotification);
     _fetchPackages();
     _fetchGallery();
     _startNotifications();
@@ -162,12 +160,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _startNotifications() async {
-    // Kapag pinindot ang phone notification, buksan ang Alerts tab.
+    // Kapag pinindot ang phone notification, buksan ang Notifications.
     LocalNotifier.onTap = (_) {
-      if (mounted) _onNavigationItemTapped(_alertsTab);
+      if (mounted) _openNotifications();
     };
     if (await LocalNotifier.launchedFromNotification() && mounted) {
-      _onNavigationItemTapped(_alertsTab);
+      _openNotifications();
     }
     await _notifications.start();
   }
@@ -206,18 +204,15 @@ class _HomePageState extends State<HomePage> {
     LocalNotifier.onTap = null;
     _carouselController.dispose();
     _scrollController.dispose();
-    _appBarFade.dispose();
+    _notifications.latest.removeListener(_onRealtimeNotification);
     super.dispose();
   }
 
-  // HEADER FADE (0 = at the top, 1 = fully faded)
-
-  void _onScroll() {
-    if (!_scrollController.hasClients) return;
-    final t = (_scrollController.offset / _fadeDistance).clamp(0.0, 1.0).toDouble();
-    if (t != _appBarFade.value) {
-      _appBarFade.value = t;
-    }
+  /// Realtime: may bagong notification habang bukas ang app → in-app banner.
+  void _onRealtimeNotification() {
+    final n = _notifications.latest.value;
+    if (n == null || !mounted) return;
+    InAppNotificationBanner.show(context, n, onOpen: _openNotifications);
   }
 
   // FETCH PACKAGES FROM SUPABASE
@@ -243,14 +238,20 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Bubukas ang Notifications (galing sa bell icon sa itaas o sa phone notification).
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const NotificationsPage()),
+    );
+  }
+
   void _onNavigationItemTapped(int index) {
-    // "More" (index 4) ay sheet, hindi tab.
-    if (index == 4) {
+    // "More" ay sheet, hindi tab.
+    if (index == _moreTab) {
       _showMoreSheet();
       return;
     }
-    // Other tabs start at the top, so the header goes back to solid green
-    _appBarFade.value = 0;
     setState(() {
       _selectedIndex = index;
     });
@@ -267,45 +268,81 @@ class _HomePageState extends State<HomePage> {
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.map_outlined),
-              title: const Text('Resort Map'),
-              onTap: () => open(
-                Scaffold(appBar: AppBar(title: const Text('Resort Map')), body: const MapPage()),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.receipt_long_outlined),
-              title: const Text('My Receipts'),
-              onTap: () => open(const MyReceiptListPage()),
-            ),
-            ListTile(
-              leading: const Icon(Icons.history),
-              title: const Text('Booking History'),
-              onTap: () => open(const MyBookingPage(initialFilter: 'past')),
-            ),
-            ListTile(
               leading: const Icon(Icons.support_agent_outlined),
               title: const Text('Help and Support'),
-              onTap: () => open(const PlaceholderPage(title: 'Help and Support')),
+              onTap: () => open(const HelpSupportPage()),
             ),
             ListTile(
               leading: const Icon(Icons.description_outlined),
               title: const Text('Terms & Conditions'),
-              onTap: () => open(const PlaceholderPage(title: 'Terms & Conditions')),
+              onTap: () => open(const TermsPage()),
             ),
             ListTile(
               leading: const Icon(Icons.info_outline),
               title: const Text('About Us'),
-              onTap: () => open(const PlaceholderPage(title: 'About Us')),
+              onTap: () => open(const AboutUsPage()),
+            ),
+            ListTile(
+              leading: const Icon(Icons.switch_account_outlined),
+              title: const Text('Switch Account'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _switchAccount();
+              },
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text('Sign Out', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _confirmSignOut();
+              },
             ),
           ],
+          ),
         ),
       ),
+    );
+  }
+
+  /// Mag-sign out tapos ipakita agad ang Google account picker para pumili ng ibang account.
+  Future<void> _switchAccount() async {
+    await signOutCompletely();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const SignInPage(openAccountPicker: true)),
+      (route) => false,
+    );
+  }
+
+  Future<void> _confirmSignOut() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sign out?'),
+        content: const Text('You will need to sign in again to book or view your bookings.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Sign Out')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await signOutCompletely();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const SignInPage()),
+      (route) => false,
     );
   }
 
@@ -370,9 +407,6 @@ class _HomePageState extends State<HomePage> {
         return const MyBookingPage(embedded: true);
 
       case 2:
-        return const NotificationsPage(embedded: true);
-
-      case 3:
         return const AccountPage();
 
       case 0:
@@ -383,15 +417,39 @@ class _HomePageState extends State<HomePage> {
 
   // SECTION TITLE (same margin and gap everywhere)
 
-  Widget _sectionTitle(String text) {
+  Widget _sectionTitle(String text, {Key? key, String? subtitle}) {
     return Padding(
+      key: key,
       padding: const EdgeInsets.fromLTRB(_pagePadding, 0, _pagePadding, _titleGap),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-        ),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 22,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF14B8A6), AppColors.primary],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  text,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.3),
+                ),
+                if (subtitle != null)
+                  Text(subtitle, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -446,225 +504,369 @@ class _HomePageState extends State<HomePage> {
     final otherPackages =
     shown.where((p) => p.name.startsWith('Function Hall')).toList();
 
-    return SingleChildScrollView(
-      controller: _scrollController,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: _topSpace),
+    final user = supabase.auth.currentUser;
+    final fullName = '${user?.userMetadata?['full_name'] ?? ''}'.trim();
+    final firstName = fullName.isEmpty ? 'Guest' : fullName.split(' ').first;
 
-          // CAROUSEL PHOTO (galing sa Gallery ng admin; default photos kung wala pa)
-          SizedBox(
-            height: _carouselHeight,
-            child: PageView.builder(
-              controller: _carouselController,
-              itemCount: _carouselCount,
-              onPageChanged: (i) => setState(() => _carouselPage = i),
-              itemBuilder: (context, index) {
-                final fromGallery = _gallery.isNotEmpty;
-                final caption = fromGallery ? '${_gallery[index]['caption'] ?? ''}'.trim() : '';
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (fromGallery)
-                          Image.network(
-                            '${_gallery[index]['image_url']}',
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, progress) => progress == null
-                                ? child
-                                : Container(
-                                    color: Colors.grey.shade200,
-                                    alignment: Alignment.center,
-                                    child: const CircularProgressIndicator(),
-                                  ),
-                            errorBuilder: (context, error, stack) => Image.asset(
-                              _resortImages[index % _resortImages.length],
-                              fit: BoxFit.cover,
-                            ),
-                          )
-                        else
-                          Image.asset(_resortImages[index], fit: BoxFit.cover),
-                        if (caption.isNotEmpty)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            child: Container(
-                              padding: const EdgeInsets.fromLTRB(14, 28, 14, 28),
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [Colors.transparent, Colors.black54],
-                                ),
-                              ),
-                              child: Text(
-                                caption,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
+    return RefreshIndicator(
+      onRefresh: () async {
+        await Future.wait([_fetchPackages(), _fetchGallery()]);
+      },
+      child: SingleChildScrollView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: _topSpace),
+
+            // WELCOME BANNER (katulad ng dashboard ng admin)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.ink, Color(0xFF0E4D5A), AppColors.primary],
+                  ),
+                  boxShadow: floatShadow,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Hi, $firstName!',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.4,
                             ),
                           ),
-                      ],
+                          const SizedBox(height: 4),
+                          const Text(
+                            "Ready for your next stay at Aryana's Guests House?",
+                            style: TextStyle(color: Color(0xFFCFE3E6), fontSize: 13.5, height: 1.35),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (var i = 0; i < _carouselCount; i++)
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: i == _carouselPage ? 18 : 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: i == _carouselPage ? _appBarColor : Colors.grey.shade400,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
+                    const SizedBox(width: 12),
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                      ),
+                      child: const Icon(Icons.beach_access_rounded, color: Colors.white, size: 28),
+                    ),
+                  ],
                 ),
-            ],
-          ),
-
-          const SizedBox(height: _sectionGap),
-
-          // RESORT INFORMATION
-          _sectionTitle('RESORT INFORMATION'),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: _pagePadding),
-            child: Text(
-              'Welcome to Aryana\'s Guests House. '
-                  'Enjoy a relaxing stay with a comfortable room, '
-                  'inclusions, and spaces for your events and gatherings.',
-              style: TextStyle(
-                fontSize: 15,
-                height: 1.5,
               ),
             ),
-          ),
+            const SizedBox(height: 18),
 
-          const SizedBox(height: _sectionGap),
-
-          // PACKAGE OFFERED
-          _sectionTitle('PACKAGE OFFERED'),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
-            child: SearchField(
-              controller: _packageSearch,
-              hint: 'Search packages or inclusions',
-              onChanged: (v) => setState(() => _packageQuery = v),
-            ),
-          ),
-          const SizedBox(height: 8),
-          FilterChipsRow(
-            padding: _pagePadding,
-            children: [
-              for (final e in const {
-                'all': 'All',
-                'packages': 'Packages',
-                'hall': 'Function Hall',
-              }.entries)
-                ChoiceChip(
-                  label: Text(e.value),
-                  selected: _packageFilter == e.key,
-                  onSelected: (_) => setState(() => _packageFilter = e.key),
-                ),
-              PopupMenuButton<String>(
-                initialValue: _packageSort,
-                onSelected: (v) => setState(() => _packageSort = v),
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'default', child: Text('Default order')),
-                  PopupMenuItem(value: 'low', child: Text('Price: low to high')),
-                  PopupMenuItem(value: 'high', child: Text('Price: high to low')),
+            // QUICK ACTIONS (neumorphic)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
+              child: Row(
+                children: [
+                  for (final (i, a) in <(IconData, String, VoidCallback)>[
+                    (Icons.event_available, 'Book', () => _scrollToPackages()),
+                    (Icons.support_agent, 'Help', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportPage()))),
+                    (Icons.map_outlined, 'Map', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ResortMapPage()))),
+                    (Icons.receipt_long, 'Receipts', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyReceiptListPage()))),
+                  ].indexed) ...[
+                    if (i > 0) const SizedBox(width: 12),
+                    Expanded(
+                      child: NeuCard(
+                        radius: 18,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        onTap: a.$3,
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(13),
+                                gradient: const LinearGradient(colors: [Color(0xFF14B8A6), AppColors.primary]),
+                                boxShadow: const [
+                                  BoxShadow(color: Color(0x400F766E), blurRadius: 10, offset: Offset(0, 4)),
+                                ],
+                              ),
+                              child: Icon(a.$1, color: Colors.white, size: 21),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(a.$2, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-                child: Chip(
-                  avatar: const Icon(Icons.sort, size: 18),
-                  label: Text(switch (_packageSort) {
-                    'low' => 'Price: low to high',
-                    'high' => 'Price: high to low',
-                    _ => 'Sort',
-                  }),
-                ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          if (shown.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: _pagePadding, vertical: 24),
-              child: Center(child: Text('No packages match your search.')),
             ),
-
-          ...mainPackages.map((pkg) => _buildPackageCard(pkg)),
-
-          // OTHER OFFERED
-          if (otherPackages.isNotEmpty) ...[
             const SizedBox(height: _sectionGap),
 
-            _sectionTitle('OTHER OFFERED'),
-
-            ...otherPackages.map((pkg) => _buildPackageCard(pkg)),
-          ],
-
-          const SizedBox(height: _sectionGap),
-
-          // CONTACT US
-          _sectionTitle('CONTACT US'),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: _pagePadding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            // GALLERY CAROUSEL (galing sa Gallery ng admin; default photos kung wala pa)
+            _sectionTitle('GALLERY', subtitle: 'A peek at the resort'),
+            SizedBox(
+              height: _carouselHeight,
+              child: PageView.builder(
+                controller: _carouselController,
+                itemCount: _carouselCount,
+                onPageChanged: (i) => setState(() => _carouselPage = i),
+                itemBuilder: (context, index) {
+                  final fromGallery = _gallery.isNotEmpty;
+                  final caption = fromGallery ? '${_gallery[index]['caption'] ?? ''}'.trim() : '';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), boxShadow: floatShadow),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (fromGallery)
+                              Image.network(
+                                '${_gallery[index]['image_url']}',
+                                fit: BoxFit.cover,
+                                loadingBuilder: (context, child, progress) => progress == null
+                                    ? child
+                                    : Container(
+                                        color: const Color(0xFFE6EBF0),
+                                        alignment: Alignment.center,
+                                        child: const CircularProgressIndicator(),
+                                      ),
+                                errorBuilder: (context, error, stack) => Image.asset(
+                                  _resortImages[index % _resortImages.length],
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            else
+                              Image.asset(_resortImages[index], fit: BoxFit.cover),
+                            if (caption.isNotEmpty)
+                              Positioned(
+                                left: 12,
+                                right: 12,
+                                bottom: 12,
+                                child: GlassPanel(
+                                  radius: 14,
+                                  opacity: 0.55,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  child: Text(
+                                    caption,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('Gmail: aryanasguesthouse06@gmail.com'),
-                SizedBox(height: 10),
-                Text("Facebook: Aryana's Guests House"),
-                SizedBox(height: 10),
-                Text('Contact: 09628828792'),
-                SizedBox(height: 10),
-                Text(
-                  'Location: Brgy. Maulawin Tramo St. Pagsanjan, Laguna',
-                ),
+                for (var i = 0; i < _carouselCount; i++)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: i == _carouselPage ? 20 : 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: i == _carouselPage ? AppColors.primary : const Color(0xFFCBD5E1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
               ],
             ),
-          ),
 
-          const SizedBox(height: _bottomSpace),
-        ],
+            const SizedBox(height: _sectionGap),
+
+            // ABOUT THE RESORT (maikli; ang buong detalye ay nasa About Us)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
+              child: _HomeLinkCard(
+                icon: Icons.spa_outlined,
+                title: "About Aryana's Guests House",
+                subtitle: 'Private pool, rooms, and a function hall in Pagsanjan',
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutUsPage())),
+              ),
+            ),
+
+            const SizedBox(height: _sectionGap),
+
+            // PACKAGE OFFERED
+            _sectionTitle('PACKAGE OFFERED', key: _packagesKey, subtitle: 'Tap a package to see inclusions'),
+
+            // Glass toolbar: search + filters
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
+              child: GlassPanel(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SearchField(
+                      controller: _packageSearch,
+                      hint: 'Search packages or inclusions',
+                      onChanged: (v) => setState(() => _packageQuery = v),
+                    ),
+                    const SizedBox(height: 6),
+                    FilterChipsRow(
+                      padding: 0,
+                      children: [
+                        for (final e in const {
+                          'all': 'All',
+                          'packages': 'Packages',
+                          'hall': 'Function Hall',
+                        }.entries)
+                          ChoiceChip(
+                            label: Text(e.value),
+                            selected: _packageFilter == e.key,
+                            onSelected: (_) => setState(() => _packageFilter = e.key),
+                          ),
+                        PopupMenuButton<String>(
+                          initialValue: _packageSort,
+                          onSelected: (v) => setState(() => _packageSort = v),
+                          itemBuilder: (context) => const [
+                            PopupMenuItem(value: 'default', child: Text('Default order')),
+                            PopupMenuItem(value: 'low', child: Text('Price: low to high')),
+                            PopupMenuItem(value: 'high', child: Text('Price: high to low')),
+                          ],
+                          child: Chip(
+                            avatar: const Icon(Icons.sort, size: 18),
+                            label: Text(switch (_packageSort) {
+                              'low' => 'Price: low to high',
+                              'high' => 'Price: high to low',
+                              _ => 'Sort',
+                            }),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            if (shown.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: _pagePadding, vertical: 24),
+                child: Center(
+                  child: Text('No packages match your search.', style: TextStyle(color: AppColors.muted)),
+                ),
+              ),
+
+            ...mainPackages.map((pkg) => _buildPackageCard(pkg)),
+
+            // OTHER OFFERED
+            if (otherPackages.isNotEmpty) ...[
+              const SizedBox(height: _sectionGap),
+              _sectionTitle('OTHER OFFERED', subtitle: 'Function hall for events'),
+              ...otherPackages.map((pkg) => _buildPackageCard(pkg)),
+            ],
+
+            // Iisang paalala para sa lahat ng package
+            if (shown.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(_pagePadding, 8, _pagePadding, 0),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: const Color(0xFFFFF7E8),
+                    border: Border.all(color: const Color(0xFFF5D9A8)),
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.mic_external_on_outlined, size: 18, color: AppColors.warning),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Videoke and speakers are only allowed from 7:00 AM to 10:00 PM. '
+                          'See Terms & Conditions in More for all resort rules.',
+                          style: TextStyle(fontSize: 12.5, height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: _sectionGap),
+
+            // NEED HELP? (ang contact details ay nasa Help and Support)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
+              child: _HomeLinkCard(
+                icon: Icons.support_agent,
+                title: 'Need help or have questions?',
+                subtitle: 'Call, text, or email the resort',
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportPage())),
+              ),
+            ),
+
+            const SizedBox(height: _bottomSpace),
+          ],
+        ),
       ),
+    );
+  }
+
+  void _scrollToPackages() {
+    final ctx = _packagesKey.currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeInOut,
+      alignment: 0.02,
     );
   }
 
   // PACKAGE CARD
 
   Widget _buildPackageCard(Package pkg) {
-    return Card(
+    return AppCard(
       margin: const EdgeInsets.symmetric(
         horizontal: _pagePadding,
         vertical: _cardGap / 2,
       ),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        side: BorderSide(
-          color: Colors.grey.shade300,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
       child: ExpansionTile(
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(13),
+            gradient: const LinearGradient(colors: [Color(0xFF14B8A6), AppColors.primary]),
+          ),
+          child: Icon(
+            pkg.name.startsWith('Function Hall') ? Icons.celebration_outlined : Icons.pool_outlined,
+            color: Colors.white,
+          ),
+        ),
         tilePadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 6,
@@ -685,7 +887,8 @@ class _HomePageState extends State<HomePage> {
                 pkg.formattedPrice,
                 style: const TextStyle(
                   fontSize: 17,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primary,
                 ),
               ),
               const SizedBox(height: 6),
@@ -741,31 +944,15 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 14),
           ],
 
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.grey.shade100,
-            ),
-            child: const Text(
-              'Note: Strictly, videoke and speakers are only '
-                  'allowed from 7:00 AM to 10:00 PM.',
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.4,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
+          const SizedBox(height: 4),
 
           SizedBox(
             width: double.infinity,
             height: 48,
-            child: ElevatedButton(
+            child: FilledButton.icon(
               onPressed: () => _handleBookNow(pkg),
-              child: const Text('BOOK NOW'),
+              icon: const Icon(Icons.event_available),
+              label: const Text('BOOK NOW'),
             ),
           ),
         ],
@@ -794,173 +981,34 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // SIDE NAVIGATION DRAWER
-  // (No Navigator.pop here, so the back arrow on the next page returns
-  // to the screen you came from with the drawer still open.)
-
-  Widget _buildDrawer() {
-    return Drawer(
-      child: SafeArea(
-        child: Column(
-          children: [
-            DrawerHeader(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(
-                    Icons.hotel,
-                    size: 50,
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    'ResortPro',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    "Aryana's Guests House",
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.calendar_month_outlined),
-              title: const Text('My Booking'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const MyBookingPage()),
-                );
-              },
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.receipt_long_outlined),
-              title: const Text('My Receipt'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const MyReceiptListPage()),
-                );
-              },
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.history),
-              title: const Text('Booking History'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MyBookingPage(initialFilter: 'past'),
-                  ),
-                );
-              },
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.support_agent_outlined),
-              title: const Text('Help and Support'),
-              onTap: () {
-                _showPlaceholderPage('Help and Support');
-              },
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.description_outlined),
-              title: const Text('Terms & Conditions'),
-              onTap: () {
-                _showPlaceholderPage('Terms & Conditions');
-              },
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('About Us'),
-              onTap: () {
-                _showPlaceholderPage('About Us');
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // TEMPORARY PLACEHOLDER
-
-  void _showPlaceholderPage(String title) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PlaceholderPage(
-          title: title,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // GREEN HEADER THAT FADES WHEN YOU SCROLL
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: ValueListenableBuilder<double>(
-          valueListenable: _appBarFade,
-          builder: (context, fade, _) {
-            final alpha = 1.0 - (1.0 - _appBarFadedAlpha) * fade;
-            final textColor = Color.lerp(
-              _appBarTextColor,
-              _appBarFadedTextColor,
-              fade,
-            )!;
-
-            return AppBar(
-              backgroundColor: _appBarColor.withValues(alpha: alpha),
-              foregroundColor: textColor,
-              elevation: 0,
-              scrolledUnderElevation: 0,
-              surfaceTintColor: Colors.transparent,
-              title: Text(
-                _tabTitles[_selectedIndex],
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+      appBar: AppBar(
+        title: Text(_tabTitles[_selectedIndex]),
+        actions: [
+          ListenableBuilder(
+            listenable: _notifications,
+            builder: (context, _) => IconButton(
+              tooltip: 'Notifications',
+              onPressed: _openNotifications,
+              icon: Badge(
+                isLabelVisible: _notifications.unreadCount > 0,
+                label: Text('${_notifications.unreadCount}'),
+                child: const Icon(Icons.notifications_outlined),
               ),
-              actions: [
-                ListenableBuilder(
-                  listenable: _notifications,
-                  builder: (context, _) => IconButton(
-                    tooltip: 'Notifications',
-                    onPressed: () => _onNavigationItemTapped(_alertsTab),
-                    icon: Badge(
-                      isLabelVisible: _notifications.unreadCount > 0,
-                      label: Text('${_notifications.unreadCount}'),
-                      child: const Icon(Icons.notifications_outlined),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
 
-      drawer: _buildDrawer(),
-
-      body: _buildCurrentPage(),
+      body: AmbientBackground(child: _buildCurrentPage()),
 
       // BOTTOM NAVIGATION: priority items muna; ang iba ay nasa "More".
       bottomNavigationBar: ListenableBuilder(
         listenable: _notifications,
         builder: (context, _) {
-          final unread = _notifications.unreadCount;
           return NavigationBar(
             selectedIndex: _selectedIndex,
             onDestinationSelected: _onNavigationItemTapped,
@@ -974,19 +1022,6 @@ class _HomePageState extends State<HomePage> {
                 icon: Icon(Icons.calendar_month_outlined),
                 selectedIcon: Icon(Icons.calendar_month),
                 label: 'Bookings',
-              ),
-              NavigationDestination(
-                icon: Badge(
-                  isLabelVisible: unread > 0,
-                  label: Text('$unread'),
-                  child: const Icon(Icons.notifications_outlined),
-                ),
-                selectedIcon: Badge(
-                  isLabelVisible: unread > 0,
-                  label: Text('$unread'),
-                  child: const Icon(Icons.notifications),
-                ),
-                label: 'Alerts',
               ),
               const NavigationDestination(
                 icon: Icon(Icons.person_outline),
@@ -1005,66 +1040,45 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// MAP PAGE
+/// Maikling card na may icon at arrow, papunta sa ibang page.
+class _HomeLinkCard extends StatelessWidget {
+  const _HomeLinkCard({required this.icon, required this.title, required this.subtitle, required this.onTap});
 
-class MapPage extends StatelessWidget {
-  const MapPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.map_outlined,
-            size: 80,
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Resort Location',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 8),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 30),
-            child: Text(
-              'The resort map and navigation will be added here.',
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// PLACEHOLDER PAGE
-
-class PlaceholderPage extends StatelessWidget {
+  final IconData icon;
   final String title;
-
-  const PlaceholderPage({
-    super.key,
-    required this.title,
-  });
+  final String subtitle;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-      ),
-      body: Center(
-        child: Text(
-          '$title page',
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
+    return AppCard(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(13),
+                gradient: const LinearGradient(colors: [Color(0xFF14B8A6), AppColors.primary]),
+              ),
+              child: Icon(icon, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.muted),
+          ],
         ),
       ),
     );

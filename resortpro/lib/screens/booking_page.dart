@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config.dart';
 import '../services/payment_proof.dart';
 import '../utils/format.dart';
 import 'home_page.dart';
+import 'info_pages.dart';
 
 class BookingPage extends StatefulWidget {
   final Package package;
@@ -47,6 +49,9 @@ class _BookingPageState extends State<BookingPage> {
         (int.tryParse(_adultController.text) ?? 0) +
         (int.tryParse(_elderlyController.text) ?? 0);
   }
+
+  /// Pinakamaraming bisita para sa package na ito.
+  int get _maxGuests => widget.package.maxPax ?? 999;
 
   double get _price => _datePrice ?? widget.package.price;
 
@@ -144,6 +149,9 @@ class _BookingPageState extends State<BookingPage> {
       return;
     }
 
+    // Lalabas ang Terms and Conditions; kailangang basahin at sumang-ayon bago ma-submit.
+    if (!await showTermsAgreement(context) || !mounted) return;
+
     setState(() => _isSubmitting = true);
 
     String? bookingId;
@@ -157,11 +165,11 @@ class _BookingPageState extends State<BookingPage> {
             'package_id': widget.package.id,
             'booking_date': dateKey(_selectedDate!),
             'total_pax': pax,
-            'infants': int.parse(_infantController.text),
-            'children': int.parse(_childController.text),
-            'teens': int.parse(_teenController.text),
-            'adults': int.parse(_adultController.text),
-            'elderly': int.parse(_elderlyController.text),
+            'infants': int.tryParse(_infantController.text) ?? 0,
+            'children': int.tryParse(_childController.text) ?? 0,
+            'teens': int.tryParse(_teenController.text) ?? 0,
+            'adults': int.tryParse(_adultController.text) ?? 0,
+            'elderly': int.tryParse(_elderlyController.text) ?? 0,
             // Ang server ang magtatakda ng huling presyo ayon sa petsa.
             'total_amount': _price,
             'status': 'reserved',
@@ -231,18 +239,15 @@ class _BookingPageState extends State<BookingPage> {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Expanded(flex: 2, child: Text(label)),
+          Expanded(flex: 5, child: Text(label)),
           Expanded(
-            flex: 1,
-            child: TextFormField(
+            flex: 6,
+            child: _GuestCounter(
               controller: controller,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              decoration: const InputDecoration(
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (_) => setState(() {}),
+              // Ilan pa ang pwede sa box na ito para hindi lumampas sa capacity.
+              max: _maxGuests - (_totalPax - (int.tryParse(controller.text) ?? 0)),
+              capacity: _maxGuests,
+              onChanged: () => setState(() {}),
             ),
           ),
         ],
@@ -329,6 +334,14 @@ class _BookingPageState extends State<BookingPage> {
                 'Total: $_totalPax pax (Capacity: ${widget.package.formattedCapacity})',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
+              if (_totalPax >= _maxGuests)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Maximum of $_maxGuests guests reached for this package.',
+                    style: const TextStyle(fontSize: 12.5, color: Color(0xFFC2410C), fontWeight: FontWeight.w600),
+                  ),
+                ),
 
               if (_isFunctionHall) ...[
                 const SizedBox(height: 24),
@@ -376,13 +389,141 @@ class _BookingPageState extends State<BookingPage> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Your date is held while the resort verifies your payment.',
+                'You will be asked to read and agree to the Terms and Conditions before your booking is submitted.',
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Bilang ng bisita: [−] [bilang] [+]. Laging nakikita ang − at +.
+/// Pag tinap ang box, pwedeng i-type ang bilang; kusang nawawala ang "0",
+/// at bumabalik ito kapag iniwang blangko.
+class _GuestCounter extends StatefulWidget {
+  const _GuestCounter({
+    required this.controller,
+    required this.onChanged,
+    required this.max,
+    required this.capacity,
+  });
+
+  /// Pinakamataas na bilang na pwede sa box na ito (ayon sa natitirang capacity).
+  final int max;
+  /// Kabuuang capacity ng package (para sa mensahe).
+  final int capacity;
+
+  final TextEditingController controller;
+  final VoidCallback onChanged;
+
+  @override
+  State<_GuestCounter> createState() => _GuestCounterState();
+}
+
+class _GuestCounterState extends State<_GuestCounter> {
+  final _focus = FocusNode();
+
+  int get _value => int.tryParse(widget.controller.text) ?? 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocusChange);
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    final c = widget.controller;
+    if (_focus.hasFocus) {
+      // Kusang tanggalin ang 0 para hindi na burahin.
+      if (c.text == '0') c.clear();
+    } else if (c.text.trim().isEmpty) {
+      c.text = '0';
+      widget.onChanged();
+    }
+    setState(() {});
+  }
+
+  int get _limit => widget.max < 0 ? 0 : widget.max;
+
+  void _set(int v) {
+    final value = v < 0 ? 0 : (v > _limit ? _limit : v);
+    widget.controller.text = '$value';
+    widget.controller.selection = TextSelection.collapsed(offset: widget.controller.text.length);
+    widget.onChanged();
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+
+    Widget button(IconData icon, String tooltip, VoidCallback? onTap) => Tooltip(
+          message: tooltip,
+          child: Material(
+            color: onTap == null ? const Color(0xFFEDF1F4) : primary.withValues(alpha: 0.12),
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              canRequestFocus: false,
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Icon(icon, size: 20, color: onTap == null ? Colors.grey : primary),
+              ),
+            ),
+          ),
+        );
+
+    return Row(
+      children: [
+        button(Icons.remove, 'Less', _value > 0 ? () => _set(_value - 1) : null),
+        const SizedBox(width: 6),
+        Expanded(
+          child: TextField(
+            controller: widget.controller,
+            focusNode: _focus,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(3),
+            ],
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            decoration: const InputDecoration(
+              isDense: true,
+              hintText: '0',
+              contentPadding: EdgeInsets.symmetric(vertical: 12),
+            ),
+            onChanged: (_) {
+              // Kapag lumampas sa capacity ang tinype, ibaba sa pinakamataas na pwede.
+              if (_value > _limit) {
+                _set(_limit);
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    SnackBar(content: Text('This package allows up to ${widget.capacity} guests only.')),
+                  );
+                return;
+              }
+              widget.onChanged();
+              setState(() {});
+            },
+            onTapOutside: (_) => _focus.unfocus(),
+          ),
+        ),
+        const SizedBox(width: 6),
+        button(Icons.add, 'More', _value < _limit ? () => _set(_value + 1) : null),
+      ],
     );
   }
 }
