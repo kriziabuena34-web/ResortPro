@@ -924,3 +924,145 @@ revoke all on function public.claim_booking(text) from public, anon;
 grant execute on function public.claim_booking(text) to authenticated;
 
 -- Tapos na ang Part 5!
+
+
+-- ===========================================================================
+-- PART 6 (dinagdag Nov 6, 2026): Iisang lugar ang buong resort
+--   Private resort ito, kaya magkasalungat ang dalawang booking kapag
+--   pareho ang petsa at nagsasabay ang oras:
+--     • Day Tour + Overnight sa iisang petsa → PWEDE (magkaibang oras)
+--     • Day Tour + Function Hall (Day Tour hours) → BAWAL (sabay)
+--     • Function Hall 22 Hours → kinukuha ang buong araw at gabi
+-- ===========================================================================
+
+-- Anong bahagi ng araw ang ginagamit ng package: 'day' at/o 'night'
+create or replace function public.package_slots(p_package_id bigint)
+returns text[]
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  p     record;
+  s     text[] := '{}';
+  st    time;
+  en    time;
+begin
+  select * into p from public.packages where id = p_package_id;
+  if not found then
+    return array['day', 'night'];
+  end if;
+
+  begin
+    st := p.start_time::text::time;
+    en := p.end_time::text::time;
+  exception when others then
+    st := null;
+    en := null;
+  end;
+
+  if st is null or en is null then
+    -- Walang oras na nakalagay: hulaan mula sa pangalan.
+    if p.name ilike '%22%' then return array['day', 'night']; end if;
+    if p.name ilike '%overnight%' then return array['night']; end if;
+    return array['day'];
+  end if;
+
+  if st < time '17:00' then s := s || 'day'::text; end if;
+  if en <= st or st >= time '17:00' then s := s || 'night'::text; end if;
+  if cardinality(s) = 0 then s := array['day']; end if;
+  return s;
+end $$;
+
+grant execute on function public.package_slots(bigint) to anon, authenticated;
+
+create or replace function public.check_availability(
+  p_package_id bigint,
+  p_date date,
+  p_exclude_booking text default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  block_reason text;
+  clash        text;
+begin
+  select coalesce(reason, '') into block_reason
+  from public.blocked_dates
+  where block_date = p_date and (package_id is null or package_id = p_package_id)
+  limit 1;
+  if found then
+    return jsonb_build_object('available', false, 'reason', 'blocked', 'note', block_reason);
+  end if;
+
+  select pk.name into clash
+  from public.bookings b
+  left join public.packages pk on pk.id = b.package_id
+  where b.booking_date = p_date
+    and b.status::text not in ('cancelled', 'no_show')
+    and (p_exclude_booking is null or b.id::text <> p_exclude_booking)
+    and public.package_slots(b.package_id) && public.package_slots(p_package_id)
+  limit 1;
+  if found then
+    return jsonb_build_object('available', false, 'reason', 'booked', 'note', coalesce(clash, ''));
+  end if;
+
+  return jsonb_build_object('available', true, 'price', public.price_for(p_package_id, p_date));
+end $$;
+
+grant execute on function public.check_availability(bigint, date, text) to anon, authenticated;
+
+create or replace function public.bookings_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' and not public.is_admin() then
+    new.total_amount := coalesce(public.price_for(new.package_id, new.booking_date), new.total_amount);
+    new.status := 'reserved';
+    new.source := 'online';
+  end if;
+
+  if new.status::text in ('cancelled', 'no_show') then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE'
+     and new.booking_date is not distinct from old.booking_date
+     and new.package_id is not distinct from old.package_id
+     and old.status::text not in ('cancelled', 'no_show') then
+    return new;
+  end if;
+
+  -- Isa-isang pagproseso ng booking sa iisang petsa (para walang sabay na makalusot).
+  perform pg_advisory_xact_lock(hashtext('booking:' || new.booking_date::text));
+
+  if exists (
+    select 1 from public.blocked_dates
+    where block_date = new.booking_date
+      and (package_id is null or package_id = new.package_id)
+  ) then
+    raise exception 'DATE_BLOCKED: This date is not available for booking.';
+  end if;
+
+  if exists (
+    select 1 from public.bookings
+    where booking_date = new.booking_date
+      and status::text not in ('cancelled', 'no_show')
+      and id <> new.id
+      and public.package_slots(package_id) && public.package_slots(new.package_id)
+  ) then
+    raise exception 'DATE_TAKEN: This date is already booked at that time.';
+  end if;
+
+  return new;
+end $$;
+
+-- Tapos na ang Part 6!

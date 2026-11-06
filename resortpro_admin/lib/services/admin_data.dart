@@ -47,6 +47,42 @@ class AdminData {
     }).toList();
   }
 
+  /// Anong bahagi ng araw ang ginagamit ng package ('day' at/o 'night').
+  /// Iisang lugar ang buong resort, kaya bawal magsabay ang magkapatong na oras.
+  /// (Kapareho ng public.package_slots sa database.)
+  Set<String> slotsOf(dynamic packageId) {
+    final p = packageById(packageId);
+    if (p == null) return {'day', 'night'};
+    int? mins(dynamic t) {
+      final parts = '${t ?? ''}'.split(':');
+      if (parts.length < 2) return null;
+      final h = int.tryParse(parts[0]), m = int.tryParse(parts[1]);
+      return h == null || m == null ? null : h * 60 + m;
+    }
+
+    final st = mins(p['start_time']), en = mins(p['end_time']);
+    if (st == null || en == null) {
+      final name = '${p['name']}'.toLowerCase();
+      if (name.contains('22')) return {'day', 'night'};
+      if (name.contains('overnight')) return {'night'};
+      return {'day'};
+    }
+    final s = <String>{};
+    if (st < 17 * 60) s.add('day');
+    if (en <= st || st >= 17 * 60) s.add('night');
+    return s.isEmpty ? {'day'} : s;
+  }
+
+  /// May aktibong booking na ba na kasabay ng oras ng [packageId] sa [day]?
+  bool isTimeTaken(DateTime day, dynamic packageId, {dynamic excludeBookingId}) {
+    final mine = slotsOf(packageId);
+    return bookings.any((b) =>
+        !isInactive(b) &&
+        bookingDateOf(b) == day &&
+        (excludeBookingId == null || '${b['id']}' != '$excludeBookingId') &&
+        slotsOf(b['package_id']).intersection(mine).isNotEmpty);
+  }
+
   Map<String, dynamic>? packageById(dynamic id) {
     for (final p in packages) {
       if ('${p['id']}' == '$id') return p;

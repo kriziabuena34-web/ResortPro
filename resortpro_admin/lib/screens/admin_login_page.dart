@@ -24,6 +24,10 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
   String? _errorDetail;
 
   Future<void> _login() async {
+    if (_emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
+      setState(() => _errorKey = 'loginMissing');
+      return;
+    }
     setState(() {
       _isLoading = true;
       _errorKey = null;
@@ -64,9 +68,28 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
         );
       }
     } catch (e) {
+      // Malinaw na mensahe para sa staff (hindi teknikal na error).
+      final t = '$e';
+      final String key;
+      if (t.contains('invalid_credentials') || t.contains('Invalid login credentials')) {
+        key = 'loginWrong';
+      } else if (t.contains('email_not_confirmed')) {
+        key = 'loginNotConfirmed';
+      } else if (t.contains('over_request_rate_limit') || t.contains('429')) {
+        key = 'loginTooMany';
+      } else if (t.contains('SocketException') ||
+          t.contains('Failed host lookup') ||
+          t.contains('ClientException') ||
+          t.contains('Failed to fetch') ||
+          t.contains('XMLHttpRequest')) {
+        key = 'loginOffline';
+      } else {
+        key = 'loginGeneric';
+      }
+      if (!mounted) return;
       setState(() {
-        _errorKey = 'loginFailed';
-        _errorDetail = '$e';
+        _errorKey = key;
+        _errorDetail = null;
         _isLoading = false;
       });
     }

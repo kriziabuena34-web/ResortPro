@@ -321,7 +321,8 @@ class _BookingPageState extends State<BookingPage> {
                     _unavailableReason == 'blocked'
                         ? 'The resort is not accepting bookings on this date'
                             '${(_blockNote ?? '').isEmpty ? '' : ' ($_blockNote)'}.'
-                        : 'This date is already booked for this package.',
+                        : 'This date is already booked at this time. The resort is private, so only one group '
+                            'can stay at a time. Please choose another date.',
                     style: const TextStyle(color: Colors.red),
                   ),
                 ),

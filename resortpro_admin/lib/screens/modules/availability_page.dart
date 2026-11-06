@@ -648,8 +648,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
 
   Widget _dayTile(ThemeData theme, Map<String, dynamic> pkg, DateTime d, double base) {
     final blocked = widget.data.blocksOn(d, packageId: pkg['id']).isNotEmpty;
-    final booked = widget.data.activeBookings
-        .any((b) => '${b['package_id']}' == '${pkg['id']}' && bookingDateOf(b) == d);
+    final booked = widget.data.isTimeTaken(d, pkg['id']);
     final price = priceForLocal(pkg, d, widget.data.pricingRules);
     final color = blocked
         ? theme.colorScheme.errorContainer

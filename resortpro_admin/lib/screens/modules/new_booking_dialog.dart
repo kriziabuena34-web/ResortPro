@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../l10n/app_strings.dart';
@@ -52,6 +53,12 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
   final _total = TextEditingController();
   final _payment = TextEditingController(text: '0');
   PaymentDetails _payDetails = const PaymentDetails(method: 'cash');
+
+  /// 0.5 = 50% downpayment, 1.0 = buong bayad, null = mano-manong halaga.
+  double? _payShare = 0.5;
+
+  /// Kailangan ng resort ng downpayment bago ma-reserve ang petsa.
+  static const _minDownRate = 0.5;
   final _notes = TextEditingController();
 
   bool _saving = false;
@@ -105,6 +112,36 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
     return pkg == null || pkg['max_pax'] == null ? null : asInt(pkg['max_pax']);
   }
 
+  double get _totalValue => double.tryParse(_total.text.replaceAll(',', '')) ?? 0;
+
+  /// Itakda ang total; kusang susunod ang "Binayaran ngayon" kapag 50% o buo ang napili.
+  void _setTotal(double total) {
+    _total.text = total.toStringAsFixed(0);
+    _applyShare();
+  }
+
+  void _applyShare() {
+    final share = _payShare;
+    if (share == null) return;
+    _payment.text = (_totalValue * share).roundToDouble().toStringAsFixed(0);
+  }
+
+  /// Mga petsang may aktibong booking na kasabay ng oras ng package (iisang lugar ang resort,
+  /// kaya bawal ang Day Tour + Function Hall Day hours; pwede ang Day Tour + Overnight).
+  Set<String> _bookedKeys(dynamic packageId) {
+    final mine = widget.data.slotsOf(packageId);
+    return {
+      for (final b in widget.data.bookings)
+        if (!isInactive(b) &&
+            bookingDateOf(b) != null &&
+            widget.data.slotsOf(b['package_id']).intersection(mine).isNotEmpty)
+          dateKey(bookingDateOf(b)!),
+    };
+  }
+
+  bool _selectable(DateTime day, dynamic packageId, Set<String> booked) =>
+      !booked.contains(dateKey(day)) && widget.data.blocksOn(day, packageId: packageId).isEmpty;
+
   Future<void> _checkAvailability() async {
     final pkg = _package;
     final date = _date;
@@ -124,8 +161,7 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
       result = Map<String, dynamic>.from(r as Map);
     } catch (_) {
       // Hindi pa na-run ang SQL: lokal na check na lang.
-      final taken = widget.data.bookings.any((b) =>
-          '${b['package_id']}' == '${pkg['id']}' && bookingDateOf(b) == date && !isInactive(b));
+      final taken = widget.data.isTimeTaken(date, pkg['id']);
       final blocked = widget.data.blocksOn(date, packageId: pkg['id']).isNotEmpty;
       result = {
         'available': !taken && !blocked,
@@ -139,21 +175,47 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
       _availability = result;
       _checking = false;
       if (result['available'] == true) {
-        final price = asDouble(result['price'] ?? pkg['price']);
-        _total.text = price.toStringAsFixed(0);
+        _setTotal(asDouble(result['price'] ?? pkg['price']));
       }
     });
   }
 
   Future<void> _pickDate() async {
-    final now = DateTime.now();
+    final pkg = _package;
+    if (pkg == null) {
+      setState(() => _error = tr('nbErrPackageFirst'));
+      return;
+    }
+    // Mula ngayon hanggang huling araw ng taon lang; bawal ang may booking na o naka-block.
+    final today = DateUtils.dateOnly(DateTime.now());
+    final last = DateTime(today.year, 12, 31);
+    final booked = _bookedKeys(pkg['id']);
+    DateTime? first;
+    for (var d = today; !d.isAfter(last); d = DateTime(d.year, d.month, d.day + 1)) {
+      if (_selectable(d, pkg['id'], booked)) {
+        first = d;
+        break;
+      }
+    }
+    if (first == null) {
+      setState(() => _error = tr('nbErrNoDates'));
+      return;
+    }
+    final current = _date;
+    final initial = current != null && !current.isBefore(today) && !current.isAfter(last) &&
+            _selectable(current, pkg['id'], booked)
+        ? current
+        : first;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _date ?? now,
-      firstDate: DateTime(now.year - 1),
-      lastDate: now.add(const Duration(days: 730)),
+      initialDate: initial,
+      firstDate: today,
+      lastDate: last,
+      selectableDayPredicate: (d) => _selectable(DateUtils.dateOnly(d), pkg['id'], booked),
+      helpText: tr('nbDateHelp'),
     );
     if (picked == null) return;
+    setState(() => _error = null);
     setState(() => _date = DateUtils.dateOnly(picked));
     await _checkAvailability();
   }
@@ -191,6 +253,11 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
     }
     if (paid < 0 || paid > total + 0.01) {
       setState(() => _error = tr('overBalance', {'amount': peso(total)}));
+      return;
+    }
+    final minDown = (total * _minDownRate).roundToDouble();
+    if (paid + 0.01 < minDown) {
+      setState(() => _error = tr('nbErrDownpayment', {'amount': peso(minDown)}));
       return;
     }
     final payError = _payDetails.validate(paid);
@@ -379,7 +446,20 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                     ),
                 ],
                 onChanged: (v) {
-                  setState(() => _packageId = v);
+                  setState(() {
+                    _packageId = v;
+                    _error = null;
+                    final p = _package;
+                    if (p != null) {
+                      // Lalabas agad ang presyo; papalitan kung may seasonal na presyo sa petsa.
+                      _setTotal(asDouble(p['price']));
+                      final d = _date;
+                      if (d != null && !_selectable(d, p['id'], _bookedKeys(p['id']))) {
+                        _date = null;
+                        _availability = null;
+                      }
+                    }
+                  });
                   _checkAvailability();
                 },
               ),
@@ -388,6 +468,13 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                 onPressed: _pickDate,
                 icon: const Icon(Icons.calendar_today, size: 18),
                 label: Text(_date == null ? tr('nbChooseDate') : formatDate(_date)),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  tr('nbDateRule', {'year': DateTime.now().year}),
+                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                ),
               ),
               const SizedBox(height: 8),
               if (_checking)
@@ -465,12 +552,13 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                     'elderly': tr('guestElderly'),
                   }.entries)
                     SizedBox(
-                      width: 100,
-                      child: TextField(
-                        controller: _pax[e.key],
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(labelText: e.value, isDense: true),
-                        onChanged: (_) => setState(() {}),
+                      width: 168,
+                      child: _PaxField(
+                        label: e.value,
+                        controller: _pax[e.key]!,
+                        // Hindi na madadagdagan gamit ang + kapag puno na ang package.
+                        canAdd: maxPax == null || _totalPax < maxPax,
+                        onChanged: () => setState(() {}),
                       ),
                     ),
                 ],
@@ -490,7 +578,9 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                     child: TextField(
                       controller: _total,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
                       decoration: InputDecoration(labelText: tr('fieldTotal'), prefixText: '₱ '),
+                      onChanged: (_) => setState(_applyShare),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -498,8 +588,9 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                     child: TextField(
                       controller: _payment,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
                       decoration: InputDecoration(labelText: tr('nbPaidNow'), prefixText: '₱ '),
-                      onChanged: (_) => setState(() {}),
+                      onChanged: (_) => setState(() => _payShare = null),
                     ),
                   ),
                 ],
@@ -509,15 +600,23 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
               Wrap(
                 spacing: 8,
                 children: [
-                  for (final e in {'nbPayNone': 0.0, 'nbPayDown': 0.5, 'nbPayFull': 1.0}.entries)
-                    ActionChip(
+                  for (final e in {'nbPayDown': 0.5, 'nbPayFull': 1.0}.entries)
+                    ChoiceChip(
                       label: Text(tr(e.key)),
-                      onPressed: () {
-                        final total = double.tryParse(_total.text.replaceAll(',', '')) ?? 0;
-                        setState(() => _payment.text = (total * e.value).roundToDouble().toStringAsFixed(0));
-                      },
+                      selected: _payShare == e.value,
+                      onSelected: (_) => setState(() {
+                        _payShare = e.value;
+                        _applyShare();
+                      }),
                     ),
                 ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  tr('nbDownNote', {'amount': peso((_totalValue * _minDownRate).roundToDouble())}),
+                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                ),
               ),
               const SizedBox(height: 12),
               // Paraan ng bayad: Cash (may sukli) / GCash / Maya (e-payment, may reference number)
@@ -684,4 +783,75 @@ Future<void> openNewBooking(BuildContext context, AdminData data, Future<void> F
   if (!saved || !context.mounted) return;
   showToast(context, tr('nbSaved'));
   await onSaved();
+}
+
+/// Bilang ng bisita na may − at +. Nawawala ang "0" kapag pinindot para makapag-type agad,
+/// at bumabalik sa 0 kapag iniwang blangko (gaya sa app).
+class _PaxField extends StatefulWidget {
+  const _PaxField({required this.label, required this.controller, required this.canAdd, required this.onChanged});
+
+  final String label;
+  final TextEditingController controller;
+  final bool canAdd;
+  final VoidCallback onChanged;
+
+  @override
+  State<_PaxField> createState() => _PaxFieldState();
+}
+
+class _PaxFieldState extends State<_PaxField> {
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() {
+      final c = widget.controller;
+      if (_focus.hasFocus && c.text == '0') {
+        c.clear();
+      } else if (!_focus.hasFocus && c.text.trim().isEmpty) {
+        c.text = '0';
+        widget.onChanged();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
+  int get _value => int.tryParse(widget.controller.text) ?? 0;
+
+  void _set(int v) {
+    widget.controller.text = '${v < 0 ? 0 : v}';
+    widget.onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: widget.controller,
+      focusNode: _focus,
+      textAlign: TextAlign.center,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
+      decoration: InputDecoration(
+        labelText: widget.label,
+        isDense: true,
+        prefixIcon: IconButton(
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.remove, size: 18),
+          onPressed: _value > 0 ? () => _set(_value - 1) : null,
+        ),
+        suffixIcon: IconButton(
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.add, size: 18),
+          onPressed: widget.canAdd ? () => _set(_value + 1) : null,
+        ),
+      ),
+      onChanged: (_) => widget.onChanged(),
+    );
+  }
 }
