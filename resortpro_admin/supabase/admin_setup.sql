@@ -1341,3 +1341,68 @@ revoke all on function public.submit_booking_survey(text, int, int, int, int, te
 grant execute on function public.submit_booking_survey(text, int, int, int, int, text) to authenticated;
 
 -- Tapos na ang Part 8!
+
+
+-- ===========================================================================
+-- PART 9 (dinagdag Nov 6, 2026): 50% downpayment bago ma-confirm
+--   Hindi ma-co-confirm ang booking hangga't walang VERIFIED na bayad na
+--   hindi bababa sa 50% ng total (policy #1 ng resort).
+-- ===========================================================================
+create or replace function public.bookings_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if tg_op = 'INSERT' and not public.is_admin() then
+    new.total_amount := coalesce(public.price_for(new.package_id, new.booking_date), new.total_amount);
+    new.status := 'reserved';
+    new.source := 'online';
+  end if;
+
+  if new.status::text in ('cancelled', 'no_show') then
+    return new;
+  end if;
+
+  -- Patakaran ng resort: kailangan ng verified na 50% downpayment bago ma-confirm (ma-reserve).
+  if tg_op = 'UPDATE' and old.status::text = 'reserved' and new.status::text = 'confirmed' then
+    if (select coalesce(sum(amount), 0) from public.payments
+         where booking_id::text = new.id::text and coalesce(status, 'verified') = 'verified')
+       + 0.01 < round(coalesce(new.total_amount, 0) * 0.5) then
+      raise exception 'DOWNPAYMENT_REQUIRED: A verified 50%% downpayment is needed before confirming.';
+    end if;
+  end if;
+
+  if tg_op = 'UPDATE'
+     and new.booking_date is not distinct from old.booking_date
+     and new.package_id is not distinct from old.package_id
+     and old.status::text not in ('cancelled', 'no_show') then
+    return new;
+  end if;
+
+  -- Isa-isang pagproseso ng booking sa iisang petsa (para walang sabay na makalusot).
+  perform pg_advisory_xact_lock(hashtext('booking:' || new.booking_date::text));
+
+  if exists (
+    select 1 from public.blocked_dates
+    where block_date = new.booking_date
+      and (package_id is null or package_id = new.package_id)
+  ) then
+    raise exception 'DATE_BLOCKED: This date is not available for booking.';
+  end if;
+
+  if exists (
+    select 1 from public.bookings
+    where booking_date = new.booking_date
+      and status::text not in ('cancelled', 'no_show')
+      and id <> new.id
+      and public.package_slots(package_id) && public.package_slots(new.package_id)
+  ) then
+    raise exception 'DATE_TAKEN: This date is already booked at that time.';
+  end if;
+
+  return new;
+end $$;
+
+-- Tapos na ang Part 9!

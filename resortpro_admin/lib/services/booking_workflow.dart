@@ -176,6 +176,17 @@ class BookingWorkflow {
     if (fullyPaid && (status == 'reserved' || status == 'confirmed')) {
       await _db.from('bookings').update({'status': 'fully_paid'}).eq('id', booking['id']);
       await log(booking['id'], 'status_change', fromStatus: '$status', toStatus: 'fully_paid');
+    } else if (status == 'reserved' && newPaid + 0.01 >= (totalOf(booking) * 0.5).roundToDouble()) {
+      // Verified na ang 50% downpayment: kusang naka-reserve (confirmed) na ang petsa.
+      await _db.from('bookings').update({'status': 'confirmed'}).eq('id', booking['id']);
+      await log(booking['id'], 'status_change', fromStatus: 'reserved', toStatus: 'confirmed',
+          note: 'Downpayment verified');
+      await NotificationService.notifyClient(
+        booking['client_id']?.toString(),
+        'booking_confirmed',
+        {'package': packageNameOf(booking), 'date': booking['booking_date']},
+        refId: '${booking['id']}',
+      );
     }
 
     await NotificationService.notifyClient(

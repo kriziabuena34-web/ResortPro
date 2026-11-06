@@ -163,7 +163,7 @@ class _BookingsPageState extends State<BookingsPage> {
               'booking_id': booking['id'],
               'amount': amount,
               'method': method,
-              'kind': 'balance',
+              'kind': paidOf(booking) <= 0 ? 'downpayment' : 'balance',
               'received_by': supabase.auth.currentUser!.id,
               if (!details.isCash) 'reference_no': details.reference,
             })
@@ -219,9 +219,33 @@ class _BookingsPageState extends State<BookingsPage> {
   Future<void> _runAction(Map<String, dynamic> booking, WorkflowAction action) async {
     String? note;
 
+    // Policy ng resort: kailangan ng VERIFIED na 50% downpayment bago ma-confirm (ma-reserve).
+    if (action.toStatus == 'confirmed' && booking['status'] == 'reserved') {
+      final needed = (totalOf(booking) * 0.5).roundToDouble();
+      if (paidOf(booking) + 0.01 < needed) {
+        final pending = paymentsOf(booking).any((p) => p['status'] == 'pending');
+        await showDialog(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(Icons.payments_outlined, color: AppColors.warning, size: 40),
+            title: Text(tr('confirmNeedsDownTitle')),
+            content: Text(
+              pending
+                  ? tr('confirmNeedsDownPending', {'amount': peso(needed)})
+                  : tr('confirmNeedsDownNone', {'amount': peso(needed)}),
+              textAlign: TextAlign.center,
+            ),
+            actions: [
+              FilledButton(onPressed: () => Navigator.pop(dialogContext), child: Text(tr('rcClose'))),
+            ],
+          ),
+        );
+        return;
+      }
+    }
+
     final hasPendingProof = paymentsOf(booking).any((p) => p['status'] == 'pending');
-    final needsConfirmWarning =
-        action.toStatus == 'confirmed' && (paidOf(booking) <= 0 || hasPendingProof);
+    final needsConfirmWarning = action.toStatus == 'confirmed' && hasPendingProof;
 
     if (action.destructive ||
         action.toStatus == 'checked_in' ||
@@ -285,7 +309,12 @@ class _BookingsPageState extends State<BookingsPage> {
         await widget.onChanged();
       } catch (e) {
         if (!mounted) return;
-        showToast(context, tr('statusChangeFailed', {'e': e}));
+        showToast(
+          context,
+          '$e'.contains('DOWNPAYMENT_REQUIRED')
+              ? tr('confirmNeedsDownNone', {'amount': peso((totalOf(booking) * 0.5).roundToDouble())})
+              : tr('statusChangeFailed', {'e': e}),
+        );
       }
     });
   }
@@ -368,7 +397,7 @@ class _BookingsPageState extends State<BookingsPage> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
-          title: Text(tr('recordBalanceTitle')),
+          title: Text(paidOf(booking) <= 0 ? tr('recordDownpayment') : tr('recordBalanceTitle')),
           content: SizedBox(
             width: 400,
             child: Column(
@@ -725,7 +754,10 @@ class _BookingsPageState extends State<BookingsPage> {
                         OutlinedButton.icon(
                           onPressed: busy ? null : () => _showRecordPaymentDialog(booking),
                           icon: const Icon(Icons.add_card, size: 18),
-                          label: Text(tr('recordPayment')),
+                          // Wala pang bayad: downpayment; may bayad na: ang natitirang balanse.
+                          label: Text(paidOf(booking) <= 0
+                              ? tr('recordDownpayment')
+                              : tr('recordBalance', {'amount': peso(remaining)})),
                         ),
                       TextButton(
                         onPressed: () => _showDetails(booking),
