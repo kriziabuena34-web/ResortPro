@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/offline_cache.dart';
 import '../utils/format.dart';
 
 class MyReceiptPage extends StatefulWidget {
@@ -18,6 +19,7 @@ class _MyReceiptPageState extends State<MyReceiptPage> {
   List<Map<String, dynamic>> _payments = [];
   bool _isLoading = true;
   String? _errorMessage;
+  DateTime? _offlineSavedAt;
 
   @override
   void initState() {
@@ -39,14 +41,28 @@ class _MyReceiptPageState extends State<MyReceiptPage> {
           .eq('booking_id', widget.bookingId)
           .order('created_at', ascending: true);
 
+      // Naka-save para maipakita ang e-receipt sa resort kahit walang signal.
+      OfflineCache.save('receipt_${widget.bookingId}', {'booking': booking, 'payments': payments});
+      if (!mounted) return;
       setState(() {
         _booking = booking;
         _payments = List<Map<String, dynamic>>.from(payments);
+        _offlineSavedAt = null;
+        _errorMessage = null;
         _isLoading = false;
       });
     } catch (e) {
+      final cached = isOfflineError(e) ? await OfflineCache.load('receipt_${widget.bookingId}') : null;
+      if (!mounted) return;
       setState(() {
-        _errorMessage = 'Failed to load receipt: $e';
+        if (cached != null) {
+          final d = Map<String, dynamic>.from(cached.data as Map);
+          _booking = Map<String, dynamic>.from(d['booking'] as Map);
+          _payments = [for (final p in d['payments'] as List) Map<String, dynamic>.from(p as Map)];
+          _offlineSavedAt = cached.savedAt;
+        } else {
+          _errorMessage = friendlyError(e, action: 'load your receipt');
+        }
         _isLoading = false;
       });
     }
@@ -79,7 +95,18 @@ class _MyReceiptPageState extends State<MyReceiptPage> {
     if (_errorMessage != null || _booking == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Receipt')),
-        body: Center(child: Text(_errorMessage ?? 'Booking not found.')),
+        body: _errorMessage != null
+            ? OfflineEmpty(
+                message: _errorMessage!,
+                onRetry: () {
+                  setState(() {
+                    _isLoading = true;
+                    _errorMessage = null;
+                  });
+                  _fetchReceipt();
+                },
+              )
+            : const Center(child: Text('Booking not found.')),
       );
     }
 
@@ -92,6 +119,8 @@ class _MyReceiptPageState extends State<MyReceiptPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_offlineSavedAt != null)
+              OfflineNotice(savedAt: _offlineSavedAt!, margin: const EdgeInsets.only(bottom: 16)),
             Center(
               child: Column(
                 children: [

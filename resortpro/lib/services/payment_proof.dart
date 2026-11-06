@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config.dart';
 import '../screens/info_pages.dart';
+import 'offline_cache.dart';
 import '../utils/format.dart';
 
 /// Ang laman ng proof of payment na ipapasa ng client.
@@ -230,6 +231,11 @@ class _PayBalanceSheetState extends State<_PayBalanceSheet> {
   Future<void> _submit() async {
     final proof = _proof;
     if (proof == null) return;
+    if (!await hasInternet()) {
+      if (mounted) showOfflineSnack(context);
+      return;
+    }
+    if (!mounted) return;
     // Lalabas ang Terms and Conditions bago i-submit ang bayad.
     if (!await showTermsAgreement(context) || !mounted) return;
     setState(() => _submitting = true);
@@ -245,7 +251,9 @@ class _PayBalanceSheetState extends State<_PayBalanceSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyError(e, action: 'upload your payment proof'))),
+      );
     }
   }
 

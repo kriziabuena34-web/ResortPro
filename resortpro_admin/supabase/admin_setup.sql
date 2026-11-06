@@ -809,3 +809,118 @@ revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
 
 -- Tapos na ang Part 3!
+
+
+-- ===========================================================================
+-- PART 4 (dinagdag Nov 5, 2026): Delete account – pati litrato ng ID
+--   Pinapayagan ang client na burahin ang sarili niyang ID photo sa storage
+--   (ginagamit ng "Delete account" bago burahin ang account).
+-- ===========================================================================
+drop policy if exists "government ids own delete" on storage.objects;
+create policy "government ids own delete" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'government-ids' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- Tapos na ang Part 4!
+
+
+-- ===========================================================================
+-- PART 5 (dinagdag Nov 6, 2026): I-link ang walk-in booking sa account
+--   • Bawat booking na walang account (walk-in/phone) ay may "claim code"
+--     na nakalagay sa resibo.
+--   • Kapag gumawa ng account ang guest, ita-type niya ang code sa app
+--     at mapupunta sa Bookings at My Receipt niya ang booking.
+-- ===========================================================================
+alter table public.bookings add column if not exists claim_code text;
+create unique index if not exists bookings_claim_code_unique
+  on public.bookings (claim_code) where claim_code is not null;
+
+-- 8 letra/numero, walang nakakalitong O/0 at I/1 (hal. K7QM4XPA)
+create or replace function public.gen_claim_code()
+returns text
+language plpgsql
+volatile
+set search_path = public
+as $$
+declare
+  chars text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  code  text;
+begin
+  loop
+    code := '';
+    for i in 1..8 loop
+      code := code || substr(chars, 1 + floor(random() * length(chars))::int, 1);
+    end loop;
+    exit when not exists (select 1 from public.bookings where claim_code = code);
+  end loop;
+  return code;
+end $$;
+
+-- May code ang booking na walang account; nawawala ang code kapag na-link na.
+create or replace function public.bookings_claim_code()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.client_id is not null then
+    new.claim_code := null;
+  elsif new.claim_code is null then
+    new.claim_code := public.gen_claim_code();
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_bookings_claim_code on public.bookings;
+create trigger trg_bookings_claim_code
+  before insert or update of client_id on public.bookings
+  for each row execute function public.bookings_claim_code();
+
+-- Bigyan ng code ang mga dating walk-in na wala pang account.
+update public.bookings
+   set claim_code = public.gen_claim_code()
+ where client_id is null and claim_code is null;
+
+-- Ginagamit ng app: i-link ang booking sa naka-login na account gamit ang code.
+create or replace function public.claim_booking(p_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid  uuid := auth.uid();
+  code text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g'));
+  b    record;
+begin
+  if uid is null then
+    raise exception 'NOT_SIGNED_IN';
+  end if;
+  if length(code) <> 8 then
+    raise exception 'INVALID_CODE';
+  end if;
+
+  select * into b
+    from public.bookings
+   where claim_code = code and client_id is null
+   for update;
+  if not found then
+    raise exception 'INVALID_CODE';
+  end if;
+
+  update public.bookings set client_id = uid where id = b.id;
+
+  begin
+    insert into public.booking_logs (booking_id, action, note)
+    values (b.id::text, 'claimed', 'Linked to the guest''s app account using the receipt code');
+  exception when others then null;
+  end;
+
+  return jsonb_build_object('booking_id', b.id, 'booking_date', b.booking_date);
+end $$;
+
+revoke all on function public.claim_booking(text) from public, anon;
+grant execute on function public.claim_booking(text) to authenticated;
+
+-- Tapos na ang Part 5!

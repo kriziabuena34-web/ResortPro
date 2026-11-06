@@ -202,6 +202,7 @@ class _BookingsPageState extends State<BookingsPage> {
             totalAmount: totalOf(booking),
             paidSoFar: paidBefore + amount,
             staff: supabase.auth.currentUser?.email ?? 'Admin',
+            claimCode: booking['client_id'] == null ? booking['claim_code'] as String? : null,
           ),
         );
         if (!mounted) return;
@@ -904,6 +905,11 @@ class _BookingDetailsDialogState extends State<_BookingDetailsDialog> {
               InfoRow(tr('fieldGuests'), tr('paxCount', {'n': guestsOf(booking)})),
               if (guestRows.isNotEmpty) InfoRow(tr('fieldBreakdown'), guestRows),
               InfoRow(tr('bookingRef'), '#${'${booking['id']}'.split('-').first.toUpperCase()}'),
+              if (booking['client_id'] == null && '${booking['claim_code'] ?? ''}'.length == 8)
+                InfoRow(
+                  tr('rcClaimCode'),
+                  '${'${booking['claim_code']}'.substring(0, 4)}-${'${booking['claim_code']}'.substring(4)}',
+                ),
               const Divider(height: 24),
               InfoRow(tr('fieldTotal'), peso(totalOf(booking))),
               InfoRow(tr('fieldPaid'), peso(paidOf(booking))),

@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../widgets/ui_kit.dart';
+import '../services/offline_cache.dart';
 import '../services/session.dart';
 import 'sign_in_page.dart';
 import 'verification_form_page.dart';
@@ -24,6 +25,7 @@ class _AccountPageState extends State<AccountPage> {
   List<Map<String, dynamic>> _bookings = [];
   bool _isLoading = true;
   bool _uploadingPhoto = false;
+  DateTime? _offlineSavedAt;
 
   @override
   void initState() {
@@ -46,14 +48,26 @@ class _AccountPageState extends State<AccountPage> {
         bookings = List<Map<String, dynamic>>.from(rows);
       } catch (_) {}
 
+      OfflineCache.save('account', {'profile': profile, 'bookings': bookings});
       if (!mounted) return;
       setState(() {
         _profile = profile;
         _bookings = bookings;
+        _offlineSavedAt = null;
         _isLoading = false;
       });
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      final cached = isOfflineError(e) ? await OfflineCache.load('account') : null;
+      if (!mounted) return;
+      setState(() {
+        if (cached != null) {
+          final d = Map<String, dynamic>.from(cached.data as Map);
+          _profile = Map<String, dynamic>.from(d['profile'] as Map);
+          _bookings = [for (final b in d['bookings'] as List) Map<String, dynamic>.from(b as Map)];
+          _offlineSavedAt = cached.savedAt;
+        }
+        _isLoading = false;
+      });
     }
   }
 
@@ -215,6 +229,12 @@ class _AccountPageState extends State<AccountPage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
           children: [
+            if (_offlineSavedAt != null)
+              OfflineNotice(
+                savedAt: _offlineSavedAt!,
+                margin: const EdgeInsets.only(bottom: 12),
+                onRetry: _fetchProfile,
+              ),
             // ---- Profile header ----
             Container(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
@@ -241,6 +261,8 @@ class _AccountPageState extends State<AccountPage> {
                             radius: 48,
                             backgroundColor: const Color(0xFFDDF2EF),
                             backgroundImage: photo.isEmpty ? null : NetworkImage(photo),
+                            // Offline: walang larawan, kulay lang ang ipapakita (hindi magka-crash).
+                            onBackgroundImageError: photo.isEmpty ? null : (_, _) {},
                             child: photo.isEmpty
                                 ? Text(
                                     googleName.isEmpty ? '?' : googleName[0].toUpperCase(),
@@ -452,6 +474,19 @@ class _AccountPageState extends State<AccountPage> {
 
   bool _deleting = false;
 
+  /// Burahin ang sariling files sa storage. Tahimik na lalaktawan kapag may error.
+  Future<void> _removeMyFiles(String uid) async {
+    try {
+      final avatars = await supabase.storage.from('avatars').list(path: uid);
+      if (avatars.isNotEmpty) {
+        await supabase.storage.from('avatars').remove([for (final f in avatars) '$uid/${f.name}']);
+      }
+    } catch (_) {}
+    try {
+      await supabase.storage.from('government-ids').remove(['$uid/id_front.jpg']);
+    } catch (_) {}
+  }
+
   Future<void> _confirmDeleteAccount() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -471,6 +506,20 @@ class _AccountPageState extends State<AccountPage> {
     );
 
     try {
+      final uid = supabase.auth.currentUser!.id;
+      // Suriin muna kung may paparating na booking, bago burahin ang mga file.
+      final active = await supabase
+          .from('bookings')
+          .select('id')
+          .eq('client_id', uid)
+          .inFilter('status', ['reserved', 'confirmed', 'fully_paid', 'checked_in'])
+          .gte('booking_date', dateKey(DateTime.now()))
+          .limit(1);
+      if ((active as List).isNotEmpty) throw Exception('HAS_ACTIVE_BOOKING');
+
+      // Burahin ang profile picture at litrato ng ID sa storage (privacy).
+      await _removeMyFiles(uid);
+
       await supabase.rpc('delete_my_account');
       // Burado na ang account, kaya baka mag-error ang sign out sa server; ayos lang.
       try {

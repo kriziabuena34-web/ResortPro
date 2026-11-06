@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config.dart';
+import '../services/offline_cache.dart';
 import '../services/payment_proof.dart';
 import '../utils/format.dart';
 import 'home_page.dart';
@@ -149,6 +150,13 @@ class _BookingPageState extends State<BookingPage> {
       return;
     }
 
+    // Walang internet: sabihin agad, bago pa ang Terms and Conditions.
+    if (!await hasInternet()) {
+      if (mounted) showOfflineSnack(context);
+      return;
+    }
+    if (!mounted) return;
+
     // Lalabas ang Terms and Conditions; kailangang basahin at sumang-ayon bago ma-submit.
     if (!await showTermsAgreement(context) || !mounted) return;
 
@@ -179,9 +187,14 @@ class _BookingPageState extends State<BookingPage> {
           .single();
       bookingId = '${bookingResponse['id']}';
 
+      // Ang server ang may huling presyo (seasonal pricing), kaya doon ibabatay ang downpayment.
+      final serverTotal = (bookingResponse['total_amount'] as num?)?.toDouble();
+      final downPayment =
+          serverTotal == null ? _downPayment : (serverTotal * downpaymentRate).roundToDouble();
+
       await submitPaymentProof(
         bookingId: bookingId,
-        amount: _downPayment,
+        amount: downPayment,
         kind: 'downpayment',
         proof: proof,
       );
@@ -212,9 +225,11 @@ class _BookingPageState extends State<BookingPage> {
         message = 'This date is not available for booking.';
       } else if (bookingId != null) {
         message = 'Your booking was saved, but the payment proof failed to upload. '
-            'Please upload it again from My Bookings. ($e)';
+            'Please upload it again from My Bookings.';
       } else {
-        message = 'Booking failed: $e';
+        message = isOfflineError(e)
+            ? 'No internet connection. Your booking was not sent. Please connect and try again.'
+            : 'Booking failed: $e';
       }
       if (mounted) _show(message);
       if (bookingId != null && mounted) Navigator.pop(context);

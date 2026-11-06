@@ -26,6 +26,7 @@ class PaymentReceipt {
     required this.staff,
     this.reference = '',
     this.cashReceived,
+    this.claimCode,
   });
 
   final Object paymentId;
@@ -41,6 +42,16 @@ class PaymentReceipt {
   final double totalAmount;
   final double paidSoFar; // kasama na ang bayad na ito
   final String staff;
+
+  /// Code para ma-link ng guest ang booking sa account niya sa app (kapag walang account).
+  final String? claimCode;
+
+  /// Hal. K7QM-4XPA
+  String? get claimCodeLabel {
+    final c = claimCode?.trim() ?? '';
+    if (c.isEmpty) return null;
+    return c.length == 8 ? '${c.substring(0, 4)}-${c.substring(4)}' : c;
+  }
 
   double get balance => (totalAmount - paidSoFar).clamp(0, double.infinity).toDouble();
   double? get change => method == 'cash' && cashReceived != null ? cashReceived! - amount : null;
@@ -120,6 +131,27 @@ class PaymentReceipt {
                 ),
               ),
             pw.Divider(thickness: 0.6),
+            if (claimCodeLabel != null) ...[
+              pw.SizedBox(height: 4),
+              pw.Text(p(tr('rcClaimTitle')),
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 4),
+              pw.Center(
+                child: pw.BarcodeWidget(
+                  barcode: pw.Barcode.qrCode(),
+                  data: claimCode!,
+                  width: 70,
+                  height: 70,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(claimCodeLabel!,
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, letterSpacing: 2)),
+              pw.Text(p(tr('rcClaimHint')), textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 7)),
+              pw.Divider(thickness: 0.6),
+            ],
             pw.SizedBox(height: 4),
             pw.Text(p(tr('rcThanks')), textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 8.5)),
             pw.SizedBox(height: 2),
@@ -200,6 +232,38 @@ Future<void> showPaymentReceipt(BuildContext context, PaymentReceipt r) {
                       ],
                     ),
                   ),
+                if (r.claimCodeLabel != null) ...[
+                  const Divider(height: 22),
+                  Text(
+                    tr('rcClaimTitle'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: SelectableText(
+                      r.claimCodeLabel!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 3,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    tr('rcClaimHint'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                  ),
+                ],
               ],
             ),
           ),
@@ -217,6 +281,41 @@ Future<void> showPaymentReceipt(BuildContext context, PaymentReceipt r) {
           icon: const Icon(Icons.print_outlined),
           label: Text(tr('rcPrint')),
         ),
+      ],
+    ),
+  );
+}
+
+/// Para sa walk-in na walang bayad pa: ipakita ang code para ma-link ng guest sa app.
+Future<void> showClaimCodeDialog(BuildContext context, String code) {
+  final label = code.length == 8 ? '${code.substring(0, 4)}-${code.substring(4)}' : code;
+  return showDialog(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      icon: const Icon(Icons.confirmation_number_outlined, color: AppColors.primary, size: 36),
+      title: Text(tr('rcClaimTitle')),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: SelectableText(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 3, color: AppColors.primary),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(tr('rcClaimHint'), textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted)),
+        ],
+      ),
+      actions: [
+        FilledButton(onPressed: () => Navigator.pop(dialogContext), child: Text(tr('rcClose'))),
       ],
     ),
   );

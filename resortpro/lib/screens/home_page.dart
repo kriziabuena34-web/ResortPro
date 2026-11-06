@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/notifications.dart';
+import '../services/offline_cache.dart';
 import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import '../widgets/notification_banner.dart';
@@ -130,6 +131,7 @@ class _HomePageState extends State<HomePage> {
   List<Package> _packages = [];
   bool _isLoading = true;
   String? _errorMessage;
+  DateTime? _offlineSavedAt; // kapag offline: kailan na-save ang ipinapakitang packages
 
   // Gallery photos mula sa admin (kapag wala, gagamitin ang _resortImages).
   List<Map<String, dynamic>> _gallery = [];
@@ -224,15 +226,29 @@ class _HomePageState extends State<HomePage> {
           .select()
           .order('id', ascending: true);
 
+      final list = List<Map<String, dynamic>>.from(data as List);
+      // I-save para may maipakita kahit walang internet.
+      OfflineCache.save('packages', list, perUser: false);
+      if (!mounted) return;
       setState(() {
-        _packages = (data as List)
-            .map((json) => Package.fromJson(json as Map<String, dynamic>))
-            .toList();
+        _packages = list.map(Package.fromJson).toList();
+        _errorMessage = null;
+        _offlineSavedAt = null;
         _isLoading = false;
       });
     } catch (e) {
+      final cached = isOfflineError(e) ? await OfflineCache.load('packages', perUser: false) : null;
+      if (!mounted) return;
       setState(() {
-        _errorMessage = 'Failed to load packages: $e';
+        if (cached != null) {
+          _packages = [
+            for (final j in cached.data as List) Package.fromJson(Map<String, dynamic>.from(j as Map)),
+          ];
+          _offlineSavedAt = cached.savedAt;
+          _errorMessage = null;
+        } else {
+          _errorMessage = friendlyError(e, action: 'load the packages');
+        }
         _isLoading = false;
       });
     }
@@ -349,6 +365,11 @@ class _HomePageState extends State<HomePage> {
   // BOOK NOW VERIFICATION CHECK
 
   Future<void> _handleBookNow(Package pkg) async {
+    // Kailangan ng internet sa pag-book: sabihin agad kapag offline.
+    if (!await hasInternet()) {
+      if (mounted) showOfflineSnack(context);
+      return;
+    }
     try {
       final userId = supabase.auth.currentUser!.id;
       final profile = await supabase
@@ -393,7 +414,7 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error checking account status: $e')),
+          SnackBar(content: Text(friendlyError(e, action: 'check your account'))),
         );
       }
     }
@@ -462,26 +483,12 @@ class _HomePageState extends State<HomePage> {
     }
 
     if (_errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
-              const SizedBox(height: 12),
-              Text(_errorMessage!, textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() => _isLoading = true);
-                  _fetchPackages();
-                },
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
+      return OfflineEmpty(
+        message: _errorMessage!,
+        onRetry: () {
+          setState(() => _isLoading = true);
+          _fetchPackages();
+        },
       );
     }
 
@@ -519,6 +526,16 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: _topSpace),
+
+            if (_offlineSavedAt != null)
+              OfflineNotice(
+                savedAt: _offlineSavedAt!,
+                margin: const EdgeInsets.fromLTRB(_pagePadding, 0, _pagePadding, 12),
+                onRetry: () {
+                  setState(() => _isLoading = true);
+                  _fetchPackages();
+                },
+              ),
 
             // WELCOME BANNER (katulad ng dashboard ng admin)
             Padding(

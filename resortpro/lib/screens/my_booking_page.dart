@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/claim_booking.dart';
+import '../services/offline_cache.dart';
 import '../services/payment_proof.dart';
 import '../utils/format.dart';
 import 'my_receipt_page.dart';
@@ -27,6 +29,7 @@ class _MyBookingPageState extends State<MyBookingPage> {
   Map<String, dynamic>? _profile;
   bool _isLoading = true;
   String? _errorMessage;
+  DateTime? _offlineSavedAt;
   String _query = '';
   late String _filter = widget.initialFilter;
   bool _newestFirst = true;
@@ -71,16 +74,26 @@ class _MyBookingPageState extends State<MyBookingPage> {
           .eq('client_id', userId)
           .order('booking_date', ascending: false);
 
+      OfflineCache.save('my_bookings', {'profile': profile, 'bookings': bookings});
       if (!mounted) return;
       setState(() {
         _profile = profile;
         _bookings = List<Map<String, dynamic>>.from(bookings);
+        _offlineSavedAt = null;
         _isLoading = false;
       });
     } catch (e) {
+      final cached = isOfflineError(e) ? await OfflineCache.load('my_bookings') : null;
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Failed to load bookings: $e';
+        if (cached != null) {
+          final d = Map<String, dynamic>.from(cached.data as Map);
+          _profile = Map<String, dynamic>.from(d['profile'] as Map);
+          _bookings = [for (final b in d['bookings'] as List) Map<String, dynamic>.from(b as Map)];
+          _offlineSavedAt = cached.savedAt;
+        } else {
+          _errorMessage = friendlyError(e, action: 'load your bookings');
+        }
         _isLoading = false;
       });
     }
@@ -170,6 +183,16 @@ class _MyBookingPageState extends State<MyBookingPage> {
     return list;
   }
 
+  Future<void> _claimWalkIn() async {
+    final linked = await showClaimBookingDialog(context);
+    if (!linked || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Booking added to your account. You can now see it here and in My Receipt.')),
+    );
+    setState(() => _filter = 'all');
+    await _fetchData();
+  }
+
   int _count(String filter) => _bookings.where((b) => _passesFilter(b, filter)).length;
 
   @override
@@ -177,7 +200,7 @@ class _MyBookingPageState extends State<MyBookingPage> {
     final body = _isLoading
         ? const Center(child: CircularProgressIndicator())
         : _errorMessage != null
-            ? Center(child: Text(_errorMessage!))
+            ? OfflineEmpty(message: _errorMessage!, onRetry: _fetchData)
             : _buildList();
 
     if (widget.embedded) return body;
@@ -200,6 +223,7 @@ class _MyBookingPageState extends State<MyBookingPage> {
 
     return Column(
       children: [
+        if (_offlineSavedAt != null) OfflineNotice(savedAt: _offlineSavedAt!, onRetry: _fetchData),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: SearchField(
@@ -222,6 +246,18 @@ class _MyBookingPageState extends State<MyBookingPage> {
               onPressed: () => setState(() => _newestFirst = !_newestFirst),
             ),
           ],
+        ),
+        // Booking na ginawa sa resort (walk-in o tawag): i-link gamit ang code sa resibo.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _claimWalkIn,
+              icon: const Icon(Icons.confirmation_number_outlined, size: 18),
+              label: const Text('Booked at the resort? Add it with your receipt code'),
+            ),
+          ),
         ),
         Expanded(
           child: RefreshIndicator(

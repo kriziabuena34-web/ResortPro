@@ -243,8 +243,12 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
             totalAmount: total,
             paidSoFar: paid,
             staff: supabase.auth.currentUser?.email ?? 'Admin',
+            claimCode: booking['claim_code'] as String?,
           ),
         );
+      } else if ('${booking['claim_code'] ?? ''}'.isNotEmpty) {
+        // Walang bayad pa: ipakita pa rin ang code para ma-link ng guest sa app.
+        await showClaimCodeDialog(context, '${booking['claim_code']}');
       }
       if (!mounted) return;
       Navigator.pop(context, true);

@@ -172,7 +172,7 @@ class _ResortMapPageState extends State<ResortMapPage> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.resortpro',
+                userAgentPackageName: 'com.aryana.resortpro',
                 // Sine-save ang mapang nakita na, para gumana kahit offline.
                 tileProvider: _tiles,
               ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/offline_cache.dart';
 import '../utils/format.dart';
 import 'my_receipt_page.dart';
 
@@ -18,6 +19,7 @@ class _MyReceiptListPageState extends State<MyReceiptListPage> {
   List<Map<String, dynamic>> _receipts = [];
   bool _isLoading = true;
   String? _errorMessage;
+  DateTime? _offlineSavedAt;
 
   @override
   void initState() {
@@ -70,13 +72,23 @@ class _MyReceiptListPageState extends State<MyReceiptListPage> {
           .eq('client_id', userId)
           .order('booking_date', ascending: false);
 
+      OfflineCache.save('my_receipts', data);
+      if (!mounted) return;
       setState(() {
         _receipts = List<Map<String, dynamic>>.from(data);
+        _offlineSavedAt = null;
         _isLoading = false;
       });
     } catch (e) {
+      final cached = isOfflineError(e) ? await OfflineCache.load('my_receipts') : null;
+      if (!mounted) return;
       setState(() {
-        _errorMessage = 'Failed to load receipts: $e';
+        if (cached != null) {
+          _receipts = [for (final r in cached.data as List) Map<String, dynamic>.from(r as Map)];
+          _offlineSavedAt = cached.savedAt;
+        } else {
+          _errorMessage = friendlyError(e, action: 'load your receipts');
+        }
         _isLoading = false;
       });
     }
@@ -99,11 +111,12 @@ class _MyReceiptListPageState extends State<MyReceiptListPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
-          ? Center(child: Text(_errorMessage!))
+          ? OfflineEmpty(message: _errorMessage!, onRetry: _fetchReceipts)
           : _receipts.isEmpty
           ? const Center(child: Text('No receipts yet.'))
           : Column(
         children: [
+          if (_offlineSavedAt != null) OfflineNotice(savedAt: _offlineSavedAt!, onRetry: _fetchReceipts),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: SearchField(
