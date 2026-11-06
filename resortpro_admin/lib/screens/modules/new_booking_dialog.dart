@@ -715,12 +715,19 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
       );
     }
 
-    final q = _clientSearch.text.trim().toLowerCase();
+    // Bawat salita sa hinahanap ay dapat nasa pangalan o phone, kahit anong pagkakasunod
+    // (hal. "krizia buena" at "buena krizia" ay parehong makikita).
+    final words = _clientSearch.text.toLowerCase().split(RegExp(r'[\s,]+')).where((w) => w.isNotEmpty).toList();
     final matches = clients.where((c) {
-      if (q.isEmpty) return true;
-      return _fullName(c).toLowerCase().contains(q) ||
-          _part(c['google_display_name']).toLowerCase().contains(q) ||
-          _part(c['phone']).contains(q);
+      if (words.isEmpty) return true;
+      final hay = [
+        _fullName(c),
+        _part(c['google_display_name']),
+        _part(c['username']),
+        _part(c['phone']),
+        _part(c['phone']).replaceAll(RegExp(r'\D'), ''),
+      ].join(' ').toLowerCase();
+      return words.every(hay.contains);
     }).toList();
 
     return Column(
