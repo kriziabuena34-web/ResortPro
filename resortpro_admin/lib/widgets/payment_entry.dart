@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../l10n/app_strings.dart';
 import '../services/admin_data.dart';
+import '../services/reference_format.dart';
 import '../theme/app_theme.dart';
 
 /// Detalye ng bayad na tinanggap ng staff (walk-in o Record payment).
@@ -29,7 +30,7 @@ class PaymentDetails {
       if (cashReceived != null && cashReceived! + 0.01 < amount) return 'peCashShort';
       return null;
     }
-    if (reference.replaceAll(RegExp(r'\s'), '').length < 6) return 'peRefRequired';
+    if (!RefFormat.of(method).isComplete(reference)) return method == 'maya' ? 'peRefMaya' : 'peRefGcash';
     return null;
   }
 }
@@ -99,7 +100,10 @@ class _PaymentEntryState extends State<PaymentEntry> {
           ],
           selected: {_method},
           onSelectionChanged: (s) {
-            setState(() => _method = s.first);
+            setState(() {
+              _method = s.first;
+              if (_method != 'cash') _reference.text = RefFormat.of(_method).format(_reference.text);
+            });
             _emit();
           },
         ),
@@ -189,14 +193,26 @@ class _PaymentEntryState extends State<PaymentEntry> {
               ],
             ),
           ),
+          // Kusang may espasyo; hindi lalampas sa bilang ng reference number.
           TextField(
+            key: ValueKey('ref-$_method'),
             controller: _reference,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]'))],
+            keyboardType: RefFormat.of(_method).digitsOnly ? TextInputType.number : TextInputType.visiblePassword,
+            textCapitalization: TextCapitalization.characters,
+            autocorrect: false,
+            enableSuggestions: false,
+            inputFormatters: [RefFormat.of(_method).formatter],
+            style: const TextStyle(letterSpacing: 1.2, fontWeight: FontWeight.w600),
             decoration: InputDecoration(
               labelText: tr('peReference', {'method': methodLabel(_method)}),
-              hintText: 'e.g. 1012 345 678901',
-              helperText: tr('peRefHelp'),
+              hintText: 'e.g. ${RefFormat.of(_method).example}',
+              helperText: tr('peRefCount', {
+                'n': RefFormat.of(_method).clean(_reference.text).length,
+                'max': RefFormat.of(_method).length,
+              }),
+              suffixIcon: RefFormat.of(_method).isComplete(_reference.text)
+                  ? const Icon(Icons.check_circle, color: AppColors.success)
+                  : null,
             ),
             onChanged: (_) {
               setState(() {});

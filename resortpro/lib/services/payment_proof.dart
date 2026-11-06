@@ -7,6 +7,8 @@ import '../config.dart';
 import '../screens/info_pages.dart';
 import 'offline_cache.dart';
 import '../utils/format.dart';
+import '../utils/reference_format.dart';
+import '../theme/app_theme.dart';
 
 /// Ang laman ng proof of payment na ipapasa ng client.
 class PaymentProof {
@@ -73,7 +75,7 @@ class _PaymentProofFormState extends State<PaymentProofForm> {
   void _emit() {
     final ref = _reference.text.trim();
     widget.onChanged(
-      ref.length >= 6 && _image != null
+      RefFormat.of(_method).isComplete(ref) && _image != null
           ? PaymentProof(method: _method, reference: ref, image: _image!)
           : null,
     );
@@ -106,7 +108,11 @@ class _PaymentProofFormState extends State<PaymentProofForm> {
           ],
           selected: {_method},
           onSelectionChanged: (s) {
-            setState(() => _method = s.first);
+            setState(() {
+              _method = s.first;
+              // Ayusin ang format ayon sa bagong paraan ng bayad.
+              _reference.text = RefFormat.of(_method).format(_reference.text);
+            });
             _emit();
           },
         ),
@@ -159,16 +165,36 @@ class _PaymentProofFormState extends State<PaymentProofForm> {
         ),
         const SizedBox(height: 12),
 
-        TextField(
-          controller: _reference,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Reference number',
-            hintText: 'e.g. 1012 345 678901',
-            border: OutlineInputBorder(),
-          ),
-          onChanged: (_) => _emit(),
-        ),
+        // Kusang may espasyo; hindi lalampas sa bilang ng GCash/Maya reference number.
+        Builder(builder: (context) {
+          final f = RefFormat.of(_method);
+          final count = f.clean(_reference.text).length;
+          final done = count == f.length;
+          return TextField(
+            key: ValueKey('ref-$_method'),
+            controller: _reference,
+            keyboardType: f.digitsOnly ? TextInputType.number : TextInputType.visiblePassword,
+            textCapitalization: TextCapitalization.characters,
+            autocorrect: false,
+            enableSuggestions: false,
+            inputFormatters: [f.formatter],
+            style: const TextStyle(letterSpacing: 1.2, fontWeight: FontWeight.w600),
+            decoration: InputDecoration(
+              labelText: '${_method == 'gcash' ? 'GCash' : 'Maya'} reference number',
+              hintText: 'e.g. ${f.example}',
+              helperText: done
+                  ? 'Looks complete.'
+                  : '${f.length} ${f.digitsOnly ? 'digits' : 'letters/numbers'} · $count of ${f.length}',
+              helperStyle: TextStyle(color: done ? AppColors.success : null),
+              suffixIcon: done ? const Icon(Icons.check_circle, color: AppColors.success) : null,
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: (_) {
+              setState(() {});
+              _emit();
+            },
+          );
+        }),
         const SizedBox(height: 12),
 
         if (_image == null)
