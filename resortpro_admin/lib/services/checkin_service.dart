@@ -52,7 +52,7 @@ class CheckinService {
 
   static Future<Map<String, dynamic>> settings() async {
     final r = await _db.from('resort_settings').select().eq('id', 1).maybeSingle();
-    return r ?? {'late_fee_per_hour': 500, 'late_grace_minutes': 15};
+    return r ?? {'late_fee_per_hour': 500, 'late_grace_minutes': 10};
   }
 
   static Future<void> saveSettings({required double perHour, required int graceMinutes}) async {

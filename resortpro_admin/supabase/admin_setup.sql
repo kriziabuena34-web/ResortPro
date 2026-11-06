@@ -1083,7 +1083,7 @@ alter table public.profiles add column if not exists google_avatar_url text;
 --   • Bawat booking ay may QR code (checkin_code) na ini-scan ng staff.
 --   • Unang scan = IN (kailangang bayad na ang balanse), pangalawa = OUT.
 --   • Kapag late ang OUT, may multa ayon sa resort_settings (₱ kada oras,
---     may palugit), na idinadagdag sa total ng booking.
+--     may palugit na 10 minuto), na idinadagdag sa total ng booking.
 --   • Tapos lang ang stay (completed) kapag nasagutan ang survey.
 -- ===========================================================================
 
@@ -1091,10 +1091,12 @@ alter table public.profiles add column if not exists google_avatar_url text;
 create table if not exists public.resort_settings (
   id                   int primary key default 1 check (id = 1),
   late_fee_per_hour    numeric not null default 500,
-  late_grace_minutes   int     not null default 15,
+  late_grace_minutes   int     not null default 10,
   updated_at           timestamptz not null default now()
 );
 insert into public.resort_settings (id) values (1) on conflict (id) do nothing;
+-- Kinumpirma ng resort (Nov 6, 2026): ₱500 kada oras ng extension, 10 minutong palugit.
+alter table public.resort_settings alter column late_grace_minutes set default 10;
 
 alter table public.resort_settings enable row level security;
 drop policy if exists "anyone can read resort settings" on public.resort_settings;
@@ -1259,7 +1261,7 @@ begin
     select * into s from public.resort_settings where id = 1;
     ends := public.booking_end_at(b.booking_date, b.package_id);
     late := greatest(0, floor(extract(epoch from (now() - ends)) / 60)::int);
-    if late > coalesce(s.late_grace_minutes, 15) then
+    if late > coalesce(s.late_grace_minutes, 10) then
       fee := ceil(late / 60.0) * coalesce(s.late_fee_per_hour, 500);
     else
       late := 0;

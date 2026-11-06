@@ -502,7 +502,8 @@ class HelpSupportPage extends StatelessWidget {
     ),
     (
       'Can I extend my stay?',
-      'Yes, extensions are charged ₱500 per hour, subject to availability. Please ask the staff on-site.',
+      'Yes, extensions are charged ₱500 per hour, subject to availability. There is a 10-minute grace period '
+          'after your package end time. Please ask the staff on-site.',
     ),
     (
       'How many guests are allowed?',

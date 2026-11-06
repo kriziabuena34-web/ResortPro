@@ -58,7 +58,8 @@ Future<void> showCheckinQr(BuildContext context, Map<String, dynamic> booking) {
           const SizedBox(height: 8),
           Text(
             inside
-                ? 'Show this to the staff when you leave. Checking out after your package time has a late fee.'
+                ? 'Show this to the staff when you leave. Checking out more than 10 minutes after your package '
+                    'time is charged ₱500 per hour.'
                 : 'Show this to the staff when you arrive. Your balance must be paid before check-in.',
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 13, color: AppColors.muted),
