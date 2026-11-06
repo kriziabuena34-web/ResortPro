@@ -32,6 +32,7 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
   String _source = 'walk_in';
   bool _existingClient = false;
   String? _clientId;
+  final _clientSearch = TextEditingController();
   final _guestName = TextEditingController();
   final _guestPhone = TextEditingController();
 
@@ -58,7 +59,7 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
 
   @override
   void dispose() {
-    for (final c in [_guestName, _guestPhone, _eventType, _total, _payment, _notes, ..._pax.values]) {
+    for (final c in [_guestName, _guestPhone, _clientSearch, _eventType, _total, _payment, _notes, ..._pax.values]) {
       c.dispose();
     }
     super.dispose();
@@ -71,10 +72,37 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
 
   String _guestDisplayName() {
     if (!_existingClient) return _guestName.text.trim();
-    final c = widget.data.clients.where((c) => '${c['id']}' == _clientId).firstOrNull;
+    final c = _selectedClient;
     if (c == null) return '—';
-    final name = '${c['google_display_name'] ?? '${c['first_name'] ?? ''} ${c['last_name'] ?? ''}'}'.trim();
+    final name = _fullName(c);
     return name.isEmpty ? '—' : name;
+  }
+
+  Map<String, dynamic>? get _selectedClient =>
+      widget.data.clients.where((c) => '${c['id']}' == _clientId).firstOrNull;
+
+  static String _part(dynamic v) {
+    final t = '${v ?? ''}'.trim();
+    return t.isEmpty || t.toUpperCase() == 'N/A' ? '' : t;
+  }
+
+  /// "Dela Cruz, Juan Santos Jr." (apelyido, pangalan, gitnang pangalan) gaya ng nasa account.
+  static String _fullName(Map<String, dynamic> c) {
+    final last = _part(c['last_name']);
+    final first = _part(c['first_name']);
+    final middle = _part(c['middle_name']);
+    final suffix = _part(c['suffix']);
+    if (last.isEmpty && first.isEmpty) return _part(c['google_display_name']);
+    final rest = [first, middle, suffix].where((e) => e.isNotEmpty).join(' ');
+    return rest.isEmpty ? last : (last.isEmpty ? rest : '$last, $rest');
+  }
+
+  /// Para sa A–Z: apelyido muna, saka pangalan.
+  static String _sortKey(Map<String, dynamic> c) => _fullName(c).toLowerCase();
+
+  int? get _maxPax {
+    final pkg = _package;
+    return pkg == null || pkg['max_pax'] == null ? null : asInt(pkg['max_pax']);
   }
 
   Future<void> _checkAvailability() async {
@@ -274,10 +302,9 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
     final basePrice = pkg == null ? null : asDouble(pkg['price']);
     final price = _availability?['price'] == null ? null : asDouble(_availability!['price']);
 
-    final clients = [...widget.data.clients]
-      ..sort((a, b) => '${a['google_display_name'] ?? a['first_name'] ?? ''}'
-          .toLowerCase()
-          .compareTo('${b['google_display_name'] ?? b['first_name'] ?? ''}'.toLowerCase()));
+    final clients = [...widget.data.clients]..sort((a, b) => _sortKey(a).compareTo(_sortKey(b)));
+    final maxPax = _maxPax;
+    final overPax = maxPax != null && _totalPax > maxPax;
 
     return AlertDialog(
       title: Text(tr('nbTitle')),
@@ -316,23 +343,7 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                 onChanged: (v) => setState(() => _existingClient = v),
               ),
               if (_existingClient)
-                DropdownButtonFormField<String>(
-                  initialValue: _clientId,
-                  isExpanded: true,
-                  decoration: InputDecoration(labelText: tr('fieldClient')),
-                  items: [
-                    for (final c in clients)
-                      DropdownMenuItem(
-                        value: '${c['id']}',
-                        child: Text(
-                          '${c['google_display_name'] ?? '${c['first_name'] ?? ''} ${c['last_name'] ?? ''}'}'
-                          '${c['phone'] != null ? ' · ${c['phone']}' : ''}',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                  onChanged: (v) => setState(() => _clientId = v),
-                )
+                _clientPicker(theme, clients)
               else
                 Row(
                   children: [
@@ -408,7 +419,40 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
               const SizedBox(height: 16),
 
               // ---- Guests ----
-              _label(theme, '${tr('fieldGuests')} (${tr('paxCount', {'n': _totalPax})})'),
+              _label(theme, tr('fieldGuests')),
+              // Kabuuang bisita at maximum ng package (pula kapag lumampas)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: (overPax ? theme.colorScheme.error : const Color(0xFF0F766E)).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: (overPax ? theme.colorScheme.error : const Color(0xFF0F766E)).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(overPax ? Icons.error_outline : Icons.groups_outlined,
+                        size: 20, color: overPax ? theme.colorScheme.error : const Color(0xFF0F766E)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        overPax
+                            ? tr('nbPaxOver', {'n': _totalPax, 'max': maxPax})
+                            : maxPax == null
+                                ? tr('nbPaxTotal', {'n': _totalPax})
+                                : tr('nbPaxOfMax', {'n': _totalPax, 'max': maxPax}),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: overPax ? theme.colorScheme.error : null,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -460,13 +504,29 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
+              // Mabilis na pagpili ng halaga
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final e in {'nbPayNone': 0.0, 'nbPayDown': 0.5, 'nbPayFull': 1.0}.entries)
+                    ActionChip(
+                      label: Text(tr(e.key)),
+                      onPressed: () {
+                        final total = double.tryParse(_total.text.replaceAll(',', '')) ?? 0;
+                        setState(() => _payment.text = (total * e.value).roundToDouble().toStringAsFixed(0));
+                      },
+                    ),
+                ],
+              ),
               const SizedBox(height: 12),
-              // Paraan ng bayad: Cash (may sukli) / GCash / Maya (may reference number)
-              if ((double.tryParse(_payment.text.replaceAll(',', '')) ?? 0) > 0)
-                PaymentEntry(
-                  amount: double.tryParse(_payment.text.replaceAll(',', '')) ?? 0,
-                  onChanged: (d) => _payDetails = d,
-                ),
+              // Paraan ng bayad: Cash (may sukli) / GCash / Maya (e-payment, may reference number)
+              Text(tr('paymentMethod'), style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              PaymentEntry(
+                amount: double.tryParse(_payment.text.replaceAll(',', '')) ?? 0,
+                onChanged: (d) => _payDetails = d,
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _notes,
@@ -500,6 +560,113 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
               : const Icon(Icons.save_outlined),
           label: Text(tr('nbSave')),
+        ),
+      ],
+    );
+  }
+
+  /// Hanapin at piliin ang client (A–Z ayon sa apelyido). Ipinapakita ang birth date at phone ng napili.
+  Widget _clientPicker(ThemeData theme, List<Map<String, dynamic>> clients) {
+    final selected = _selectedClient;
+    if (selected != null) {
+      final phone = _part(selected['phone']);
+      final birth = parseDate(selected['birth_date']);
+      final verified = selected['verification_status'] == 'verified';
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F766E).withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF0F766E).withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const CircleAvatar(
+              backgroundColor: Color(0xFF0F766E),
+              child: Icon(Icons.person, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_fullName(selected), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                  const SizedBox(height: 4),
+                  Text('${tr('birthDate')}: ${birth == null ? tr('notSet') : formatDate(birth)}'),
+                  Text('${tr('fieldPhone')}: ${phone.isEmpty ? tr('notSet') : phone}'),
+                  const SizedBox(height: 4),
+                  Text(
+                    verified ? tr('nbClientVerified') : tr('nbClientNotVerified'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: verified ? const Color(0xFF15803D) : const Color(0xFFC2410C),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: () => setState(() => _clientId = null),
+              child: Text(tr('nbChangeClient')),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final q = _clientSearch.text.trim().toLowerCase();
+    final matches = clients.where((c) {
+      if (q.isEmpty) return true;
+      return _fullName(c).toLowerCase().contains(q) ||
+          _part(c['google_display_name']).toLowerCase().contains(q) ||
+          _part(c['phone']).contains(q);
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _clientSearch,
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.search),
+            hintText: tr('nbSearchClient'),
+            isDense: true,
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          constraints: const BoxConstraints(maxHeight: 220),
+          decoration: BoxDecoration(
+            border: Border.all(color: theme.dividerColor),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: matches.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(tr('noResults'), textAlign: TextAlign.center),
+                )
+              : ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: matches.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final c = matches[i];
+                    final phone = _part(c['phone']);
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.person_outline),
+                      title: Text(_fullName(c), overflow: TextOverflow.ellipsis),
+                      subtitle: phone.isEmpty ? null : Text(phone),
+                      onTap: () => setState(() {
+                        _clientId = '${c['id']}';
+                        _clientSearch.clear();
+                      }),
+                    );
+                  },
+                ),
         ),
       ],
     );

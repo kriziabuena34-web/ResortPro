@@ -34,6 +34,10 @@ class PaymentDetails {
   }
 }
 
+/// Saan magpapadala ang guest kapag GCash/Maya (e-payment sa resort mismo).
+const resortPayName = "Aryana's Guests House";
+const resortPayNumber = '0962 882 8792';
+
 /// Paraan ng bayad (Cash / GCash / Maya) + sukli o reference number.
 class PaymentEntry extends StatefulWidget {
   const PaymentEntry({super.key, required this.amount, required this.onChanged, this.initialMethod = 'cash'});
@@ -145,7 +149,46 @@ class _PaymentEntryState extends State<PaymentEntry> {
               ),
             ),
           ],
-        ] else
+        ] else ...[
+          // E-payment: saan magpapadala ang guest, bago ilagay ang reference number.
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.info.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.info.withValues(alpha: 0.25)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.qr_code_2, color: AppColors.info),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tr('peSendTo', {'method': methodLabel(_method)}),
+                        style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                      ),
+                      const SelectableText(
+                        '$resortPayNumber · $resortPayName',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                      ),
+                      if (widget.amount > 0)
+                        Text(
+                          tr('peSendAmount', {'amount': peso(widget.amount)}),
+                          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                        ),
+                      const SizedBox(height: 2),
+                      Text(tr('peSendHelp'), style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
           TextField(
             controller: _reference,
             keyboardType: TextInputType.number,
@@ -160,6 +203,7 @@ class _PaymentEntryState extends State<PaymentEntry> {
               _emit();
             },
           ),
+        ],
       ],
     );
   }
