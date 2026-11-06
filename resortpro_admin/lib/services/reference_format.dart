@@ -2,7 +2,7 @@ import 'package:flutter/services.dart';
 
 /// Format ng reference number ng GCash at Maya.
 ///   GCash: 13 na numero, nakikita bilang "1012 345 678901" (4-3-6)
-///   Maya:  12 na letra o numero, nakikita bilang "A1B2 C3D4 E5F6" (4-4-4)
+///   Maya:  12 na numero at letra (kahit saang puwesto), hal. "1234 567A 8B90" (4-4-4)
 class RefFormat {
   const RefFormat._(this.groups, this.digitsOnly, this.example);
 
@@ -11,7 +11,7 @@ class RefFormat {
   final String example;
 
   static const gcash = RefFormat._([4, 3, 6], true, '1012 345 678901');
-  static const maya = RefFormat._([4, 4, 4], false, 'A1B2 C3D4 E5F6');
+  static const maya = RefFormat._([4, 4, 4], false, '1234 567A 8B90');
 
   static RefFormat of(String method) => method == 'maya' ? maya : gcash;
 
