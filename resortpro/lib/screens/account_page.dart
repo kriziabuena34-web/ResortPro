@@ -638,7 +638,7 @@ class _UsernameDialogState extends State<_UsernameDialog> {
           textInputAction: TextInputAction.done,
           onFieldSubmitted: (_) => _save(),
           decoration: const InputDecoration(
-            hintText: 'e.g. Izia Buena',
+            hintText: 'Enter the name you want to show',
             helperText: 'This name is shown on your account. Your verified real name stays the same.',
             helperMaxLines: 2,
           ),
