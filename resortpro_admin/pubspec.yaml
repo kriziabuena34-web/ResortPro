@@ -41,6 +41,7 @@ dependencies:
   printing: ^5.14.3
   excel: ^4.0.6
   file_saver: ^0.7.0
+  mobile_scanner: ^7.5.0
 
 dev_dependencies:
   flutter_test:

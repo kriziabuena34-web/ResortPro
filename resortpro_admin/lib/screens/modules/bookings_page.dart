@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../l10n/app_strings.dart';
 import '../../services/admin_data.dart';
 import '../../services/booking_workflow.dart';
+import '../../services/checkin_service.dart';
 import '../../services/receipt.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/admin_widgets.dart';
@@ -203,6 +204,7 @@ class _BookingsPageState extends State<BookingsPage> {
             paidSoFar: paidBefore + amount,
             staff: supabase.auth.currentUser?.email ?? 'Admin',
             claimCode: booking['client_id'] == null ? booking['claim_code'] as String? : null,
+            checkinCode: booking['checkin_code'] as String?,
           ),
         );
         if (!mounted) return;
@@ -246,6 +248,33 @@ class _BookingsPageState extends State<BookingsPage> {
       );
       if (result == null) return;
       note = result;
+    }
+
+    // Check in / Check out: dumaan sa parehong proseso ng QR scan
+    // (bayad muna bago pumasok; multa kapag late; survey bago matapos).
+    if (action.toStatus == 'checked_in' || action.toStatus == 'completed') {
+      await _runBusy(booking, () async {
+        try {
+          final result = await CheckinService.scan(bookingId: '${booking['id']}');
+          await widget.onChanged();
+          if (!mounted) return;
+          await showScanResult(
+            context,
+            result: result,
+            booking: booking,
+            onSurvey: () async {
+              if (await showSurveyDialog(context, booking) && mounted) {
+                showToast(context, tr('svDone'));
+                await widget.onChanged();
+              }
+            },
+          );
+        } catch (e) {
+          if (!mounted) return;
+          showToast(context, CheckinService.friendly(e));
+        }
+      });
+      return;
     }
 
     await _runBusy(booking, () async {

@@ -27,6 +27,7 @@ class PaymentReceipt {
     this.reference = '',
     this.cashReceived,
     this.claimCode,
+    this.checkinCode,
   });
 
   final Object paymentId;
@@ -45,6 +46,16 @@ class PaymentReceipt {
 
   /// Code para ma-link ng guest ang booking sa account niya sa app (kapag walang account).
   final String? claimCode;
+
+  /// QR para sa check-in / check-out sa resort.
+  final String? checkinCode;
+
+  /// Hal. 7K3QM-4XPA2
+  String? get checkinCodeLabel {
+    final c = checkinCode?.trim() ?? '';
+    if (c.isEmpty) return null;
+    return c.length == 10 ? '${c.substring(0, 5)}-${c.substring(5)}' : c;
+  }
 
   /// Hal. K7QM-4XPA
   String? get claimCodeLabel {
@@ -131,21 +142,33 @@ class PaymentReceipt {
                 ),
               ),
             pw.Divider(thickness: 0.6),
-            if (claimCodeLabel != null) ...[
+            if (checkinCodeLabel != null) ...[
               pw.SizedBox(height: 4),
-              pw.Text(p(tr('rcClaimTitle')),
+              pw.Text(p(tr('rcCheckinTitle')),
                   textAlign: pw.TextAlign.center,
                   style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 4),
               pw.Center(
                 child: pw.BarcodeWidget(
                   barcode: pw.Barcode.qrCode(),
-                  data: claimCode!,
-                  width: 70,
-                  height: 70,
+                  data: checkinCode!,
+                  width: 80,
+                  height: 80,
                 ),
               ),
+              pw.SizedBox(height: 3),
+              pw.Text(checkinCodeLabel!,
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, letterSpacing: 1.5)),
+              pw.Text(p(tr('rcCheckinHint')), textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 7)),
+              pw.Divider(thickness: 0.6),
+            ],
+            if (claimCodeLabel != null) ...[
               pw.SizedBox(height: 4),
+              pw.Text(p(tr('rcClaimTitle')),
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 2),
               pw.Text(claimCodeLabel!,
                   textAlign: pw.TextAlign.center,
                   style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, letterSpacing: 2)),
@@ -232,6 +255,20 @@ Future<void> showPaymentReceipt(BuildContext context, PaymentReceipt r) {
                       ],
                     ),
                   ),
+                if (r.checkinCodeLabel != null) ...[
+                  const Divider(height: 22),
+                  Row(
+                    children: [
+                      const Icon(Icons.qr_code_2, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(tr('rcCheckinTitle'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                      ),
+                      SelectableText(r.checkinCodeLabel!,
+                          style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+                    ],
+                  ),
+                ],
                 if (r.claimCodeLabel != null) ...[
                   const Divider(height: 22),
                   Text(

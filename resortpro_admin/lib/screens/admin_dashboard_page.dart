@@ -11,6 +11,7 @@ import 'modules/analytics_page.dart';
 import 'modules/availability_page.dart';
 import 'modules/bookings_page.dart';
 import 'modules/calendar_page.dart';
+import 'modules/checkin_page.dart';
 import 'modules/clients_page.dart';
 import 'modules/gallery_page.dart';
 import 'modules/overview_page.dart';
@@ -56,6 +57,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     (icon: Icons.event_busy_outlined, selectedIcon: Icons.event_busy, label: 'navAvailability'),
     (icon: Icons.summarize_outlined, selectedIcon: Icons.summarize, label: 'navReports'),
     (icon: Icons.insights_outlined, selectedIcon: Icons.insights, label: 'navAnalytics'),
+    (icon: Icons.qr_code_scanner_outlined, selectedIcon: Icons.qr_code_scanner, label: 'navCheckin'),
   ];
 
   @override
@@ -311,7 +313,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   /// Mga module na laging nasa bottom bar kapag naka-phone (pinakamadalas gamitin).
-  static const _priorityModules = [0, 1, 4, 5]; // Dashboard, Bookings, Verifications, Payments
+  static const _priorityModules = [0, 1, 11, 5]; // Dashboard, Bookings, Check-in/out, Payments
 
   void _showMoreModules() {
     showModalBottomSheet(
@@ -381,6 +383,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       7 => const GalleryPage(),
       8 => AvailabilityPage(data: data, onChanged: _fetchData),
       9 => ReportsPage(data: data),
+      11 => CheckinPage(data: data, onChanged: _fetchData, onOpenBookings: () => _openModule(1)),
       _ => AnalyticsPage(data: data),
     };
 
@@ -422,7 +425,7 @@ class _Sidebar extends StatelessWidget {
   final VoidCallback onLogout;
 
   static const _groups = [
-    ('navGroupMain', [0, 1, 2]),
+    ('navGroupMain', [0, 1, 11, 2]),
     ('navGroupGuests', [3, 4, 5]),
     ('navGroupResort', [6, 7, 8]),
     ('navGroupInsights', [9, 10]),

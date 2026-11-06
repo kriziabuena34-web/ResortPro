@@ -339,6 +339,7 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
             paidSoFar: paid,
             staff: supabase.auth.currentUser?.email ?? 'Admin',
             claimCode: booking['claim_code'] as String?,
+            checkinCode: booking['checkin_code'] as String?,
           ),
         );
       } else if ('${booking['claim_code'] ?? ''}'.isNotEmpty) {

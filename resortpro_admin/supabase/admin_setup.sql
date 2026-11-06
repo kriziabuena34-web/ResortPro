@@ -1076,3 +1076,266 @@ end $$;
 alter table public.profiles add column if not exists google_avatar_url text;
 
 -- Tapos na ang Part 7!
+
+
+-- ===========================================================================
+-- PART 8 (dinagdag Nov 6, 2026): QR check-in / check-out
+--   • Bawat booking ay may QR code (checkin_code) na ini-scan ng staff.
+--   • Unang scan = IN (kailangang bayad na ang balanse), pangalawa = OUT.
+--   • Kapag late ang OUT, may multa ayon sa resort_settings (₱ kada oras,
+--     may palugit), na idinadagdag sa total ng booking.
+--   • Tapos lang ang stay (completed) kapag nasagutan ang survey.
+-- ===========================================================================
+
+-- Mga patakaran na nababago ng admin (iisang row lang)
+create table if not exists public.resort_settings (
+  id                   int primary key default 1 check (id = 1),
+  late_fee_per_hour    numeric not null default 500,
+  late_grace_minutes   int     not null default 15,
+  updated_at           timestamptz not null default now()
+);
+insert into public.resort_settings (id) values (1) on conflict (id) do nothing;
+
+alter table public.resort_settings enable row level security;
+drop policy if exists "anyone can read resort settings" on public.resort_settings;
+create policy "anyone can read resort settings" on public.resort_settings
+  for select to anon, authenticated using (true);
+drop policy if exists "admins update resort settings" on public.resort_settings;
+create policy "admins update resort settings" on public.resort_settings
+  for update to authenticated using (public.is_admin()) with check (public.is_admin());
+
+-- Mga bagong column sa bookings
+alter table public.bookings add column if not exists checkin_code   text;
+alter table public.bookings add column if not exists checked_in_at  timestamptz;
+alter table public.bookings add column if not exists checked_out_at timestamptz;
+alter table public.bookings add column if not exists late_minutes   int not null default 0;
+alter table public.bookings add column if not exists late_fee       numeric not null default 0;
+create unique index if not exists bookings_checkin_code_unique
+  on public.bookings (checkin_code) where checkin_code is not null;
+
+create or replace function public.gen_checkin_code()
+returns text language plpgsql volatile set search_path = public as $$
+declare
+  chars text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  code  text;
+begin
+  loop
+    code := '';
+    for i in 1..10 loop
+      code := code || substr(chars, 1 + floor(random() * length(chars))::int, 1);
+    end loop;
+    exit when not exists (select 1 from public.bookings where checkin_code = code);
+  end loop;
+  return code;
+end $$;
+
+create or replace function public.bookings_checkin_code()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.checkin_code is null then
+    new.checkin_code := public.gen_checkin_code();
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_bookings_checkin_code on public.bookings;
+create trigger trg_bookings_checkin_code
+  before insert on public.bookings
+  for each row execute function public.bookings_checkin_code();
+
+update public.bookings set checkin_code = public.gen_checkin_code() where checkin_code is null;
+
+-- Survey pagkatapos ng stay
+create table if not exists public.booking_surveys (
+  id           bigint generated always as identity primary key,
+  booking_id   text not null,
+  overall      int  not null check (overall between 1 and 5),
+  cleanliness  int  check (cleanliness between 1 and 5),
+  staff        int  check (staff between 1 and 5),
+  facilities   int  check (facilities between 1 and 5),
+  comments     text,
+  answered_by  text not null default 'guest' check (answered_by in ('guest', 'staff')),
+  submitted_by uuid default auth.uid(),
+  created_at   timestamptz not null default now()
+);
+create unique index if not exists booking_surveys_one_per_booking on public.booking_surveys (booking_id);
+
+alter table public.booking_surveys enable row level security;
+drop policy if exists "admins read surveys" on public.booking_surveys;
+create policy "admins read surveys" on public.booking_surveys
+  for select to authenticated using (public.is_admin());
+drop policy if exists "clients read own surveys" on public.booking_surveys;
+create policy "clients read own surveys" on public.booking_surveys
+  for select to authenticated
+  using (exists (select 1 from public.bookings b where b.id::text = booking_surveys.booking_id and b.client_id = auth.uid()));
+
+-- Kailan dapat lumabas ang guest (oras ng Asia/Manila)
+create or replace function public.booking_end_at(p_booking_date date, p_package_id bigint)
+returns timestamptz language plpgsql stable security definer set search_path = public as $$
+declare
+  st time;
+  en time;
+begin
+  begin
+    select start_time::text::time, end_time::text::time into st, en
+      from public.packages where id = p_package_id;
+  exception when others then
+    st := null; en := null;
+  end;
+  if en is null then
+    return ((p_booking_date + 1)::timestamp + time '06:00') at time zone 'Asia/Manila';
+  end if;
+  if st is not null and en <= st then
+    return ((p_booking_date + 1)::timestamp + en) at time zone 'Asia/Manila';
+  end if;
+  return (p_booking_date::timestamp + en) at time zone 'Asia/Manila';
+end $$;
+
+-- Ang pag-scan: IN o OUT. Admin lang.
+create or replace function public.booking_scan(p_code text, p_booking_id text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  code     text := upper(regexp_replace(coalesce(p_code, ''), '[^A-Za-z0-9]', '', 'g'));
+  b        record;
+  paid     numeric;
+  balance  numeric;
+  ends     timestamptz;
+  late     int := 0;
+  fee      numeric := 0;
+  s        record;
+  today    date := (now() at time zone 'Asia/Manila')::date;
+begin
+  if not public.is_admin() then
+    raise exception 'NOT_ADMIN';
+  end if;
+
+  if p_booking_id is not null then
+    select * into b from public.bookings where id::text = p_booking_id for update;
+  else
+    if code like 'AGH%' and length(code) > 10 then code := substr(code, 4); end if;
+    select * into b from public.bookings where checkin_code = code for update;
+  end if;
+  if not found then
+    raise exception 'CODE_NOT_FOUND';
+  end if;
+
+  select coalesce(sum(amount), 0) into paid
+    from public.payments
+   where booking_id::text = b.id::text and coalesce(status, 'verified') = 'verified';
+  balance := greatest(0, coalesce(b.total_amount, 0) - paid);
+
+  -- Hindi pa naka-in: IN
+  if b.checked_in_at is null then
+    if b.status::text in ('cancelled', 'no_show', 'completed') then
+      raise exception 'BOOKING_INACTIVE';
+    end if;
+    if b.status::text = 'reserved' then
+      raise exception 'NOT_CONFIRMED';
+    end if;
+    if b.booking_date > today then
+      raise exception 'TOO_EARLY:%', b.booking_date;
+    end if;
+    if public.booking_end_at(b.booking_date, b.package_id) < now() then
+      raise exception 'BOOKING_ENDED';
+    end if;
+    if balance > 0.01 then
+      raise exception 'BALANCE_DUE:%', balance;
+    end if;
+
+    update public.bookings
+       set checked_in_at = now(), status = 'checked_in'
+     where id = b.id;
+    insert into public.booking_logs (booking_id, action, from_status, to_status, note)
+    values (b.id::text, 'checked_in', b.status::text, 'checked_in', 'QR scan');
+    return jsonb_build_object('action', 'checked_in', 'booking_id', b.id, 'balance', 0);
+  end if;
+
+  -- Naka-in pa: OUT (may multa kapag late)
+  if b.checked_out_at is null then
+    select * into s from public.resort_settings where id = 1;
+    ends := public.booking_end_at(b.booking_date, b.package_id);
+    late := greatest(0, floor(extract(epoch from (now() - ends)) / 60)::int);
+    if late > coalesce(s.late_grace_minutes, 15) then
+      fee := ceil(late / 60.0) * coalesce(s.late_fee_per_hour, 500);
+    else
+      late := 0;
+    end if;
+
+    update public.bookings
+       set checked_out_at = now(),
+           late_minutes   = late,
+           late_fee       = fee,
+           total_amount   = coalesce(total_amount, 0) + fee
+     where id = b.id;
+    insert into public.booking_logs (booking_id, action, note)
+    values (b.id::text, 'checked_out',
+            case when fee > 0 then 'QR scan · late ' || late || ' min · fee ' || fee else 'QR scan · on time' end);
+    return jsonb_build_object('action', 'checked_out', 'booking_id', b.id,
+                              'late_minutes', late, 'late_fee', fee, 'balance', balance + fee);
+  end if;
+
+  -- Naka-out na
+  return jsonb_build_object(
+    'action', case when b.status::text = 'completed' then 'completed' else 'awaiting_survey' end,
+    'booking_id', b.id, 'late_minutes', b.late_minutes, 'late_fee', b.late_fee, 'balance', balance);
+end $$;
+
+revoke all on function public.booking_scan(text, text) from public, anon;
+grant execute on function public.booking_scan(text, text) to authenticated;
+
+-- Sagutin ang survey: guest (sariling booking) o staff. Saka magiging "completed".
+create or replace function public.submit_booking_survey(
+  p_booking_id  text,
+  p_overall     int,
+  p_cleanliness int default null,
+  p_staff       int default null,
+  p_facilities  int default null,
+  p_comments    text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b       record;
+  paid    numeric;
+  balance numeric;
+  admin   boolean := public.is_admin();
+begin
+  select * into b from public.bookings where id::text = p_booking_id for update;
+  if not found then raise exception 'CODE_NOT_FOUND'; end if;
+  if not admin and (auth.uid() is null or b.client_id is distinct from auth.uid()) then
+    raise exception 'NOT_ALLOWED';
+  end if;
+  if b.checked_out_at is null then raise exception 'NOT_CHECKED_OUT'; end if;
+  if exists (select 1 from public.booking_surveys where booking_id = p_booking_id) then
+    raise exception 'ALREADY_ANSWERED';
+  end if;
+
+  select coalesce(sum(amount), 0) into paid
+    from public.payments
+   where booking_id::text = b.id::text and coalesce(status, 'verified') = 'verified';
+  balance := greatest(0, coalesce(b.total_amount, 0) - paid);
+  if balance > 0.01 then
+    raise exception 'BALANCE_DUE:%', balance;
+  end if;
+
+  insert into public.booking_surveys (booking_id, overall, cleanliness, staff, facilities, comments, answered_by)
+  values (p_booking_id, p_overall, p_cleanliness, p_staff, p_facilities,
+          nullif(trim(coalesce(p_comments, '')), ''), case when admin then 'staff' else 'guest' end);
+
+  update public.bookings set status = 'completed' where id = b.id;
+  insert into public.booking_logs (booking_id, action, from_status, to_status, note)
+  values (b.id::text, 'survey', b.status::text, 'completed', 'Check-out survey answered (' || p_overall || '/5)');
+  return jsonb_build_object('ok', true);
+end $$;
+
+revoke all on function public.submit_booking_survey(text, int, int, int, int, text) from public, anon;
+grant execute on function public.submit_booking_survey(text, int, int, int, int, text) to authenticated;
+
+-- Tapos na ang Part 8!

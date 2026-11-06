@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/checkin_qr.dart';
 import '../services/claim_booking.dart';
 import '../services/offline_cache.dart';
 import '../services/payment_proof.dart';
@@ -412,6 +413,33 @@ class _MyBookingPageState extends State<MyBookingPage> {
                   label: Text(
                     hasVerifiedDown || pending > 0 ? 'Pay balance (${peso(unpaid)})' : 'Send downpayment proof',
                   ),
+                ),
+              ),
+            // QR para sa check-in / check-out (gumagana kahit offline)
+            if (canShowCheckinQr(booking))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: FilledButton.tonalIcon(
+                  onPressed: () => showCheckinQr(context, booking),
+                  icon: const Icon(Icons.qr_code_2, size: 18),
+                  label: Text(booking['checked_in_at'] != null ? 'Show check-out QR' : 'Show check-in QR'),
+                ),
+              ),
+            // Naka-out na: survey para matapos ang stay
+            if (needsCheckoutSurvey(booking))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    if (await showGuestSurvey(context, booking) && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Thank you! Your stay is now complete.')),
+                      );
+                      await _fetchData();
+                    }
+                  },
+                  icon: const Icon(Icons.rate_review_outlined, size: 18),
+                  label: const Text('Answer check-out survey'),
                 ),
               ),
             OutlinedButton.icon(
