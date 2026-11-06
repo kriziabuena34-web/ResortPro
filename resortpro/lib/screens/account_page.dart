@@ -140,6 +140,8 @@ class _AccountPageState extends State<AccountPage> {
       final url = supabase.storage.from('avatars').getPublicUrl(path);
       await supabase.from('profiles').update({'avatar_url': url}).eq('id', uid);
       setState(() => _profile?['avatar_url'] = url);
+      // Burahin ang mga lumang litrato para hindi maipon sa storage.
+      _cleanupAvatars(uid, keep: path.split('/').last);
       _show('Profile picture updated.');
     } catch (e) {
       _show('$e'.contains('Bucket not found')
@@ -150,11 +152,21 @@ class _AccountPageState extends State<AccountPage> {
     }
   }
 
+  /// Burahin ang mga litrato sa storage maliban sa [keep] (tahimik kapag may error).
+  Future<void> _cleanupAvatars(String uid, {String? keep}) async {
+    try {
+      final files = await supabase.storage.from('avatars').list(path: uid);
+      final old = [for (final f in files) if (f.name != keep) '$uid/${f.name}'];
+      if (old.isNotEmpty) await supabase.storage.from('avatars').remove(old);
+    } catch (_) {}
+  }
+
   Future<void> _removePhoto() async {
     try {
       final uid = supabase.auth.currentUser!.id;
       await supabase.from('profiles').update({'avatar_url': null}).eq('id', uid);
       setState(() => _profile?['avatar_url'] = null);
+      _cleanupAvatars(uid);
     } catch (e) {
       _show('Could not remove photo: $e');
     }
