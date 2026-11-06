@@ -1066,3 +1066,13 @@ begin
 end $$;
 
 -- Tapos na ang Part 6!
+
+
+-- ===========================================================================
+-- PART 7 (dinagdag Nov 6, 2026): Litrato mula sa Google para sa admin
+--   Sine-save ng app ang Google profile picture ng client, para makita ito
+--   ng admin (hal. sa New Walk-In / Phone Booking) kahit walang sariling litrato.
+-- ===========================================================================
+alter table public.profiles add column if not exists google_avatar_url text;
+
+-- Tapos na ang Part 7!

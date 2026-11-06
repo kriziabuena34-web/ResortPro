@@ -49,6 +49,7 @@ class _AccountPageState extends State<AccountPage> {
       } catch (_) {}
 
       OfflineCache.save('account', {'profile': profile, 'bookings': bookings});
+      _syncGooglePhoto(profile);
       if (!mounted) return;
       setState(() {
         _profile = profile;
@@ -69,6 +70,16 @@ class _AccountPageState extends State<AccountPage> {
         _isLoading = false;
       });
     }
+  }
+
+  /// I-save ang litrato mula sa Google para makita rin ng admin (kapag walang sariling litrato).
+  Future<void> _syncGooglePhoto(Map<String, dynamic> profile) async {
+    final meta = supabase.auth.currentUser?.userMetadata;
+    final google = '${meta?['avatar_url'] ?? meta?['picture'] ?? ''}'.trim();
+    if (google.isEmpty || profile['google_avatar_url'] == google || !profile.containsKey('google_avatar_url')) return;
+    try {
+      await supabase.from('profiles').update({'google_avatar_url': google}).eq('id', profile['id']);
+    } catch (_) {}
   }
 
   void _show(String message) {
@@ -132,8 +143,8 @@ class _AccountPageState extends State<AccountPage> {
       _show('Profile picture updated.');
     } catch (e) {
       _show('$e'.contains('Bucket not found')
-          ? 'Profile photos are not set up yet. Please ask the admin to run account_setup.sql in Supabase.'
-          : 'Could not update photo: $e');
+          ? 'Profile photos are not available yet. Please try again later.'
+          : friendlyError(e, action: 'update your photo'));
     } finally {
       if (mounted) setState(() => _uploadingPhoto = false);
     }
@@ -153,12 +164,20 @@ class _AccountPageState extends State<AccountPage> {
   // Username (pwedeng palitan). Ang real name ay HINDI pwedeng i-edit dito.
   // -------------------------------------------------------------------------
 
+  /// Pangalang ipinapakita sa account: ang username kapag mayroon, kung wala ay ang pangalan sa Google.
+  String get _displayName {
+    final username = '${_profile?['username'] ?? ''}'.trim();
+    if (username.isNotEmpty) return username;
+    final user = supabase.auth.currentUser;
+    return '${user?.userMetadata?['full_name'] ?? _profile?['google_display_name'] ?? ''}'.trim();
+  }
+
   Future<void> _editUsername() async {
     // Ang dialog mismo ang may-ari ng text box, kaya ligtas itong nalilinis
     // pagkatapos ng animation ng pagsara (iwas sa '_dependents.isEmpty' error).
     final value = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => _UsernameDialog(initial: '${_profile?['username'] ?? ''}'),
+      builder: (dialogContext) => _UsernameDialog(initial: _displayName),
     );
     if (value == null) return;
 
@@ -167,9 +186,9 @@ class _AccountPageState extends State<AccountPage> {
       await supabase.from('profiles').update({'username': value}).eq('id', uid);
       if (!mounted) return;
       setState(() => _profile?['username'] = value);
-      _show('Username updated.');
+      _show('Name updated.');
     } on PostgrestException catch (e) {
-      _show(e.code == '23505' ? 'That username is already taken.' : 'Could not save username: ${e.message}');
+      _show(e.code == '23505' ? 'That name is already used by another account.' : 'Could not save: ${e.message}');
     } catch (e) {
       _show('Could not save username: $e');
     }
@@ -299,10 +318,27 @@ class _AccountPageState extends State<AccountPage> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  Text(
-                    googleName,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
+                  // Pangalan (username) na pwedeng palitan
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: _offlineSavedAt != null ? null : _editUsername,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              username.isNotEmpty ? username : googleName,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.edit, size: 16, color: Color(0xFFCFE3E6)),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(email, style: const TextStyle(color: Color(0xFFCFE3E6), fontSize: 13)),
@@ -337,11 +373,11 @@ class _AccountPageState extends State<AccountPage> {
                 children: [
                   _InfoTile(
                     icon: Icons.alternate_email,
-                    label: 'Username',
-                    value: username.isEmpty ? 'Add a username' : '@$username',
-                    muted: username.isEmpty,
+                    label: 'Name on your account',
+                    value: username.isNotEmpty ? username : googleName,
+                    muted: false,
                     trailing: IconButton(
-                      tooltip: 'Edit username',
+                      tooltip: 'Edit name',
                       onPressed: _editUsername,
                       icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
                     ),
@@ -584,31 +620,34 @@ class _UsernameDialogState extends State<_UsernameDialog> {
 
   void _save() {
     if (_formKey.currentState!.validate()) {
-      Navigator.pop(context, _controller.text.trim());
+      Navigator.pop(context, _controller.text.trim().replaceAll(RegExp(r'\s+'), ' '));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Edit username'),
+      title: const Text('Edit name'),
       content: Form(
         key: _formKey,
         child: TextFormField(
           controller: _controller,
           autofocus: true,
-          maxLength: 20,
+          maxLength: 30,
+          textCapitalization: TextCapitalization.words,
           textInputAction: TextInputAction.done,
           onFieldSubmitted: (_) => _save(),
           decoration: const InputDecoration(
-            prefixText: '@',
-            hintText: 'e.g. izia.buena',
-            helperText: 'Letters, numbers, dot and underscore only.',
+            hintText: 'e.g. Izia Buena',
+            helperText: 'This name is shown on your account. Your verified real name stays the same.',
+            helperMaxLines: 2,
           ),
           validator: (v) {
-            final t = (v ?? '').trim();
+            final t = (v ?? '').trim().replaceAll(RegExp(r'\s+'), ' ');
             if (t.length < 3) return 'At least 3 characters.';
-            if (!RegExp(r'^[A-Za-z0-9._]+$').hasMatch(t)) return 'Letters, numbers, . and _ only.';
+            if (!RegExp(r"^[\p{L}0-9 ._'\-]+$", unicode: true).hasMatch(t)) {
+              return 'Use letters, numbers, spaces, and . _ - only.';
+            }
             return null;
           },
         ),

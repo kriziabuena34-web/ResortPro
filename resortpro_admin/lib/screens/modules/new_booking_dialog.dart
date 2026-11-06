@@ -681,10 +681,7 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const CircleAvatar(
-              backgroundColor: Color(0xFF0F766E),
-              child: Icon(Icons.person, color: Colors.white),
-            ),
+            _ClientAvatar(client: selected, name: _fullName(selected), radius: 26),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -726,6 +723,8 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
         _part(c['username']),
         _part(c['phone']),
         _part(c['phone']).replaceAll(RegExp(r'\D'), ''),
+        // +63 9XX… → 09XX… para mahanap din kapag 0 ang simula ng tina-type
+        _part(c['phone']).replaceAll(RegExp(r'\D'), '').replaceFirst(RegExp(r'^63'), '0'),
       ].join(' ').toLowerCase();
       return words.every(hay.contains);
     }).toList();
@@ -763,7 +762,7 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                     final phone = _part(c['phone']);
                     return ListTile(
                       dense: true,
-                      leading: const Icon(Icons.person_outline),
+                      leading: _ClientAvatar(client: c, name: _fullName(c), radius: 17),
                       title: Text(_fullName(c), overflow: TextOverflow.ellipsis),
                       subtitle: phone.isEmpty ? null : Text(phone),
                       onTap: () => setState(() {
@@ -859,6 +858,44 @@ class _PaxFieldState extends State<_PaxField> {
         ),
       ),
       onChanged: (_) => widget.onChanged(),
+    );
+  }
+}
+
+/// Profile picture ng client (sariling litrato sa app, o galing Google). Inisyal kapag wala o hindi ma-load.
+class _ClientAvatar extends StatelessWidget {
+  const _ClientAvatar({required this.client, required this.name, required this.radius});
+
+  final Map<String, dynamic> client;
+  final String name;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    String pick(dynamic v) => '${v ?? ''}'.trim();
+    final url = pick(client['avatar_url']).isNotEmpty ? pick(client['avatar_url']) : pick(client['google_avatar_url']);
+    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
+    final fallback = Container(
+      color: const Color(0xFF0F766E),
+      alignment: Alignment.center,
+      child: Text(
+        initial,
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: radius * 0.85),
+      ),
+    );
+    return SizedBox(
+      width: radius * 2,
+      height: radius * 2,
+      child: ClipOval(
+        child: url.isEmpty
+            ? fallback
+            : Image.network(
+                url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => fallback,
+                loadingBuilder: (context, child, progress) => progress == null ? child : fallback,
+              ),
+      ),
     );
   }
 }
