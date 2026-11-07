@@ -31,7 +31,7 @@ class LanguageMenuButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.translate, size: 20),
+            const Icon(Icons.language, size: 20), // globo (hindi na ang 文A)
             const SizedBox(width: 4),
             Text(current.shortCode, style: const TextStyle(fontWeight: FontWeight.bold)),
             const Icon(Icons.arrow_drop_down, size: 20),
