@@ -160,9 +160,9 @@ class _CancelSheetState extends State<_CancelSheet> {
                     const SizedBox(height: 6),
                     Text(
                       half
-                          ? 'Because you are cancelling at least 5 days before your date, you get back half of '
+                          ? 'Because you are cancelling before your booking date, you get back half of '
                               'the 50% reservation fee.'
-                          : 'Cancellations less than 5 days before the date do not get the 50% reservation fee back.',
+                          : 'Cancellations on the booking date itself do not get the 50% reservation fee back.',
                       style: const TextStyle(fontSize: 13, height: 1.4),
                     ),
                     const Divider(height: 20),

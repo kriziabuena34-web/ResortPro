@@ -1411,10 +1411,10 @@ end $$;
 -- ===========================================================================
 -- PART 10 (dinagdag Nov 7, 2026): Mga package ayon sa Pool Agreement,
 -- at cancellation + refund
---   Policy #6–#8 ng resort:
---     • Cancel 5 araw o higit pa bago ang petsa → refund ng KALAHATI ng
---       50% reservation fee (hal. ₱6,500 → fee ₱3,250 → refund ₱1,625)
---     • Cancel kulang sa 5 araw → walang refund sa reservation fee
+--   Policy #6–#8 ng resort (kinumpirma Nov 7, 2026):
+--     • Cancel BAGO ang mismong araw ng booking (kahit sa loob ng 5 araw bago)
+--       → refund ng KALAHATI ng 50% reservation fee (hal. ₱6,500 → fee ₱3,250 → refund ₱1,625)
+--     • Hindi nakapag-cancel bago ang araw ng booking → walang refund
 --     • Ang ibinayad na lampas sa reservation fee (hal. bayad na lahat) ay ibinabalik
 -- ===========================================================================
 
@@ -1498,11 +1498,11 @@ begin
    where booking_id::text = b.id::text and coalesce(status, 'verified') = 'verified';
   fee  := least(paid, round(coalesce(b.total_amount, 0) * 0.5));
   days := b.booking_date - today;
-  refund := greatest(0, paid - fee) + case when days >= 5 then round(fee * 0.5) else 0 end;
+  refund := greatest(0, paid - fee) + case when days >= 1 then round(fee * 0.5) else 0 end;
 
   return jsonb_build_object(
     'days_before', days, 'paid', paid, 'reservation_fee', fee,
-    'refund', refund, 'eligible_half', days >= 5,
+    'refund', refund, 'eligible_half', days >= 1,
     'can_cancel', b.status::text in ('reserved', 'confirmed', 'fully_paid') and b.checked_in_at is null and days >= 0);
 end $$;
 
