@@ -42,6 +42,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   /// Filter na ipapasa sa Bookings module (galing sa reminders).
   String? _bookingFilter;
+  String? _focusBookingId;
 
   // Ang pagkakasunod dito ang index na ginagamit ng onOpenModule.
   // Ang `label` ay translation key (tingnan ang l10n/app_strings.dart).
@@ -167,9 +168,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     );
   }
 
-  void _openModule(int index, [String? bookingFilter]) => setState(() {
+  void _openModule(int index, [String? bookingFilter, String? focusBookingId]) => setState(() {
         _index = index;
         _bookingFilter = bookingFilter;
+        _focusBookingId = focusBookingId;
       });
 
   int get _pendingCount => _data?.pendingAccounts.length ?? 0;
@@ -377,16 +379,18 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           data: data,
           onChanged: _fetchData,
           initialFilter: _bookingFilter,
+          onOpenPayments: (id) => _openModule(5, 'pending', id),
         ),
       2 => CalendarPage(data: data),
       3 => ClientsPage(data: data),
       4 => VerificationsPage(data: data, onChanged: _fetchData),
       5 => PaymentsPage(
-          key: ValueKey('payments-${_bookingFilter ?? ''}'),
+          key: ValueKey('payments-${_bookingFilter ?? ''}-${_focusBookingId ?? ''}'),
           data: data,
           onChanged: _fetchData,
           showPendingFirst: _bookingFilter == 'pending',
           initialTab: _bookingFilter == 'refunds' ? 'refunds' : null,
+          focusBookingId: _focusBookingId,
         ),
       6 => PackagesPage(data: data, onChanged: _fetchData),
       7 => const GalleryPage(),

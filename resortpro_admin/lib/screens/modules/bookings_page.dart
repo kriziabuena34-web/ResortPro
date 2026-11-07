@@ -20,10 +20,14 @@ class BookingsPage extends StatefulWidget {
     required this.data,
     required this.onChanged,
     this.initialFilter,
+    this.onOpenPayments,
   });
 
   final AdminData data;
   final Future<void> Function() onChanged;
+
+  /// Buksan ang Payments (Pending) para sa booking na ito.
+  final void Function(String bookingId)? onOpenPayments;
 
   /// Pwedeng status (hal. 'reserved') o quick filter:
   /// 'today', 'balance', 'overdue'. Galing sa dashboard reminders.
@@ -236,7 +240,16 @@ class _BookingsPageState extends State<BookingsPage> {
               textAlign: TextAlign.center,
             ),
             actions: [
-              FilledButton(onPressed: () => Navigator.pop(dialogContext), child: Text(tr('rcClose'))),
+              TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(tr('rcClose'))),
+              if (widget.onOpenPayments != null)
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                    widget.onOpenPayments!('${booking['id']}');
+                  },
+                  icon: const Icon(Icons.fact_check_outlined, size: 18),
+                  label: Text(tr('goToPayments')),
+                ),
             ],
           ),
         );
@@ -397,7 +410,7 @@ class _BookingsPageState extends State<BookingsPage> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
-          title: Text(paidOf(booking) <= 0 ? tr('recordDownpayment') : tr('recordBalanceTitle')),
+          title: Text(tr('recordBalanceTitle')),
           content: SizedBox(
             width: 400,
             child: Column(
@@ -608,6 +621,7 @@ class _BookingsPageState extends State<BookingsPage> {
     final total = totalOf(booking);
     final paid = paidOf(booking);
     final remaining = remainingOf(booking);
+    final downVerified = paidOf(booking) + 0.01 >= (totalOf(booking) * 0.5).roundToDouble();
     final inactive = isInactive(booking);
     final busy = _busy.contains('${booking['id']}');
     final actions = BookingWorkflow.actionsFor(booking);
@@ -750,14 +764,15 @@ class _BookingsPageState extends State<BookingsPage> {
                           icon: Icon(a.icon, size: 18),
                           label: Text(tr(a.key)),
                         ),
+                      // Balanse lang ang nire-record dito, at kapag verified na ang 50% downpayment.
                       if (!inactive && remaining > 0)
-                        OutlinedButton.icon(
-                          onPressed: busy ? null : () => _showRecordPaymentDialog(booking),
-                          icon: const Icon(Icons.add_card, size: 18),
-                          // Wala pang bayad: downpayment; may bayad na: ang natitirang balanse.
-                          label: Text(paidOf(booking) <= 0
-                              ? tr('recordDownpayment')
-                              : tr('recordBalance', {'amount': peso(remaining)})),
+                        Tooltip(
+                          message: downVerified ? tr('recordBalanceTitle') : tr('recordBalanceLocked'),
+                          child: OutlinedButton.icon(
+                            onPressed: busy || !downVerified ? null : () => _showRecordPaymentDialog(booking),
+                            icon: const Icon(Icons.add_card, size: 18),
+                            label: Text(tr('recordBalance', {'amount': peso(remaining)})),
+                          ),
                         ),
                       TextButton(
                         onPressed: () => _showDetails(booking),

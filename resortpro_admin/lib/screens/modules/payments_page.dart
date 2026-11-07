@@ -18,7 +18,11 @@ class PaymentsPage extends StatefulWidget {
     required this.onChanged,
     this.showPendingFirst = false,
     this.initialTab,
+    this.focusBookingId,
   });
+
+  /// Kapag galing sa Bookings: ipakita lang ang mga bayad ng booking na ito.
+  final String? focusBookingId;
 
   /// 'pending', 'refunds', o 'all' (galing sa notification).
   final String? initialTab;
@@ -54,6 +58,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
           : widget.data.pendingRefunds.isNotEmpty
               ? 'refunds'
               : 'pending');
+  late String? _focusId = widget.focusBookingId;
   String _query = '';
   String _method = 'all';
   String _kind = 'all';
@@ -250,7 +255,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
       padding: const EdgeInsets.only(bottom: 12),
       child: AppCard(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -291,7 +296,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
               if ('${r['refund_reference'] ?? ''}'.isNotEmpty) InfoRow(tr('rcReference'), '${r['refund_reference']}'),
               if ('${r['admin_note'] ?? ''}'.isNotEmpty) InfoRow(tr('adminNotes'), '${r['admin_note']}'),
               if (status == 'pending') ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 20),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -408,8 +413,33 @@ class _PaymentsPageState extends State<PaymentsPage> {
   }
 
   Widget _buildPending() {
-    final pending = widget.data.pendingPayments;
+    final focus = _focusId == null ? null : widget.data.bookingById(_focusId);
+    final pending = widget.data.pendingPayments
+        .where((e) => _focusId == null || '${e.booking['id']}' == _focusId)
+        .toList();
+    final focusBar = focus == null
+        ? null
+        : Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Wrap(
+              spacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Chip(
+                  avatar: const Icon(Icons.person_outline, size: 18),
+                  label: Text(tr('payFocusShowing', {'client': clientNameOf(focus)})),
+                ),
+                TextButton(onPressed: () => setState(() => _focusId = null), child: Text(tr('payFocusShowAll'))),
+              ],
+            ),
+          );
     if (pending.isEmpty) {
+      if (focusBar != null) {
+        return ListView(
+          padding: pageInsets(context),
+          children: [focusBar, EmptyState(icon: Icons.task_alt, message: tr('payNoPending'))],
+        );
+      }
       return EmptyState(icon: Icons.task_alt, message: tr('payNoPending'));
     }
 
@@ -421,6 +451,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
           child: ListView(
             padding: pageInsets(context),
             children: [
+              ?focusBar,
               Text(
                 tr('payPendingHint'),
                 style: Theme.of(context).textTheme.bodyMedium,
@@ -449,7 +480,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -518,7 +549,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
             ),
             const SizedBox(height: 4),
             Text(tr('tapToZoom'), style: theme.textTheme.bodySmall),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
             Wrap(
               spacing: 12,
               runSpacing: 8,

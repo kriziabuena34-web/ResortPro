@@ -223,16 +223,15 @@ String packageNameOf(Map<String, dynamic> booking) {
   return tr('unknownPackage');
 }
 
+/// Pangalan ng booker: "JUAN DELA CRUZ" (first name, last name, all caps).
 String clientNameOf(Map<String, dynamic> booking) {
   final p = booking['profiles'];
   if (p is Map) {
-    final display = p['google_display_name'];
-    if (display != null && '$display'.trim().isNotEmpty) return '$display';
-    final full = '${p['first_name'] ?? ''} ${p['last_name'] ?? ''}'.trim();
-    if (full.isNotEmpty) return full;
+    final n = upperFirstLast(p['first_name'], p['last_name'], fallback: p['google_display_name']);
+    if (n.isNotEmpty) return n;
   }
   final guest = '${booking['guest_name'] ?? ''}'.trim();
-  if (guest.isNotEmpty) return guest;
+  if (guest.isNotEmpty) return guest.replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
   return tr('unknownClient');
 }
 
