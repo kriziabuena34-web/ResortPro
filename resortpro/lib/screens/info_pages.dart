@@ -29,6 +29,7 @@ const resortTerms = <String>[
   'Guests are responsible for confirming or canceling their reservations at least 5 days before the booking date.',
   'If the guests fail to cancel the reservation within 5 days, they will no longer get the 50% reservation fee.',
   'Guests can only refund half of the 50% reservation fee if they cancel within 5 days before the event.',
+  'All bookings are non-refundable unless the guest has a valid reason accepted by the management.',
   'For extensions, guests will be charged ₱500 per hour.',
   'Guests are obliged to make an effort to keep the surroundings clean. Guests should refrain from throwing '
       'rubbish anywhere other than the strategically located trash bins. Don\'t leave any trash.',
@@ -497,8 +498,10 @@ class HelpSupportPage extends StatelessWidget {
     ),
     (
       'Can I cancel or move my booking?',
-      'Please confirm or cancel at least 5 days before your booking date. If you cancel within 5 days '
-          'before the event, only half of the 50% reservation fee can be refunded. See Terms & Conditions.',
+      'All bookings are non-refundable unless you have a valid reason. You can cancel in My Bookings any time '
+          'before your booking date and request a refund with your reason. If the resort accepts it, you get back '
+          'half of the 50% reservation fee. Cancelling on the booking date itself gets no refund. '
+          'See Terms & Conditions.',
     ),
     (
       'Can I extend my stay?',

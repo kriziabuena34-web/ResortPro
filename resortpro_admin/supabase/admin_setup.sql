@@ -1627,3 +1627,153 @@ revoke all on function public.complete_refund(bigint, text, boolean, text) from 
 grant execute on function public.complete_refund(bigint, text, boolean, text) to authenticated;
 
 -- Tapos na ang Part 10!
+
+-- ===========================================================================
+-- PART 11 (dinagdag Nov 7, 2026): Mga presyo ng package, Overnight (22 hours),
+-- at refund kapag may VALID na dahilan lang
+--   Pool:          Day Tour ₱5,500 · Night Tour ₱6,500 · Overnight (22 Hours) ₱11,500
+--   Function Hall: Day Tour ₱15,000 · Night Tour ₱15,000 · Overnight (22 Hours) ₱22,000
+--   Lahat ay non-refundable maliban kung may valid na dahilan (aaprubahan ng admin);
+--   kapag valid, susundin ang policy sa reservation fee.
+-- ===========================================================================
+
+-- ---- Pool packages ----
+update public.packages set price = 5500 where name = 'Day Tour';
+update public.packages set price = 6500 where name = 'Night Tour';
+
+-- Bagong "Overnight (22 Hours)": kopya ng Night Tour (inclusions, max pax, atbp.),
+-- 8:00 AM hanggang 6:00 AM kinabukasan, ₱11,500.
+do $$
+declare
+  cols      text;
+  id_needed boolean;
+  id_type   text;
+  id_expr   text;
+begin
+  if exists (select 1 from public.packages where name = 'Overnight (22 Hours)') then
+    update public.packages
+       set price = 11500, start_time = '08:00', end_time = '06:00'
+     where name = 'Overnight (22 Hours)';
+    return;
+  end if;
+  if not exists (select 1 from public.packages where name = 'Night Tour') then
+    return;
+  end if;
+
+  select string_agg(quote_ident(column_name), ', ' order by ordinal_position) into cols
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'packages'
+     and column_name not in ('id', 'name', 'price', 'start_time', 'end_time', 'created_at')
+     and is_generated = 'NEVER' and identity_generation is null;
+
+  -- Kung walang default ang id, gagawa tayo ng bago (uuid o susunod na numero).
+  select c.column_default is null and c.identity_generation is null, c.data_type
+    into id_needed, id_type
+    from information_schema.columns c
+   where c.table_schema = 'public' and c.table_name = 'packages' and c.column_name = 'id';
+  if id_needed then
+    id_expr := case when id_type = 'uuid' then 'gen_random_uuid()'
+                    when id_type in ('text', 'character varying') then 'gen_random_uuid()::text'
+                    else '(select coalesce(max(id), 0) + 1 from public.packages)' end;
+  end if;
+
+  execute format(
+    'insert into public.packages (%sname, price, start_time, end_time%s)
+     select %s%L, 11500, %L, %L%s from public.packages where name = %L limit 1',
+    case when id_expr is null then '' else 'id, ' end,
+    case when cols is null then '' else ', ' || cols end,
+    case when id_expr is null then '' else id_expr || ', ' end,
+    'Overnight (22 Hours)', '08:00', '06:00',
+    case when cols is null then '' else ', ' || cols end,
+    'Night Tour');
+end $$;
+
+-- ---- Function Hall: pangalan at presyo ayon sa oras (hindi binabago ang oras) ----
+update public.packages
+   set name = 'Function Hall (Day Tour)', price = 15000
+ where name ilike 'function hall%'
+   and start_time::text::time < time '17:00' and end_time::text::time > start_time::text::time;
+
+update public.packages
+   set name = 'Function Hall (Night Tour)', price = 15000
+ where name ilike 'function hall%'
+   and start_time::text::time >= time '17:00';
+
+update public.packages
+   set name = 'Function Hall (Overnight 22 Hours)', price = 22000
+ where name ilike 'function hall%'
+   and start_time::text::time < time '17:00' and end_time::text::time <= start_time::text::time;
+
+-- ---- Pag-cancel: refund kapag hiniling LANG at may dahilan; admin ang mag-aapruba ----
+drop function if exists public.request_cancellation(text, text, text, text, text);
+
+create or replace function public.request_cancellation(
+  p_booking_id     text,
+  p_method         text default null,
+  p_number         text default null,
+  p_name           text default null,
+  p_reason         text default null,
+  p_request_refund boolean default true
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b    record;
+  q    jsonb;
+  amt  numeric;
+  want boolean;
+begin
+  select * into b from public.bookings where id::text = p_booking_id for update;
+  if not found then raise exception 'CODE_NOT_FOUND'; end if;
+  if auth.uid() is null or b.client_id is distinct from auth.uid() then
+    raise exception 'NOT_ALLOWED';
+  end if;
+
+  q := public.refund_quote(p_booking_id);
+  if not (q->>'can_cancel')::boolean then raise exception 'CANNOT_CANCEL'; end if;
+  amt  := (q->>'refund')::numeric;
+  want := coalesce(p_request_refund, true) and amt > 0;
+
+  if want then
+    if length(coalesce(trim(p_reason), '')) < 5 then
+      raise exception 'REASON_REQUIRED';
+    end if;
+    if coalesce(p_method, '') not in ('gcash', 'maya') or length(coalesce(trim(p_number), '')) < 10
+       or length(coalesce(trim(p_name), '')) < 2 then
+      raise exception 'PAYOUT_REQUIRED';
+    end if;
+  end if;
+
+  update public.bookings set status = 'cancelled' where id = b.id;
+  insert into public.booking_logs (booking_id, action, from_status, to_status, note)
+  values (b.id::text, 'status_change', b.status::text, 'cancelled',
+          'Cancelled by guest' || case when coalesce(trim(p_reason), '') <> '' then ' · ' || trim(p_reason) else '' end
+          || ' · ' || (q->>'days_before') || ' day(s) before'
+          || case when want then ' · refund requested ' || amt else ' · no refund requested' end);
+
+  if want then
+    insert into public.refund_requests
+      (booking_id, client_id, days_before, paid, reservation_fee, amount,
+       payout_method, payout_number, payout_name, reason)
+    values (b.id::text, b.client_id, (q->>'days_before')::int, (q->>'paid')::numeric,
+            (q->>'reservation_fee')::numeric, amt, p_method, trim(p_number), trim(p_name), trim(p_reason));
+  end if;
+
+  insert into public.notifications (audience, type, data, ref_id)
+  values ('admin', 'refund_request',
+          jsonb_build_object('client', public.client_display_name(b.client_id),
+                             'package', (select name from public.packages where id = b.package_id),
+                             'date', b.booking_date, 'amount', case when want then amt else 0 end,
+                             'reason', p_reason),
+          b.id::text);
+
+  return q || jsonb_build_object('refund_requested', want);
+end $$;
+
+revoke all on function public.request_cancellation(text, text, text, text, text, boolean) from public, anon;
+grant execute on function public.request_cancellation(text, text, text, text, text, boolean) to authenticated;
+
+-- Tapos na ang Part 11!

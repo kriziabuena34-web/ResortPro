@@ -218,7 +218,7 @@ class _MyBookingPageState extends State<MyBookingPage> {
           Colors.red.shade700,
           'Refund not approved${'${r['admin_note'] ?? ''}'.isEmpty ? '' : ': ${r['admin_note']}'}',
         ),
-      _ => (Colors.orange.shade800, 'Refund of $amount is being processed by the resort.'),
+      _ => (Colors.orange.shade800, 'Refund request of $amount is being reviewed by the resort.'),
     };
     return Container(
       margin: const EdgeInsets.only(top: 8),
@@ -503,7 +503,7 @@ class _MyBookingPageState extends State<MyBookingPage> {
                   onPressed: () async {
                     if (await showCancelBookingSheet(context, booking) && mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Booking cancelled. Any refund will be sent by the resort.')),
+                        const SnackBar(content: Text('Booking cancelled. If you asked for a refund, the resort will review your reason.')),
                       );
                       await _fetchData();
                     }

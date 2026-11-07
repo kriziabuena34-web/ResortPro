@@ -299,11 +299,11 @@ class _PaymentsPageState extends State<PaymentsPage> {
                     FilledButton.icon(
                       onPressed: busy ? null : () => _completeRefund(r),
                       icon: const Icon(Icons.send, size: 18),
-                      label: Text(tr('rfMarkSent')),
+                      label: Text(tr('rfApprove')),
                     ),
                     OutlinedButton(
                       onPressed: busy ? null : () => _rejectRefund(r),
-                      child: Text(tr('reject')),
+                      child: Text(tr('rfRejectInvalid')),
                     ),
                   ],
                 ),

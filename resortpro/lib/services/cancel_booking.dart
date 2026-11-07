@@ -44,6 +44,7 @@ class _CancelSheetState extends State<_CancelSheet> {
   final _name = TextEditingController();
   final _reason = TextEditingController();
   bool _agree = false;
+  bool _wantRefund = false;
   bool _busy = false;
   String? _error;
 
@@ -78,7 +79,11 @@ class _CancelSheetState extends State<_CancelSheet> {
   double get _refund => asDouble(_quote?['refund']);
 
   Future<void> _submit() async {
-    final needsPayout = _refund > 0;
+    final needsPayout = _refund > 0 && _wantRefund;
+    if (needsPayout && _reason.text.trim().length < 5) {
+      setState(() => _error = 'Please tell us your reason. A refund is only given for a valid reason.');
+      return;
+    }
     final digits = _number.text.replaceAll(RegExp(r'\D'), '');
     if (needsPayout && (digits.length != 11 || !digits.startsWith('09'))) {
       setState(() => _error = 'Enter your 11-digit ${_method == 'gcash' ? 'GCash' : 'Maya'} number (starts with 09).');
@@ -103,6 +108,7 @@ class _CancelSheetState extends State<_CancelSheet> {
         'p_number': needsPayout ? digits : null,
         'p_name': needsPayout ? _name.text.trim() : null,
         'p_reason': _reason.text.trim(),
+        'p_request_refund': needsPayout,
       });
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -112,7 +118,9 @@ class _CancelSheetState extends State<_CancelSheet> {
         _busy = false;
         _error = '$e'.contains('CANNOT_CANCEL')
             ? 'This booking can no longer be cancelled in the app. Please contact the resort.'
-            : friendlyError(e, action: 'cancel the booking');
+            : '$e'.contains('REASON_REQUIRED')
+                ? 'Please tell us your reason. A refund is only given for a valid reason.'
+                : friendlyError(e, action: 'cancel the booking');
       });
     }
   }
@@ -158,22 +166,37 @@ class _CancelSheetState extends State<_CancelSheet> {
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 6),
+                    const Text(
+                      'All bookings are non-refundable unless you have a valid reason.',
+                      style: TextStyle(fontSize: 13, height: 1.4, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
                     Text(
                       half
-                          ? 'Because you are cancelling before your booking date, you get back half of '
-                              'the 50% reservation fee.'
-                          : 'Cancellations on the booking date itself do not get the 50% reservation fee back.',
+                          ? 'If the resort accepts your reason, you get back half of the 50% reservation fee '
+                              'because you are cancelling before your booking date.'
+                          : 'Cancellations on the booking date itself get no refund, even with a valid reason.',
                       style: const TextStyle(fontSize: 13, height: 1.4),
                     ),
                     const Divider(height: 20),
                     _row('Verified payments', peso(asDouble(q?['paid']))),
                     _row('Reservation fee (50%)', peso(asDouble(q?['reservation_fee']))),
-                    _row('Refund to you', peso(_refund), bold: true),
+                    _row('Refund if approved', peso(_refund), bold: true),
                   ],
                 ),
               ),
               const SizedBox(height: 14),
-              if (_refund > 0) ...[
+              if (_refund > 0)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _wantRefund,
+                  onChanged: _busy ? null : (v) => setState(() => _wantRefund = v),
+                  title: Text('Request a ${peso(_refund)} refund', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  subtitle: const Text('Only for a valid reason. The resort will review it first.',
+                      style: TextStyle(fontSize: 12)),
+                ),
+              if (_refund > 0 && _wantRefund) ...[
+                const SizedBox(height: 4),
                 const Text('Where should we send your refund?', style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
                 SegmentedButton<String>(
@@ -205,7 +228,10 @@ class _CancelSheetState extends State<_CancelSheet> {
               TextField(
                 controller: _reason,
                 maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Reason (optional)'),
+                decoration: InputDecoration(
+                  labelText: _refund > 0 && _wantRefund ? 'Reason for cancelling (required)' : 'Reason (optional)',
+                  hintText: _refund > 0 && _wantRefund ? 'e.g. medical emergency, family emergency, typhoon' : null,
+                ),
               ),
               const SizedBox(height: 8),
               CheckboxListTile(
@@ -230,7 +256,7 @@ class _CancelSheetState extends State<_CancelSheet> {
                   onPressed: _busy || !_agree ? null : _submit,
                   child: _busy
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(_refund > 0 ? 'Cancel and request ${peso(_refund)} refund' : 'Cancel booking'),
+                      : Text(_refund > 0 && _wantRefund ? 'Cancel and request refund' : 'Cancel booking'),
                 ),
               ),
             ],
