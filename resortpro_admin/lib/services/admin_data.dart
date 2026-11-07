@@ -236,6 +236,29 @@ String clientNameOf(Map<String, dynamic> booking) {
   return tr('unknownClient');
 }
 
+/// Pangalan para sa resibo at notification: "JUAN DELA CRUZ" (first name, last name, all caps).
+String upperFirstLast(dynamic first, dynamic last, {dynamic fallback}) {
+  String part(dynamic v) {
+    final t = '${v ?? ''}'.trim();
+    return t.toUpperCase() == 'N/A' ? '' : t;
+  }
+
+  final full = [part(first), part(last)].where((e) => e.isNotEmpty).join(' ');
+  final name = full.isNotEmpty ? full : part(fallback);
+  return name.replaceAll(RegExp(r'\s+'), ' ').toUpperCase();
+}
+
+/// Pangalan ng guest sa resibo: "JUAN DELA CRUZ".
+String receiptNameOf(Map<String, dynamic> booking) {
+  final p = booking['profiles'];
+  if (p is Map) {
+    final n = upperFirstLast(p['first_name'], p['last_name'], fallback: p['google_display_name']);
+    if (n.isNotEmpty) return n;
+  }
+  final guest = '${booking['guest_name'] ?? ''}'.trim();
+  return guest.isEmpty ? tr('unknownClient').toUpperCase() : guest.toUpperCase();
+}
+
 String? clientPhoneOf(Map<String, dynamic> booking) {
   final p = booking['profiles'];
   if (p is Map && p['phone'] != null) return '${p['phone']}';

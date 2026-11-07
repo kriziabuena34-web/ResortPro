@@ -84,7 +84,7 @@ class PaymentReceipt {
 
   /// Mga linya ng resibo: (label, value, naka-bold?)
   List<(String, String, bool)> get lines => [
-        (tr('rcGuest'), guest, false),
+        (tr('rcGuest'), guest.toUpperCase(), false),
         (tr('rcPackage'), packageName, false),
         if (bookingDate != null) (tr('rcBookingDate'), formatDate(bookingDate), false),
         (tr('rcSource'), sourceLabel(source), false),

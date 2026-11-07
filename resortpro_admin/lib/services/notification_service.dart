@@ -143,23 +143,22 @@ String notificationBody(Map<String, dynamic> n) {
   switch (n['type']) {
     case 'new_booking':
       return tr('notifNewBookingBody', {
-        'client': d['client'] ?? '',
+        'client': '${d['client'] ?? ''}'.toUpperCase(),
         'package': d['package'] ?? '',
         'date': formatDate(parseDate(d['date'])),
       });
     case 'client_payment':
       return tr('notifPaymentBody', {
-        'client': d['client'] ?? '',
+        'client': '${d['client'] ?? ''}'.toUpperCase(),
         'amount': peso(asDouble(d['amount'])),
         'method': methodLabel(d['method'] as String?),
         'package': d['package'] ?? '',
-      }) +
-          ('${d['reference_no'] ?? ''}'.isEmpty ? '' : ' (Ref ${d['reference_no']})');
+      });
     case 'verification_request':
-      return tr('notifVerificationBody', {'client': d['client'] ?? ''});
+      return tr('notifVerificationBody', {'client': '${d['client'] ?? ''}'.toUpperCase()});
     case 'refund_request':
       return tr('notifRefundBody', {
-        'client': d['client'] ?? '',
+        'client': '${d['client'] ?? ''}'.toUpperCase(),
         'package': d['package'] ?? '',
         'date': formatDate(parseDate(d['date'])),
         'amount': peso(asDouble(d['amount'])),

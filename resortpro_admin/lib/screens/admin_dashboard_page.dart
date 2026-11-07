@@ -78,9 +78,17 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   void _onNewNotification(Map<String, dynamic> n) {
     _fetchData();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    // Lalabas sa itaas (kanan kapag malapad ang screen) para hindi matakpan ang mga button sa ibaba.
+    final size = MediaQuery.of(context).size;
+    final wide = size.width > 700;
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        showCloseIcon: true,
+        dismissDirection: DismissDirection.up,
+        margin: wide ? EdgeInsets.only(left: size.width - 456, right: 16, bottom: size.height - 230) : null,
         content: Row(
           children: [
             Icon(notificationIcon(n['type'] as String?), color: Colors.white),

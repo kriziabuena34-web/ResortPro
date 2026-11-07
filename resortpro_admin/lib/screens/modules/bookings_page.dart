@@ -192,7 +192,7 @@ class _BookingsPageState extends State<BookingsPage> {
           PaymentReceipt(
             paymentId: payment['id'],
             date: DateTime.now(),
-            guest: clientNameOf(booking),
+            guest: receiptNameOf(booking),
             packageName: packageNameOf(booking),
             bookingDate: bookingDateOf(booking),
             source: bookingSourceOf(booking),

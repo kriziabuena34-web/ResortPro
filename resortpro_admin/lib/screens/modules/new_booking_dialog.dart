@@ -77,11 +77,12 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
   Map<String, dynamic>? get _package =>
       _packageId == null ? null : widget.data.packageById(_packageId);
 
+  /// Para sa resibo: "JUAN DELA CRUZ" (first name, last name, all caps).
   String _guestDisplayName() {
-    if (!_existingClient) return _guestName.text.trim();
+    if (!_existingClient) return _guestName.text.trim().toUpperCase();
     final c = _selectedClient;
     if (c == null) return '—';
-    final name = _fullName(c);
+    final name = upperFirstLast(_part(c['first_name']), _part(c['last_name']), fallback: c['google_display_name']);
     return name.isEmpty ? '—' : name;
   }
 

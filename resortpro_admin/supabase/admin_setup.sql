@@ -1777,3 +1777,28 @@ revoke all on function public.request_cancellation(text, text, text, text, text,
 grant execute on function public.request_cancellation(text, text, text, text, text, boolean) to authenticated;
 
 -- Tapos na ang Part 11!
+
+-- ===========================================================================
+-- PART 12 (dinagdag Nov 7, 2026): Pangalan sa notification — FIRST LAST, all caps
+--   Hal. "KRIZIA BUENA" (hindi na "Buena Krizia" mula sa Google name)
+-- ===========================================================================
+create or replace function public.client_display_name(p_id uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select upper(coalesce(
+    nullif(trim(
+      case when upper(trim(coalesce(first_name, ''))) = 'N/A' then '' else trim(coalesce(first_name, '')) end
+      || ' ' ||
+      case when upper(trim(coalesce(last_name, ''))) = 'N/A' then '' else trim(coalesce(last_name, '')) end
+    ), ''),
+    nullif(trim(google_display_name), ''),
+    'Client'
+  ))
+  from public.profiles where id = p_id;
+$$;
+
+-- Tapos na ang Part 12!
