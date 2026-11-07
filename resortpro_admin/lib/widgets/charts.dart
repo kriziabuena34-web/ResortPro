@@ -148,7 +148,7 @@ class _GroupedBarPainter extends CustomPainter {
         if (v > maxV) maxV = v;
       }
     }
-    final niceMax = _niceCeil(maxV <= 0 ? 1 : maxV);
+    final niceMax = maxV <= 0 ? 4.0 : _niceCeil(maxV);
 
     final plotW = size.width - left;
     final plotH = size.height - top - bottom;
@@ -561,10 +561,12 @@ class _LinePainter extends CustomPainter {
         if (v != null && v > maxV) maxV = v;
       }
     }
-    if (maxV <= 0) maxV = 1;
+    // Walang data: 0–4 para buo ang mga numero sa axis (hindi ₱1, ₱1, ₱0…).
+    final empty = maxV <= 0;
+    if (empty) maxV = 4;
     final exponent = math.pow(10, (math.log(maxV) / math.ln10).floor()).toDouble();
     final f = maxV / exponent;
-    final niceMax = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * exponent;
+    final niceMax = empty ? 4.0 : (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * exponent;
 
     final plotW = size.width - left - right;
     final plotH = size.height - top - bottom;
