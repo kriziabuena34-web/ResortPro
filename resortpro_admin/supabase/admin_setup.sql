@@ -1805,8 +1805,9 @@ $$;
 
 -- ===========================================================================
 -- PART 13 (dinagdag Nov 8, 2026): Kusang "No-show"
---   Kapag hindi nag-check in ang guest at lumipas na ang 6 na oras matapos ang
---   oras ng package (hal. Day Tour 5:00 PM → 11:00 PM; Night Tour 6:00 AM → 12:00 PM),
+--   Kapag hindi nag-check in ang guest at natapos na ang oras ng package
+--   (hal. Day Tour hanggang 5:00 PM → no-show pagsapit ng 5:01 PM;
+--   Night Tour / Overnight hanggang 6:00 AM → no-show pagsapit ng 6:01 AM kinabukasan),
 --   gagawing "no_show" ang booking, ila-log, at aabisuhan ang guest.
 --   Non-refundable ang mga bayad (kasama pa rin sa "Collected").
 -- ===========================================================================
@@ -1825,7 +1826,7 @@ begin
      where bk.status::text in ('reserved', 'confirmed', 'fully_paid')
        and bk.checked_in_at is null
        and bk.booking_date <= (now() at time zone 'Asia/Manila')::date
-       and public.booking_end_at(bk.booking_date, bk.package_id) + interval '6 hours' < now()
+       and public.booking_end_at(bk.booking_date, bk.package_id) < now()
      for update skip locked
   loop
     update public.bookings set status = 'no_show' where id = b.id;
@@ -1850,12 +1851,12 @@ end $$;
 revoke all on function public.mark_no_shows() from public, anon;
 grant execute on function public.mark_no_shows() to authenticated;
 
--- Patakbuhin bawat oras (pg_cron). Kung hindi available, ang admin app ang tatawag nito.
+-- Patakbuhin bawat minuto (pg_cron). Kung hindi available, ang admin app ang tatawag nito.
 do $$
 begin
   create extension if not exists pg_cron;
   perform cron.unschedule(jobid) from cron.job where jobname = 'mark-no-shows';
-  perform cron.schedule('mark-no-shows', '5 * * * *', 'select public.mark_no_shows()');
+  perform cron.schedule('mark-no-shows', '* * * * *', 'select public.mark_no_shows()');
 exception when others then
   raise notice 'pg_cron is not available (%). The admin app will mark no-shows instead.', sqlerrm;
 end $$;
