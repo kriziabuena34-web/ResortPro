@@ -1865,3 +1865,12 @@ end $$;
 select public.mark_no_shows() as marked_no_show;
 
 -- Tapos na ang Part 13!
+
+-- ===========================================================================
+-- PART 14 (dinagdag Nov 8, 2026): Posisyon ng admin/staff
+--   Hal. "Owner", "Assistant / Caretaker" — makikita sa sidebar at Dashboard.
+--   Ang admin mismo ang naglalagay nito (pindutin ang pangalan sa sidebar).
+-- ===========================================================================
+alter table public.profiles add column if not exists staff_title text;
+
+-- Tapos na ang Part 14!

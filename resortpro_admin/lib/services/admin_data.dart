@@ -138,11 +138,20 @@ class AdminData {
 
     // Pangalan ng mga admin/staff (para sa "Received by", "Verified by", at pagbati).
     try {
-      final admins = await supabase.from('profiles').select('id, first_name, last_name').eq('role', 'admin');
+      List admins;
+      try {
+        admins = await supabase.from('profiles').select('id, first_name, last_name, staff_title').eq('role', 'admin');
+      } catch (_) {
+        // Hindi pa na-run ang Part 14 ng SQL (walang staff_title).
+        admins = await supabase.from('profiles').select('id, first_name, last_name').eq('role', 'admin');
+      }
       _staffNames.clear();
+      _staffTitles.clear();
       for (final a in admins) {
         final n = _plainName(a['first_name'], a['last_name']);
         if (n.isNotEmpty) _staffNames['${a['id']}'] = n;
+        final t = '${a['staff_title'] ?? ''}'.trim();
+        if (t.isNotEmpty) _staffTitles['${a['id']}'] = t;
       }
     } catch (_) {}
 
@@ -182,6 +191,13 @@ class AdminData {
 // ---------------------------------------------------------------------------
 
 final Map<String, String> _staffNames = {};
+final Map<String, String> _staffTitles = {};
+
+/// Posisyon ng admin (hal. "Owner", "Assistant / Caretaker"), o null.
+String? staffTitleOf(dynamic id) => id == null ? null : _staffTitles['$id'];
+
+/// Posisyon ng naka-login na admin, o null.
+String? currentStaffTitle() => staffTitleOf(Supabase.instance.client.auth.currentUser?.id);
 
 String _plainName(dynamic first, dynamic last) {
   String part(dynamic v) {
@@ -207,11 +223,19 @@ String? currentStaffFirstName() {
   return n?.split(' ').first;
 }
 
-/// I-save ang sariling pangalan ng naka-login na admin.
-Future<void> saveMyStaffName(String first, String last) async {
+/// I-save ang sariling pangalan (at posisyon) ng naka-login na admin.
+Future<void> saveMyStaffName(String first, String last, {String? title}) async {
   final supabase = Supabase.instance.client;
   final id = supabase.auth.currentUser!.id;
   await supabase.from('profiles').update({'first_name': first.trim(), 'last_name': last.trim()}).eq('id', id);
+  if (title != null) {
+    await supabase.from('profiles').update({'staff_title': title.trim()}).eq('id', id);
+    if (title.trim().isEmpty) {
+      _staffTitles.remove(id);
+    } else {
+      _staffTitles[id] = title.trim();
+    }
+  }
   final n = _plainName(first, last);
   if (n.isEmpty) {
     _staffNames.remove(id);

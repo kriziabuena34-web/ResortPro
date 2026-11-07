@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../l10n/app_strings.dart';
 import '../../services/admin_data.dart';
 import '../../services/notification_service.dart';
@@ -143,12 +145,21 @@ class _OverviewPageState extends State<OverviewPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          tr('greeting', {'name': currentStaffFirstName() ?? 'Admin'}),
+                          tr('greeting', {
+                            'name': staffNameOf(Supabase.instance.client.auth.currentUser?.id) ?? 'Admin',
+                          }),
                           style: theme.textTheme.headlineSmall?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
+                        if (currentStaffTitle() != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            currentStaffTitle()!,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                          ),
+                        ],
                         const SizedBox(height: 4),
                         Text(
                           tr('summaryToday', {'date': formatDate(today)}),

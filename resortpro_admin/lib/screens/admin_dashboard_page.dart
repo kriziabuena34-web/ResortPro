@@ -125,6 +125,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     final current = (staffNameOf(supabase.auth.currentUser?.id) ?? '').split(' ');
     final first = TextEditingController(text: current.length > 1 ? current.sublist(0, current.length - 1).join(' ') : current.first);
     final last = TextEditingController(text: current.length > 1 ? current.last : '');
+    final title = TextEditingController(text: currentStaffTitle() ?? '');
     String? error;
     final saved = await showDialog<bool>(
       context: context,
@@ -150,6 +151,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(labelText: tr('lastName')),
                 ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: title,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(labelText: tr('staffTitle')),
+                ),
                 if (error != null) ...[
                   const SizedBox(height: 10),
                   Text(error!, style: const TextStyle(color: AppColors.danger)),
@@ -166,7 +173,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   return;
                 }
                 try {
-                  await saveMyStaffName(first.text, last.text);
+                  await saveMyStaffName(first.text, last.text, title: title.text);
                   if (dialogContext.mounted) Navigator.pop(dialogContext, true);
                 } catch (e) {
                   setLocal(() => error = tr('failed', {'e': e}));
@@ -180,6 +187,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     );
     first.dispose();
     last.dispose();
+    title.dispose();
     if (saved == true && mounted) {
       showToast(context, tr('nameSaved'));
       setState(() {});
@@ -313,6 +321,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   counts: [for (var i = 0; i < _modules.length; i++) _countFor(i)],
                   email: supabase.auth.currentUser?.email ?? '',
                   staffName: staffNameOf(supabase.auth.currentUser?.id),
+                  staffTitle: currentStaffTitle(),
                   onEditName: _editMyName,
                   onSelect: _openModule,
                   onLogout: _logout,
@@ -349,6 +358,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               counts: [for (var i = 0; i < _modules.length; i++) _countFor(i)],
               email: supabase.auth.currentUser?.email ?? '',
               staffName: staffNameOf(supabase.auth.currentUser?.id),
+              staffTitle: currentStaffTitle(),
               onEditName: () {
                 Navigator.pop(context);
                 _editMyName();
@@ -497,6 +507,7 @@ class _Sidebar extends StatelessWidget {
     required this.counts,
     required this.email,
     this.staffName,
+    this.staffTitle,
     this.onEditName,
     required this.onSelect,
     required this.onLogout,
@@ -510,6 +521,7 @@ class _Sidebar extends StatelessWidget {
   final List<int> counts;
   final String email;
   final String? staffName;
+  final String? staffTitle;
   final VoidCallback? onEditName;
   final ValueChanged<int> onSelect;
   final VoidCallback onLogout;
@@ -655,7 +667,7 @@ class _Sidebar extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  tr('adminRole'),
+                                  staffTitle ?? tr('adminRole'),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(color: AppColors.inkText, fontSize: 12),
