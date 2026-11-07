@@ -117,6 +117,11 @@ class AdminData {
   static Future<AdminData> fetch() async {
     final supabase = Supabase.instance.client;
 
+    // Kusang "No-show": hindi nag-check in at lumipas na ang oras ng package (Part 13 ng SQL).
+    try {
+      await supabase.rpc('mark_no_shows');
+    } catch (_) {}
+
     final bookings = await supabase
         .from('bookings')
         .select(

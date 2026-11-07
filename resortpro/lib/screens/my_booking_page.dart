@@ -206,6 +206,30 @@ class _MyBookingPageState extends State<MyBookingPage> {
     await _fetchData();
   }
 
+  Widget _noShowInfo() => Container(
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.red.shade100),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.person_off_outlined, color: Colors.red.shade700, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'You did not check in on your booking date, so this booking was marked as no-show. '
+                'Payments are non-refundable. Please contact the resort if you have a valid reason.',
+                style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.w600, height: 1.35),
+              ),
+            ),
+          ],
+        ),
+      );
+
   Widget _refundInfo(Map<String, dynamic> r) {
     final status = '${r['status']}';
     final amount = peso(asDouble(r['amount']));
@@ -492,6 +516,8 @@ class _MyBookingPageState extends State<MyBookingPage> {
               icon: const Icon(Icons.receipt_long, size: 18),
               label: const Text('View receipt'),
             ),
+            // Hindi nakapag-check in sa araw ng booking
+            if (status == 'no_show') _noShowInfo(),
             // Refund (kapag na-cancel)
             if (booking['_refund'] is Map) _refundInfo(Map<String, dynamic>.from(booking['_refund'] as Map)),
             // Pag-cancel ayon sa refund policy

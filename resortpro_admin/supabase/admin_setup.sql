@@ -1802,3 +1802,65 @@ as $$
 $$;
 
 -- Tapos na ang Part 12!
+
+-- ===========================================================================
+-- PART 13 (dinagdag Nov 8, 2026): Kusang "No-show"
+--   Kapag hindi nag-check in ang guest at lumipas na ang 6 na oras matapos ang
+--   oras ng package (hal. Day Tour 5:00 PM → 11:00 PM; Night Tour 6:00 AM → 12:00 PM),
+--   gagawing "no_show" ang booking, ila-log, at aabisuhan ang guest.
+--   Non-refundable ang mga bayad (kasama pa rin sa "Collected").
+-- ===========================================================================
+create or replace function public.mark_no_shows()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b record;
+  n int := 0;
+begin
+  for b in
+    select bk.* from public.bookings bk
+     where bk.status::text in ('reserved', 'confirmed', 'fully_paid')
+       and bk.checked_in_at is null
+       and bk.booking_date <= (now() at time zone 'Asia/Manila')::date
+       and public.booking_end_at(bk.booking_date, bk.package_id) + interval '6 hours' < now()
+     for update skip locked
+  loop
+    update public.bookings set status = 'no_show' where id = b.id;
+
+    insert into public.booking_logs (booking_id, action, from_status, to_status, note)
+    values (b.id::text, 'status_change', b.status::text, 'no_show',
+            'Automatically marked: no check-in on the booking date');
+
+    if b.client_id is not null then
+      insert into public.notifications (audience, recipient_id, type, data, ref_id)
+      values ('client', b.client_id, 'booking_no_show',
+              jsonb_build_object('package', (select name from public.packages where id = b.package_id),
+                                 'date', b.booking_date,
+                                 'note', 'There was no check-in on your booking date. Payments are non-refundable.'),
+              b.id::text);
+    end if;
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+
+revoke all on function public.mark_no_shows() from public, anon;
+grant execute on function public.mark_no_shows() to authenticated;
+
+-- Patakbuhin bawat oras (pg_cron). Kung hindi available, ang admin app ang tatawag nito.
+do $$
+begin
+  create extension if not exists pg_cron;
+  perform cron.unschedule(jobid) from cron.job where jobname = 'mark-no-shows';
+  perform cron.schedule('mark-no-shows', '5 * * * *', 'select public.mark_no_shows()');
+exception when others then
+  raise notice 'pg_cron is not available (%). The admin app will mark no-shows instead.', sqlerrm;
+end $$;
+
+-- Ngayon din: ayusin ang mga lumang booking na lumipas na.
+select public.mark_no_shows() as marked_no_show;
+
+-- Tapos na ang Part 13!

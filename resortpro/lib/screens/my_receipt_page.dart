@@ -142,6 +142,14 @@ class _MyReceiptPageState extends State<MyReceiptPage> {
             if (_booking!['event_type'] != null)
               _receiptRow('Event Type', '${_booking!['event_type']}'),
             _receiptRow('Status', statusLabel(_booking!['status'] as String?)),
+            if (_booking!['status'] == 'no_show')
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'No check-in on the booking date. Payments are non-refundable.',
+                  style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600),
+                ),
+              ),
 
             const Divider(height: 32),
 
