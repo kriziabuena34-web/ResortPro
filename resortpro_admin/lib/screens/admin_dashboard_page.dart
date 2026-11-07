@@ -170,7 +170,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   int _countFor(int i) => switch (i) {
         1 => _toConfirmCount,
         4 => _pendingCount,
-        5 => _data?.pendingPayments.length ?? 0,
+        5 => (_data?.pendingPayments.length ?? 0) + (_data?.pendingRefunds.length ?? 0),
         _ => 0,
       };
 
@@ -378,6 +378,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           data: data,
           onChanged: _fetchData,
           showPendingFirst: _bookingFilter == 'pending',
+          initialTab: _bookingFilter == 'refunds' ? 'refunds' : null,
         ),
       6 => PackagesPage(data: data, onChanged: _fetchData),
       7 => const GalleryPage(),

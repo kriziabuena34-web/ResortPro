@@ -1406,3 +1406,224 @@ begin
 end $$;
 
 -- Tapos na ang Part 9!
+
+
+-- ===========================================================================
+-- PART 10 (dinagdag Nov 7, 2026): Mga package ayon sa Pool Agreement,
+-- at cancellation + refund
+--   Policy #6–#8 ng resort:
+--     • Cancel 5 araw o higit pa bago ang petsa → refund ng KALAHATI ng
+--       50% reservation fee (hal. ₱6,500 → fee ₱3,250 → refund ₱1,625)
+--     • Cancel kulang sa 5 araw → walang refund sa reservation fee
+--     • Ang ibinayad na lampas sa reservation fee (hal. bayad na lahat) ay ibinabalik
+-- ===========================================================================
+
+-- ---- Mga pangalan ng package (ayon sa papel ng resort) ----
+-- Ang dating "Overnight" (7:00 PM – 6:00 AM) ay "Night Tour" na.
+update public.packages set name = 'Night Tour'
+ where name = 'Overnight'
+   and not exists (select 1 from public.packages where name = 'Night Tour');
+
+-- ---- Refund requests ----
+create table if not exists public.refund_requests (
+  id               bigint generated always as identity primary key,
+  booking_id       text not null,
+  client_id        uuid,
+  days_before      int not null,
+  paid             numeric not null default 0,
+  reservation_fee  numeric not null default 0,
+  amount           numeric not null default 0,
+  payout_method    text check (payout_method in ('gcash', 'maya', 'cash')),
+  payout_number    text,
+  payout_name      text,
+  reason           text,
+  status           text not null default 'pending' check (status in ('pending', 'refunded', 'rejected')),
+  refund_reference text,
+  admin_note       text,
+  processed_by     uuid,
+  processed_at     timestamptz,
+  created_at       timestamptz not null default now()
+);
+create unique index if not exists refund_requests_one_per_booking on public.refund_requests (booking_id);
+
+alter table public.refund_requests enable row level security;
+drop policy if exists "admins manage refunds" on public.refund_requests;
+create policy "admins manage refunds" on public.refund_requests
+  for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "clients read own refunds" on public.refund_requests;
+create policy "clients read own refunds" on public.refund_requests
+  for select to authenticated using (client_id = auth.uid());
+
+-- Pwedeng i-record ang refund bilang negatibong bayad (kind = 'refund').
+do $$
+declare c record;
+begin
+  for c in
+    select con.conname, pg_get_constraintdef(con.oid) as def
+    from pg_constraint con
+    join pg_class rel on rel.oid = con.conrelid
+    join pg_namespace n on n.oid = rel.relnamespace
+    where n.nspname = 'public' and rel.relname = 'payments' and con.contype = 'c'
+      and (pg_get_constraintdef(con.oid) ilike '%kind%' or pg_get_constraintdef(con.oid) ilike '%amount%')
+      and con.conname <> 'payments_status_check'
+  loop
+    execute format('alter table public.payments drop constraint %I', c.conname);
+  end loop;
+end $$;
+
+-- Kuwenta ng refund (pareho ang ginagamit ng app at ng server).
+create or replace function public.refund_quote(p_booking_id text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  b      record;
+  paid   numeric;
+  fee    numeric;
+  days   int;
+  refund numeric;
+  today  date := (now() at time zone 'Asia/Manila')::date;
+begin
+  select * into b from public.bookings where id::text = p_booking_id;
+  if not found then raise exception 'CODE_NOT_FOUND'; end if;
+  if not coalesce(public.is_admin(), false) and (auth.uid() is null or b.client_id is distinct from auth.uid()) then
+    raise exception 'NOT_ALLOWED';
+  end if;
+
+  select coalesce(sum(amount), 0) into paid
+    from public.payments
+   where booking_id::text = b.id::text and coalesce(status, 'verified') = 'verified';
+  fee  := least(paid, round(coalesce(b.total_amount, 0) * 0.5));
+  days := b.booking_date - today;
+  refund := greatest(0, paid - fee) + case when days >= 5 then round(fee * 0.5) else 0 end;
+
+  return jsonb_build_object(
+    'days_before', days, 'paid', paid, 'reservation_fee', fee,
+    'refund', refund, 'eligible_half', days >= 5,
+    'can_cancel', b.status::text in ('reserved', 'confirmed', 'fully_paid') and b.checked_in_at is null and days >= 0);
+end $$;
+
+grant execute on function public.refund_quote(text) to authenticated;
+
+-- Guest: i-cancel ang sariling booking at humingi ng refund (kung mayroon).
+create or replace function public.request_cancellation(
+  p_booking_id text,
+  p_method     text default null,
+  p_number     text default null,
+  p_name       text default null,
+  p_reason     text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b   record;
+  q   jsonb;
+  amt numeric;
+begin
+  select * into b from public.bookings where id::text = p_booking_id for update;
+  if not found then raise exception 'CODE_NOT_FOUND'; end if;
+  if auth.uid() is null or b.client_id is distinct from auth.uid() then
+    raise exception 'NOT_ALLOWED';
+  end if;
+
+  q := public.refund_quote(p_booking_id);
+  if not (q->>'can_cancel')::boolean then raise exception 'CANNOT_CANCEL'; end if;
+  amt := (q->>'refund')::numeric;
+
+  if amt > 0 and (coalesce(p_method, '') not in ('gcash', 'maya') or length(coalesce(trim(p_number), '')) < 10
+                  or length(coalesce(trim(p_name), '')) < 2) then
+    raise exception 'PAYOUT_REQUIRED';
+  end if;
+
+  update public.bookings set status = 'cancelled' where id = b.id;
+  insert into public.booking_logs (booking_id, action, from_status, to_status, note)
+  values (b.id::text, 'status_change', b.status::text, 'cancelled',
+          'Cancelled by guest' || case when coalesce(trim(p_reason), '') <> '' then ' · ' || trim(p_reason) else '' end
+          || ' · ' || (q->>'days_before') || ' day(s) before · refund ' || amt);
+
+  if amt > 0 then
+    insert into public.refund_requests
+      (booking_id, client_id, days_before, paid, reservation_fee, amount,
+       payout_method, payout_number, payout_name, reason)
+    values (b.id::text, b.client_id, (q->>'days_before')::int, (q->>'paid')::numeric,
+            (q->>'reservation_fee')::numeric, amt, p_method, trim(p_number), trim(p_name),
+            nullif(trim(coalesce(p_reason, '')), ''));
+  end if;
+
+  insert into public.notifications (audience, type, data, ref_id)
+  values ('admin', 'refund_request',
+          jsonb_build_object('client', public.client_display_name(b.client_id),
+                             'package', (select name from public.packages where id = b.package_id),
+                             'date', b.booking_date, 'amount', amt),
+          b.id::text);
+
+  return q;
+end $$;
+
+revoke all on function public.request_cancellation(text, text, text, text, text) from public, anon;
+grant execute on function public.request_cancellation(text, text, text, text, text) to authenticated;
+
+-- Admin: naipadala na ang refund (o tinanggihan).
+create or replace function public.complete_refund(
+  p_request_id bigint,
+  p_reference  text default null,
+  p_reject     boolean default false,
+  p_note       text default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  r record;
+  b record;
+begin
+  if not coalesce(public.is_admin(), false) then raise exception 'NOT_ADMIN'; end if;
+  select * into r from public.refund_requests where id = p_request_id for update;
+  if not found then raise exception 'CODE_NOT_FOUND'; end if;
+  if r.status <> 'pending' then raise exception 'ALREADY_DONE'; end if;
+  select * into b from public.bookings where id::text = r.booking_id;
+
+  if p_reject then
+    update public.refund_requests
+       set status = 'rejected', admin_note = nullif(trim(coalesce(p_note, '')), ''),
+           processed_by = auth.uid(), processed_at = now()
+     where id = r.id;
+  else
+    update public.refund_requests
+       set status = 'refunded', refund_reference = nullif(trim(coalesce(p_reference, '')), ''),
+           admin_note = nullif(trim(coalesce(p_note, '')), ''),
+           processed_by = auth.uid(), processed_at = now()
+     where id = r.id;
+    -- Ibawas sa nakolektang bayad (para tama ang reports).
+    insert into public.payments (booking_id, amount, method, kind, received_by, status, reference_no)
+    values (b.id, -r.amount, coalesce(r.payout_method, 'cash'), 'refund', auth.uid(), 'verified',
+            nullif(trim(coalesce(p_reference, '')), ''));
+  end if;
+
+  insert into public.booking_logs (booking_id, action, note)
+  values (r.booking_id, case when p_reject then 'refund_rejected' else 'refunded' end,
+          case when p_reject then coalesce(p_note, '') else 'Refund ' || r.amount || coalesce(' · Ref ' || p_reference, '') end);
+
+  if r.client_id is not null then
+    insert into public.notifications (audience, recipient_id, type, data, ref_id)
+    values ('client', r.client_id, case when p_reject then 'payment_refund_rejected' else 'payment_refunded' end,
+            jsonb_build_object('package', (select name from public.packages where id = b.package_id),
+                               'date', b.booking_date, 'amount', r.amount,
+                               'reference_no', p_reference, 'reason', p_note),
+            r.booking_id);
+  end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+revoke all on function public.complete_refund(bigint, text, boolean, text) from public, anon;
+grant execute on function public.complete_refund(bigint, text, boolean, text) to authenticated;
+
+-- Tapos na ang Part 10!

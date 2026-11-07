@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../l10n/app_strings.dart';
 import '../../services/admin_data.dart';
 import '../../services/booking_workflow.dart';
+import '../../services/reference_format.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/admin_widgets.dart';
 import '../../widgets/list_controls.dart';
@@ -16,7 +17,11 @@ class PaymentsPage extends StatefulWidget {
     required this.data,
     required this.onChanged,
     this.showPendingFirst = false,
+    this.initialTab,
   });
+
+  /// 'pending', 'refunds', o 'all' (galing sa notification).
+  final String? initialTab;
 
   final AdminData data;
   final Future<void> Function() onChanged;
@@ -43,7 +48,12 @@ enum _PaySort { newest, oldest, amountHigh, amountLow }
 class _PaymentsPageState extends State<PaymentsPage> {
   final supabase = Supabase.instance.client;
   final _searchController = TextEditingController();
-  late bool _pendingTab = widget.showPendingFirst || widget.data.pendingPayments.isNotEmpty;
+  late String _tab = widget.initialTab ??
+      (widget.showPendingFirst || widget.data.pendingPayments.isNotEmpty
+          ? 'pending'
+          : widget.data.pendingRefunds.isNotEmpty
+              ? 'refunds'
+              : 'pending');
   String _query = '';
   String _method = 'all';
   String _kind = 'all';
@@ -161,27 +171,240 @@ class _PaymentsPageState extends State<PaymentsPage> {
   @override
   Widget build(BuildContext context) {
     final pendingCount = widget.data.pendingPayments.length;
+    final refundCount = widget.data.pendingRefunds.length;
 
     return Column(
       children: [
         Padding(
           padding: EdgeInsets.fromLTRB(pageGutter(context), pageGutter(context) - 4, pageGutter(context), 0),
-          child: PillTabs<bool>(
-            value: _pendingTab,
-            onChanged: (v) => setState(() => _pendingTab = v),
+          child: PillTabs<String>(
+            value: _tab,
+            onChanged: (v) => setState(() => _tab = v),
             items: [
               (
-                value: true,
+                value: 'pending',
                 icon: Icons.fact_check_outlined,
                 label: pendingCount > 0 ? '${tr('payPendingTab')}  ·  $pendingCount' : tr('payPendingTab'),
               ),
-              (value: false, icon: Icons.receipt_long_outlined, label: tr('payAllTab')),
+              (
+                value: 'refunds',
+                icon: Icons.currency_exchange,
+                label: refundCount > 0 ? '${tr('payRefundsTab')}  ·  $refundCount' : tr('payRefundsTab'),
+              ),
+              (value: 'all', icon: Icons.receipt_long_outlined, label: tr('payAllTab')),
             ],
           ),
         ),
-        Expanded(child: _pendingTab ? _buildPending() : _buildAll()),
+        Expanded(
+          child: switch (_tab) {
+            'refunds' => _buildRefunds(),
+            'all' => _buildAll(),
+            _ => _buildPending(),
+          },
+        ),
       ],
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // Refunds (policy #6–#8: kalahati ng reservation fee kapag 5+ araw bago)
+  // -------------------------------------------------------------------------
+
+  Widget _buildRefunds() {
+    final refunds = widget.data.refunds;
+    if (refunds.isEmpty) {
+      return EmptyState(icon: Icons.currency_exchange, message: tr('rfNone'));
+    }
+    final pending = refunds.where((r) => r['status'] == 'pending').toList();
+    final done = refunds.where((r) => r['status'] != 'pending').toList();
+    return RefreshIndicator(
+      onRefresh: widget.onChanged,
+      child: ListView(
+        padding: pageInsets(context),
+        children: [
+          Text(tr('rfHint'), style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 12),
+          for (final r in pending) _refundCard(r),
+          if (done.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(tr('rfHistory'), style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            for (final r in done) _refundCard(r),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _refundCard(Map<String, dynamic> r) {
+    final booking = widget.data.bookingById(r['booking_id']);
+    final status = '${r['status']}';
+    final busy = _busy.contains('refund-${r['id']}');
+    final method = '${r['payout_method'] ?? ''}';
+    final color = switch (status) {
+      'refunded' => AppColors.success,
+      'rejected' => AppColors.danger,
+      _ => AppColors.warning,
+    };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AppCard(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      booking == null ? tr('unknownClient') : clientNameOf(booking),
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(tr('rfStatus_$status'),
+                        style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+                  ),
+                ],
+              ),
+              if (booking != null)
+                Text('${packageNameOf(booking)} · ${formatDate(bookingDateOf(booking))}',
+                    style: const TextStyle(color: AppColors.muted)),
+              const SizedBox(height: 10),
+              Text(peso(asDouble(r['amount'])),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.primary)),
+              Text(tr('rfBreakdown', {
+                'days': asInt(r['days_before']),
+                'paid': peso(asDouble(r['paid'])),
+                'fee': peso(asDouble(r['reservation_fee'])),
+              }), style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+              const Divider(height: 20),
+              InfoRow(tr('rfSendTo'), '${methodLabel(method)} · ${r['payout_number'] ?? ''}'),
+              InfoRow(tr('rfAccountName'), '${r['payout_name'] ?? ''}'),
+              if ('${r['reason'] ?? ''}'.isNotEmpty) InfoRow(tr('rfReason'), '${r['reason']}'),
+              if ('${r['refund_reference'] ?? ''}'.isNotEmpty) InfoRow(tr('rcReference'), '${r['refund_reference']}'),
+              if ('${r['admin_note'] ?? ''}'.isNotEmpty) InfoRow(tr('adminNotes'), '${r['admin_note']}'),
+              if (status == 'pending') ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: busy ? null : () => _completeRefund(r),
+                      icon: const Icon(Icons.send, size: 18),
+                      label: Text(tr('rfMarkSent')),
+                    ),
+                    OutlinedButton(
+                      onPressed: busy ? null : () => _rejectRefund(r),
+                      child: Text(tr('reject')),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _runRefund(Map<String, dynamic> r, {String? reference, bool reject = false, String? note}) async {
+    final key = 'refund-${r['id']}';
+    setState(() => _busy.add(key));
+    try {
+      await supabase.rpc('complete_refund', params: {
+        'p_request_id': r['id'],
+        'p_reference': reference,
+        'p_reject': reject,
+        'p_note': note,
+      });
+      if (!mounted) return;
+      showToast(context, reject ? tr('rfRejected') : tr('rfSent'));
+      await widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      showToast(context, tr('failed', {'e': e}));
+    } finally {
+      if (mounted) setState(() => _busy.remove(key));
+    }
+  }
+
+  Future<void> _completeRefund(Map<String, dynamic> r) async {
+    final method = '${r['payout_method'] ?? 'gcash'}';
+    final f = RefFormat.of(method);
+    final controller = TextEditingController();
+    final ref = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text(tr('rfMarkSent')),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(tr('rfSendInstr', {
+                  'amount': peso(asDouble(r['amount'])),
+                  'method': methodLabel(method),
+                  'number': '${r['payout_number'] ?? ''}',
+                  'name': '${r['payout_name'] ?? ''}',
+                })),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  inputFormatters: [f.formatter],
+                  keyboardType: f.digitsOnly ? TextInputType.number : TextInputType.visiblePassword,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: InputDecoration(
+                    labelText: tr('peReference', {'method': methodLabel(method)}),
+                    hintText: 'e.g. ${f.example}',
+                  ),
+                  onChanged: (_) => setDialogState(() {}),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(tr('cancel'))),
+            FilledButton(
+              onPressed: f.isComplete(controller.text) ? () => Navigator.pop(dialogContext, controller.text) : null,
+              child: Text(tr('rfConfirmSent')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ref == null) return;
+    await _runRefund(r, reference: ref);
+  }
+
+  Future<void> _rejectRefund(Map<String, dynamic> r) async {
+    final controller = TextEditingController();
+    final note = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(tr('rfRejectQ')),
+        content: TextField(
+          controller: controller,
+          maxLines: 2,
+          decoration: InputDecoration(labelText: tr('rfRejectReason')),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(tr('cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text), child: Text(tr('reject'))),
+        ],
+      ),
+    );
+    if (note == null) return;
+    await _runRefund(r, reject: true, note: note);
   }
 
   Widget _buildPending() {

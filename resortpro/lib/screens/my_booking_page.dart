@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/cancel_booking.dart';
 import '../services/checkin_qr.dart';
 import '../services/claim_booking.dart';
 import '../services/offline_cache.dart';
@@ -75,11 +76,22 @@ class _MyBookingPageState extends State<MyBookingPage> {
           .eq('client_id', userId)
           .order('booking_date', ascending: false);
 
-      OfflineCache.save('my_bookings', {'profile': profile, 'bookings': bookings});
+      // Refund ng bawat na-cancel na booking (kung mayroon).
+      final list = List<Map<String, dynamic>>.from(bookings);
+      try {
+        final refunds = await supabase.from('refund_requests').select().eq('client_id', userId);
+        for (final r in refunds) {
+          for (final b in list) {
+            if ('${b['id']}' == '${r['booking_id']}') b['_refund'] = r;
+          }
+        }
+      } catch (_) {}
+
+      OfflineCache.save('my_bookings', {'profile': profile, 'bookings': list});
       if (!mounted) return;
       setState(() {
         _profile = profile;
-        _bookings = List<Map<String, dynamic>>.from(bookings);
+        _bookings = list;
         _offlineSavedAt = null;
         _isLoading = false;
       });
@@ -192,6 +204,34 @@ class _MyBookingPageState extends State<MyBookingPage> {
     );
     setState(() => _filter = 'all');
     await _fetchData();
+  }
+
+  Widget _refundInfo(Map<String, dynamic> r) {
+    final status = '${r['status']}';
+    final amount = peso(asDouble(r['amount']));
+    final (Color color, String text) = switch (status) {
+      'refunded' => (
+          Colors.green.shade700,
+          'Refund of $amount sent${'${r['refund_reference'] ?? ''}'.isEmpty ? '' : ' · Ref ${r['refund_reference']}'}',
+        ),
+      'rejected' => (
+          Colors.red.shade700,
+          'Refund not approved${'${r['admin_note'] ?? ''}'.isEmpty ? '' : ': ${r['admin_note']}'}',
+        ),
+      _ => (Colors.orange.shade800, 'Refund of $amount is being processed by the resort.'),
+    };
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10)),
+      child: Row(
+        children: [
+          Icon(Icons.currency_exchange, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600))),
+        ],
+      ),
+    );
   }
 
   int _count(String filter) => _bookings.where((b) => _passesFilter(b, filter)).length;
@@ -452,6 +492,26 @@ class _MyBookingPageState extends State<MyBookingPage> {
               icon: const Icon(Icons.receipt_long, size: 18),
               label: const Text('View receipt'),
             ),
+            // Refund (kapag na-cancel)
+            if (booking['_refund'] is Map) _refundInfo(Map<String, dynamic>.from(booking['_refund'] as Map)),
+            // Pag-cancel ayon sa refund policy
+            if (canCancelBooking(booking) && _offlineSavedAt == null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
+                  onPressed: () async {
+                    if (await showCancelBookingSheet(context, booking) && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Booking cancelled. Any refund will be sent by the resort.')),
+                      );
+                      await _fetchData();
+                    }
+                  },
+                  icon: const Icon(Icons.event_busy_outlined, size: 18),
+                  label: const Text('Cancel booking'),
+                ),
+              ),
           ],
         ),
       ),

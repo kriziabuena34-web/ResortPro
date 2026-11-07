@@ -137,6 +137,10 @@ String notificationTitle(Map<String, dynamic> n) {
       return 'Payment verified';
     case 'payment_rejected':
       return 'Payment not accepted';
+    case 'payment_refunded':
+      return 'Refund sent';
+    case 'payment_refund_rejected':
+      return 'Refund not approved';
     case 'account_verified':
       return 'Account verified';
     case 'account_rejected':
@@ -178,6 +182,11 @@ String notificationBody(Map<String, dynamic> n) {
     case 'payment_rejected':
       return 'Your payment of ${peso(asDouble(d['amount']))} for $pkg could not be verified'
           '${reason.isEmpty ? '.' : ': $reason.'} Please send a new proof in My Bookings.';
+    case 'payment_refunded':
+      return 'We sent your refund of ${peso(asDouble(d['amount']))} for $pkg.'
+          '${'${d['reference_no'] ?? ''}'.isEmpty ? '' : ' Reference no. ${d['reference_no']}.'}';
+    case 'payment_refund_rejected':
+      return 'Your refund for $pkg was not approved${reason.isEmpty ? '.' : ': $reason.'}';
     case 'account_verified':
       return 'Your ID has been verified. You can now book packages.';
     case 'account_rejected':

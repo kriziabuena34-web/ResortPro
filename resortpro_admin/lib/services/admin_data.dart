@@ -14,7 +14,20 @@ class AdminData {
     required this.packages,
     this.blockedDates = const [],
     this.pricingRules = const [],
+    this.refunds = const [],
   });
+
+  /// Galing sa refund_requests (Part 10 ng SQL), pinakabago muna.
+  final List<Map<String, dynamic>> refunds;
+
+  List<Map<String, dynamic>> get pendingRefunds => refunds.where((r) => r['status'] == 'pending').toList();
+
+  Map<String, dynamic>? bookingById(dynamic id) {
+    for (final b in bookings) {
+      if ('${b['id']}' == '$id') return b;
+    }
+    return null;
+  }
 
   final List<Map<String, dynamic>> bookings;
   final List<Map<String, dynamic>> clients;
@@ -131,6 +144,12 @@ class AdminData {
         await supabase.from('pricing_rules').select().order('priority', ascending: false),
       );
     } catch (_) {}
+    List<Map<String, dynamic>> refunds = [];
+    try {
+      refunds = List<Map<String, dynamic>>.from(
+        await supabase.from('refund_requests').select().order('created_at', ascending: false),
+      );
+    } catch (_) {}
 
     return AdminData(
       bookings: List<Map<String, dynamic>>.from(bookings),
@@ -138,6 +157,7 @@ class AdminData {
       packages: List<Map<String, dynamic>>.from(packages),
       blockedDates: blocked,
       pricingRules: rules,
+      refunds: refunds,
     );
   }
 }
@@ -457,6 +477,8 @@ String kindLabel(String? kind) {
       return tr('kindDownpayment');
     case 'balance':
       return tr('kindBalance');
+    case 'refund':
+      return tr('kindRefund');
     default:
       return capitalize((kind ?? '').replaceAll('_', ' '));
   }
