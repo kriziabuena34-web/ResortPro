@@ -206,7 +206,7 @@ class _BookingsPageState extends State<BookingsPage> {
             cashReceived: details.isCash ? details.cashReceived : null,
             totalAmount: totalOf(booking),
             paidSoFar: paidBefore + amount,
-            staff: supabase.auth.currentUser?.email ?? 'Admin',
+            staff: currentStaffName().toUpperCase(),
             claimCode: booking['client_id'] == null ? booking['claim_code'] as String? : null,
             checkinCode: booking['checkin_code'] as String?,
           ),
@@ -1075,6 +1075,11 @@ class _BookingDetailsDialogState extends State<_BookingDetailsDialog> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(_logText(log)),
+                                    if (staffNameOf(log['actor_id']) != null)
+                                      Text(
+                                        tr('logBy', {'name': staffNameOf(log['actor_id'])!}),
+                                        style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                                      ),
                                     if (log['action'] != 'payment' &&
                                         '${log['note'] ?? ''}'.trim().isNotEmpty)
                                       Text(

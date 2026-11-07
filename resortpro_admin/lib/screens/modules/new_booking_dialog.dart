@@ -338,7 +338,7 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
             cashReceived: d.isCash ? d.cashReceived : null,
             totalAmount: total,
             paidSoFar: paid,
-            staff: supabase.auth.currentUser?.email ?? 'Admin',
+            staff: currentStaffName().toUpperCase(),
             claimCode: booking['claim_code'] as String?,
             checkinCode: booking['checkin_code'] as String?,
           ),

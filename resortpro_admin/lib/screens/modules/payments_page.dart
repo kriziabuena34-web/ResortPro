@@ -750,6 +750,15 @@ class _PaymentsPageState extends State<PaymentsPage> {
     );
   }
 
+  /// "· Verified by John Sairon" / "· Received by John Sairon"
+  String _byLine(_PaymentEntry e) {
+    final reviewer = staffNameOf(e.payment['reviewed_by']);
+    if (reviewer != null && e.status != 'pending') return ' · ${tr('payVerifiedBy', {'name': reviewer})}';
+    final receiver = staffNameOf(e.payment['received_by']);
+    if (receiver != null) return ' · ${tr('payReceivedBy', {'name': receiver})}';
+    return '';
+  }
+
   Widget _buildRow(_PaymentEntry e) {
     final color = methodColor(e.method);
     final reference = '${e.payment['reference_no'] ?? ''}'.trim();
@@ -766,6 +775,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
       subtitle: Text(
         '${kindLabel(e.kind)} · ${methodLabel(e.method)} · ${formatDate(e.date)}'
         '${reference.isEmpty ? '' : ' · Ref $reference'}'
+        '${_byLine(e)}'
         '${e.status == 'rejected' && reason.isNotEmpty ? '\n${tr('payRejectedReason', {'reason': reason})}' : ''}',
       ),
       isThreeLine: e.status == 'rejected' && reason.isNotEmpty,

@@ -120,6 +120,72 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     );
   }
 
+  /// Ilagay o palitan ang sariling pangalan ng naka-login na admin.
+  Future<void> _editMyName() async {
+    final current = (staffNameOf(supabase.auth.currentUser?.id) ?? '').split(' ');
+    final first = TextEditingController(text: current.length > 1 ? current.sublist(0, current.length - 1).join(' ') : current.first);
+    final last = TextEditingController(text: current.length > 1 ? current.last : '');
+    String? error;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setLocal) => AlertDialog(
+          title: Text(tr('yourNameTitle')),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(tr('yourNameHelp'), style: const TextStyle(color: AppColors.muted)),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: first,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(labelText: tr('firstName')),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: last,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(labelText: tr('lastName')),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(error!, style: const TextStyle(color: AppColors.danger)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(tr('cancel'))),
+            FilledButton(
+              onPressed: () async {
+                if (first.text.trim().isEmpty || last.text.trim().isEmpty) {
+                  setLocal(() => error = tr('nameRequired'));
+                  return;
+                }
+                try {
+                  await saveMyStaffName(first.text, last.text);
+                  if (dialogContext.mounted) Navigator.pop(dialogContext, true);
+                } catch (e) {
+                  setLocal(() => error = tr('failed', {'e': e}));
+                }
+              },
+              child: Text(tr('save')),
+            ),
+          ],
+        ),
+      ),
+    );
+    first.dispose();
+    last.dispose();
+    if (saved == true && mounted) {
+      showToast(context, tr('nameSaved'));
+      setState(() {});
+    }
+  }
+
   Future<void> _fetchData() async {
     setState(() {
       _isLoading = true;
@@ -246,6 +312,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   selectedIcons: [for (final m in _modules) m.selectedIcon],
                   counts: [for (var i = 0; i < _modules.length; i++) _countFor(i)],
                   email: supabase.auth.currentUser?.email ?? '',
+                  staffName: staffNameOf(supabase.auth.currentUser?.id),
+                  onEditName: _editMyName,
                   onSelect: _openModule,
                   onLogout: _logout,
                 ),
@@ -280,6 +348,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               selectedIcons: [for (final m in _modules) m.selectedIcon],
               counts: [for (var i = 0; i < _modules.length; i++) _countFor(i)],
               email: supabase.auth.currentUser?.email ?? '',
+              staffName: staffNameOf(supabase.auth.currentUser?.id),
+              onEditName: () {
+                Navigator.pop(context);
+                _editMyName();
+              },
               onSelect: (i) {
                 Navigator.pop(context);
                 _openModule(i);
@@ -423,6 +496,8 @@ class _Sidebar extends StatelessWidget {
     required this.selectedIcons,
     required this.counts,
     required this.email,
+    this.staffName,
+    this.onEditName,
     required this.onSelect,
     required this.onLogout,
   });
@@ -434,6 +509,8 @@ class _Sidebar extends StatelessWidget {
   final List<IconData> selectedIcons;
   final List<int> counts;
   final String email;
+  final String? staffName;
+  final VoidCallback? onEditName;
   final ValueChanged<int> onSelect;
   final VoidCallback onLogout;
 
@@ -446,7 +523,8 @@ class _Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initial = email.isEmpty ? 'A' : email[0].toUpperCase();
+    final shown = staffName ?? email;
+    final initial = shown.isEmpty ? 'A' : shown[0].toUpperCase();
 
     return Container(
       width: extended ? 264 : 80,
@@ -560,24 +638,30 @@ class _Sidebar extends StatelessWidget {
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                tr('adminRole'),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
+                          child: InkWell(
+                            onTap: onEditName,
+                            borderRadius: BorderRadius.circular(8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  staffName ?? tr('setYourName'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: staffName == null ? AppColors.accent : Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                email,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: AppColors.inkText, fontSize: 12),
-                              ),
-                            ],
+                                Text(
+                                  tr('adminRole'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: AppColors.inkText, fontSize: 12),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                         IconButton(

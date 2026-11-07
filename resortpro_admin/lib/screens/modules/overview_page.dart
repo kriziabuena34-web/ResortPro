@@ -143,7 +143,7 @@ class _OverviewPageState extends State<OverviewPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          tr('greeting'),
+                          tr('greeting', {'name': currentStaffFirstName() ?? 'Admin'}),
                           style: theme.textTheme.headlineSmall?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,

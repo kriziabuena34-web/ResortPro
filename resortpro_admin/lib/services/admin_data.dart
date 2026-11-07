@@ -136,6 +136,16 @@ class AdminData {
 
     final packages = await supabase.from('packages').select().order('id');
 
+    // Pangalan ng mga admin/staff (para sa "Received by", "Verified by", at pagbati).
+    try {
+      final admins = await supabase.from('profiles').select('id, first_name, last_name').eq('role', 'admin');
+      _staffNames.clear();
+      for (final a in admins) {
+        final n = _plainName(a['first_name'], a['last_name']);
+        if (n.isNotEmpty) _staffNames['${a['id']}'] = n;
+      }
+    } catch (_) {}
+
     // Opsyonal: gagana pa rin ang app kahit hindi pa na-run ang Part 2 ng SQL.
     List<Map<String, dynamic>> blocked = [];
     List<Map<String, dynamic>> rules = [];
@@ -164,6 +174,49 @@ class AdminData {
       pricingRules: rules,
       refunds: refunds,
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pangalan ng staff (admin)
+// ---------------------------------------------------------------------------
+
+final Map<String, String> _staffNames = {};
+
+String _plainName(dynamic first, dynamic last) {
+  String part(dynamic v) {
+    final t = '${v ?? ''}'.trim();
+    return t.toUpperCase() == 'N/A' ? '' : t;
+  }
+
+  return [part(first), part(last)].where((e) => e.isNotEmpty).join(' ');
+}
+
+/// "John Sairon" ng admin na may ganitong id (null kapag hindi admin o wala pang pangalan).
+String? staffNameOf(dynamic id) => id == null ? null : _staffNames['$id'];
+
+/// Pangalan ng naka-login na admin; email kapag wala pang pangalan.
+String currentStaffName() {
+  final u = Supabase.instance.client.auth.currentUser;
+  return staffNameOf(u?.id) ?? u?.email ?? 'Admin';
+}
+
+/// Unang pangalan ng naka-login na admin (para sa pagbati), o null.
+String? currentStaffFirstName() {
+  final n = staffNameOf(Supabase.instance.client.auth.currentUser?.id);
+  return n?.split(' ').first;
+}
+
+/// I-save ang sariling pangalan ng naka-login na admin.
+Future<void> saveMyStaffName(String first, String last) async {
+  final supabase = Supabase.instance.client;
+  final id = supabase.auth.currentUser!.id;
+  await supabase.from('profiles').update({'first_name': first.trim(), 'last_name': last.trim()}).eq('id', id);
+  final n = _plainName(first, last);
+  if (n.isEmpty) {
+    _staffNames.remove(id);
+  } else {
+    _staffNames[id] = n;
   }
 }
 
