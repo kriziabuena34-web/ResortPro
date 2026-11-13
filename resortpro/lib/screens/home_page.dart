@@ -151,12 +151,16 @@ class _HomePageState extends State<HomePage> {
 
   final _notifications = UserNotifications.instance;
 
+  /// Username ng account (makikita sa "Hi, ...!"). Null kapag wala pa.
+  String? _username;
+
   @override
   void initState() {
     super.initState();
     _notifications.latest.addListener(_onRealtimeNotification);
     _fetchPackages();
     _fetchGallery();
+    _fetchUsername();
     _startNotifications();
     _carouselTimer = Timer.periodic(const Duration(seconds: 5), (_) => _autoSlide());
   }
@@ -262,6 +266,23 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// Kunin ang username (naka-save din para gumana offline).
+  Future<void> _fetchUsername() async {
+    final cached = await OfflineCache.load('username');
+    if (cached != null && mounted && _username == null) {
+      final c = '${cached.data ?? ''}'.trim();
+      if (c.isNotEmpty) setState(() => _username = c);
+    }
+    try {
+      final uid = supabase.auth.currentUser?.id;
+      if (uid == null) return;
+      final p = await supabase.from('profiles').select('username').eq('id', uid).maybeSingle();
+      final u = '${p?['username'] ?? ''}'.trim();
+      await OfflineCache.save('username', u);
+      if (mounted) setState(() => _username = u.isEmpty ? null : u);
+    } catch (_) {}
+  }
+
   void _onNavigationItemTapped(int index) {
     // "More" ay sheet, hindi tab.
     if (index == _moreTab) {
@@ -271,6 +292,8 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _selectedIndex = index;
     });
+    // Pagbalik sa Home: kunin ulit ang username (baka pinalitan sa Account).
+    if (index == 0) _fetchUsername();
   }
 
   // "MORE" SHEET: mga item na hindi kasya sa bottom navigation
@@ -513,11 +536,11 @@ class _HomePageState extends State<HomePage> {
 
     final user = supabase.auth.currentUser;
     final fullName = '${user?.userMetadata?['full_name'] ?? ''}'.trim();
-    final firstName = fullName.isEmpty ? 'Guest' : fullName.split(' ').first;
+    final firstName = _username ?? (fullName.isEmpty ? 'Guest' : fullName.split(' ').first);
 
     return RefreshIndicator(
       onRefresh: () async {
-        await Future.wait([_fetchPackages(), _fetchGallery()]);
+        await Future.wait([_fetchPackages(), _fetchGallery(), _fetchUsername()]);
       },
       child: SingleChildScrollView(
         controller: _scrollController,
@@ -559,6 +582,8 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           Text(
                             'Hi, $firstName!',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 22,
