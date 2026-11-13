@@ -1874,3 +1874,59 @@ select public.mark_no_shows() as marked_no_show;
 alter table public.profiles add column if not exists staff_title text;
 
 -- Tapos na ang Part 14!
+
+-- ===========================================================================
+-- PART 15 (dinagdag Nov 13, 2026): Pagpalit ng username at profile picture
+--   Inaayos ang "new row violates row-level security policy for table profiles"
+--   kapag verified na ang account. Ang function na ito ay pinapalitan LANG ang
+--   username / avatar ng sariling account (hindi magagalaw ang verification o role).
+-- ===========================================================================
+create or replace function public.update_my_profile(
+  p_username          text    default null,
+  p_avatar_url        text    default null,
+  p_clear_avatar      boolean default false,
+  p_google_avatar_url text    default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  u   text;
+begin
+  if uid is null then
+    raise exception 'NOT_ALLOWED';
+  end if;
+
+  if p_username is not null then
+    u := regexp_replace(trim(p_username), '\s+', ' ', 'g');
+    if length(u) < 3 or length(u) > 30 then
+      raise exception 'USERNAME_LENGTH: Name must be 3 to 30 characters.';
+    end if;
+    update public.profiles set username = u where id = uid;
+  end if;
+
+  if coalesce(p_clear_avatar, false) then
+    update public.profiles set avatar_url = null where id = uid;
+  elsif p_avatar_url is not null then
+    -- Dapat galing sa sariling folder sa avatars bucket.
+    if position('/storage/v1/object/public/avatars/' || uid::text || '/' in p_avatar_url) = 0 then
+      raise exception 'BAD_AVATAR';
+    end if;
+    update public.profiles set avatar_url = p_avatar_url where id = uid;
+  end if;
+
+  if p_google_avatar_url is not null then
+    if p_google_avatar_url !~ '^https://' then
+      raise exception 'BAD_AVATAR';
+    end if;
+    update public.profiles set google_avatar_url = p_google_avatar_url where id = uid;
+  end if;
+end $$;
+
+revoke all on function public.update_my_profile(text, text, boolean, text) from public, anon;
+grant execute on function public.update_my_profile(text, text, boolean, text) to authenticated;
+
+-- Tapos na ang Part 15!

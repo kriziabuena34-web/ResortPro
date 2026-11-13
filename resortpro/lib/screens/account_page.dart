@@ -78,7 +78,7 @@ class _AccountPageState extends State<AccountPage> {
     final google = '${meta?['avatar_url'] ?? meta?['picture'] ?? ''}'.trim();
     if (google.isEmpty || profile['google_avatar_url'] == google || !profile.containsKey('google_avatar_url')) return;
     try {
-      await supabase.from('profiles').update({'google_avatar_url': google}).eq('id', profile['id']);
+      await supabase.rpc('update_my_profile', params: {'p_google_avatar_url': google});
     } catch (_) {}
   }
 
@@ -135,10 +135,10 @@ class _AccountPageState extends State<AccountPage> {
       await supabase.storage.from('avatars').uploadBinary(
             path,
             bytes,
-            fileOptions: const FileOptions(upsert: true, contentType: 'image/jpeg'),
+            fileOptions: const FileOptions(contentType: 'image/jpeg'),
           );
       final url = supabase.storage.from('avatars').getPublicUrl(path);
-      await supabase.from('profiles').update({'avatar_url': url}).eq('id', uid);
+      await supabase.rpc('update_my_profile', params: {'p_avatar_url': url});
       setState(() => _profile?['avatar_url'] = url);
       // Burahin ang mga lumang litrato para hindi maipon sa storage.
       _cleanupAvatars(uid, keep: path.split('/').last);
@@ -164,11 +164,11 @@ class _AccountPageState extends State<AccountPage> {
   Future<void> _removePhoto() async {
     try {
       final uid = supabase.auth.currentUser!.id;
-      await supabase.from('profiles').update({'avatar_url': null}).eq('id', uid);
+      await supabase.rpc('update_my_profile', params: {'p_clear_avatar': true});
       setState(() => _profile?['avatar_url'] = null);
       _cleanupAvatars(uid);
     } catch (e) {
-      _show('Could not remove photo: $e');
+      _show(friendlyError(e, action: 'remove your photo'));
     }
   }
 
@@ -194,15 +194,20 @@ class _AccountPageState extends State<AccountPage> {
     if (value == null) return;
 
     try {
-      final uid = supabase.auth.currentUser!.id;
-      await supabase.from('profiles').update({'username': value}).eq('id', uid);
+      await supabase.rpc('update_my_profile', params: {'p_username': value});
       if (!mounted) return;
       setState(() => _profile?['username'] = value);
       _show('Name updated.');
     } on PostgrestException catch (e) {
-      _show(e.code == '23505' ? 'That name is already used by another account.' : 'Could not save: ${e.message}');
+      _show(e.code == '23505'
+          ? 'That name is already used by another account.'
+          : e.message.contains('USERNAME_LENGTH')
+              ? 'Your name must be 3 to 30 characters.'
+              : e.message.contains('update_my_profile')
+                  ? 'Changing your name is not available yet. Please try again later.'
+                  : 'Could not save your name. Please try again.');
     } catch (e) {
-      _show('Could not save username: $e');
+      _show(friendlyError(e, action: 'save your name'));
     }
   }
 
