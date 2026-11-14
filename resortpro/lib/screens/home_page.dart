@@ -98,7 +98,9 @@ class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
 
   // Malaki ang larawan sa gitna; sumisilip ang nasa kaliwa at kanan.
-  final PageController _carouselController = PageController(viewportFraction: 0.84);
+  // Paikot (loop): napakarami ang "pahina" para laging may susunod; ang larawan ay pahina % bilang.
+  static const int _loopStart = 12000; // nahahati sa 1–6, 8, 10, 12…: nagsisimula sa unang larawan
+  final PageController _carouselController = PageController(viewportFraction: 0.84, initialPage: _loopStart);
   final ScrollController _scrollController = ScrollController();
   final supabase = Supabase.instance.client;
 
@@ -137,7 +139,8 @@ class _HomePageState extends State<HomePage> {
 
   // Gallery photos mula sa admin (kapag wala, gagamitin ang _resortImages).
   List<Map<String, dynamic>> _gallery = [];
-  int _carouselPage = 0;
+  int _carouselPage = 0; // aling larawan (0 hanggang bilang - 1)
+  int _carouselVirtual = _loopStart; // aktuwal na pahina sa PageView
   Timer? _carouselTimer;
 
   // Search at filter ng packages
@@ -291,11 +294,22 @@ class _HomePageState extends State<HomePage> {
   void _autoSlide() {
     final count = _carouselCount;
     if (count < 2 || !_carouselController.hasClients || _selectedIndex != 0) return;
+    // Laging pasulong: mula sa huling larawan, diretso sa una (walang pabalik na slide).
     _carouselController.animateToPage(
-      (_carouselPage + 1) % count,
+      _carouselVirtual + 1,
       duration: const Duration(milliseconds: 450),
       curve: Curves.easeInOut,
     );
+  }
+
+  /// Bumalik sa unang larawan (hal. nagbago ang bilang ng larawan).
+  void _resetCarousel() {
+    final count = _carouselCount;
+    if (count == 0) return;
+    final target = count < 2 ? 0 : _loopStart - _loopStart % count;
+    _carouselVirtual = target;
+    _carouselPage = 0;
+    if (_carouselController.hasClients) _carouselController.jumpToPage(target);
   }
 
   int get _carouselCount => _gallery.isNotEmpty ? _gallery.length : _resortImages.length;
@@ -310,6 +324,7 @@ class _HomePageState extends State<HomePage> {
           .order('id');
       if (!mounted) return;
       setState(() => _gallery = List<Map<String, dynamic>>.from(rows));
+      _resetCarousel();
     } catch (_) {
       // Walang gallery table pa: mananatili ang default na photos.
     }
@@ -804,20 +819,24 @@ class _HomePageState extends State<HomePage> {
                 },
                 child: PageView.builder(
                   controller: _carouselController,
-                  itemCount: _carouselCount,
-                  onPageChanged: (i) => setState(() => _carouselPage = i),
+                  // Walang dulo kapag 2 o higit pa ang larawan (paikot).
+                  itemCount: _carouselCount < 2 ? _carouselCount : null,
+                  onPageChanged: (i) => setState(() {
+                    _carouselVirtual = i;
+                    _carouselPage = i % _carouselCount;
+                  }),
                   itemBuilder: (context, index) => AnimatedBuilder(
                     animation: _carouselController,
                     builder: (context, child) {
                       // Lumiliit ang mga larawan sa gilid; buo ang nasa gitna.
-                      var page = _carouselPage.toDouble();
+                      var page = _carouselVirtual.toDouble();
                       if (_carouselController.hasClients && _carouselController.position.haveDimensions) {
                         page = _carouselController.page ?? page;
                       }
                       final t = (page - index).abs().clamp(0.0, 1.0);
                       return Transform.scale(scale: 1 - t * 0.12, child: child);
                     },
-                    child: _galleryCard(index),
+                    child: _galleryCard(index % _carouselCount),
                   ),
                 ),
               ),
