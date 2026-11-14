@@ -551,6 +551,7 @@ class _HomePageState extends State<HomePage> {
 
     return RefreshIndicator(
       onRefresh: () async {
+        FocusManager.instance.primaryFocus?.unfocus();
         await Future.wait([_fetchPackages(), _fetchGallery(), _fetchUsername()]);
       },
       child: SingleChildScrollView(

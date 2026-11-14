@@ -121,7 +121,9 @@ class StatusChip extends StatelessWidget {
 }
 
 /// Search box na ginagamit sa mga listahan ng user app.
-class SearchField extends StatelessWidget {
+/// Nawawala ang "focus" (ang linya/kulay ng box) kapag pinindot ang ibang bahagi
+/// ng screen, kapag nag-scroll o nag-reload, o kapag isinara ang keyboard.
+class SearchField extends StatefulWidget {
   const SearchField({
     super.key,
     required this.controller,
@@ -134,22 +136,55 @@ class SearchField extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
+  State<SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends State<SearchField> with WidgetsBindingObserver {
+  final _focus = FocusNode();
+  double _lastKeyboard = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _focus.dispose();
+    super.dispose();
+  }
+
+  /// Isinara ang keyboard (hal. back button): alisin din ang focus.
+  @override
+  void didChangeMetrics() {
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    final keyboard = view.viewInsets.bottom;
+    if (_lastKeyboard > 0 && keyboard == 0 && _focus.hasFocus) _focus.unfocus();
+    _lastKeyboard = keyboard;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<TextEditingValue>(
-      valueListenable: controller,
+      valueListenable: widget.controller,
       builder: (context, value, _) => TextField(
-        controller: controller,
-        onChanged: onChanged,
+        controller: widget.controller,
+        focusNode: _focus,
+        onChanged: widget.onChanged,
+        onTapOutside: (_) => _focus.unfocus(),
+        textInputAction: TextInputAction.search,
         decoration: InputDecoration(
-          hintText: hint,
+          hintText: widget.hint,
           prefixIcon: const Icon(Icons.search),
           suffixIcon: value.text.isEmpty
               ? null
               : IconButton(
                   icon: const Icon(Icons.clear),
                   onPressed: () {
-                    controller.clear();
-                    onChanged('');
+                    widget.controller.clear();
+                    widget.onChanged('');
                   },
                 ),
           isDense: true,

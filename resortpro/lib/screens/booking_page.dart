@@ -26,6 +26,9 @@ class _BookingPageState extends State<BookingPage> {
   bool _checkingAvailability = false;
   bool _dateAvailable = true;
   String? _unavailableReason; // 'booked' o 'blocked'
+
+  /// Para maibalik ang tingin sa "SELECT DATE" kapag hindi available ang petsa.
+  final _dateKey = GlobalKey();
   String? _blockNote;
 
   /// Presyo para sa napiling petsa (pwedeng iba tuwing weekend/holiday).
@@ -58,7 +61,19 @@ class _BookingPageState extends State<BookingPage> {
 
   double get _downPayment => (_price * downpaymentRate).roundToDouble();
 
+  /// Ipakita ang bahagi ng petsa (at ang pulang abiso) sa screen.
+  void _showDateSection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _dateKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 300), alignment: 0.1);
+      }
+    });
+  }
+
   Future<void> _pickDate() async {
+    // Alisin ang focus sa text field para hindi bumaba ang screen pagsara ng calendar.
+    FocusManager.instance.primaryFocus?.unfocus();
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
@@ -73,6 +88,7 @@ class _BookingPageState extends State<BookingPage> {
         _checkingAvailability = true;
       });
       await _checkAvailability(picked);
+      if (mounted && !_dateAvailable) _showDateSection();
     }
   }
 
@@ -126,10 +142,12 @@ class _BookingPageState extends State<BookingPage> {
   Future<void> _submitBooking() async {
     if (_selectedDate == null) {
       _show('Please select a date.');
+      _showDateSection();
       return;
     }
     if (!_dateAvailable) {
       _show('That date is not available. Please choose another.');
+      _showDateSection();
       return;
     }
     if (!_formKey.currentState!.validate()) return;
@@ -302,7 +320,7 @@ class _BookingPageState extends State<BookingPage> {
               ),
               const SizedBox(height: 24),
 
-              const Text('SELECT DATE', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('SELECT DATE', key: _dateKey, style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: _pickDate,
@@ -315,15 +333,21 @@ class _BookingPageState extends State<BookingPage> {
                   child: Text('Checking availability...'),
                 ),
               if (!_checkingAvailability && _selectedDate != null && !_dateAvailable)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
                   child: Text(
                     _unavailableReason == 'blocked'
                         ? 'The resort is not accepting bookings on this date'
                             '${(_blockNote ?? '').isEmpty ? '' : ' ($_blockNote)'}.'
                         : 'This date is already booked at this time. The resort is private, so only one group '
                             'can stay at a time. Please choose another date.',
-                    style: const TextStyle(color: Colors.red),
+                    style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.w600, height: 1.35),
                   ),
                 ),
               if (!_checkingAvailability && _selectedDate != null && _dateAvailable)
