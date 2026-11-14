@@ -97,7 +97,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
 
-  final PageController _carouselController = PageController();
+  // Malaki ang larawan sa gitna; sumisilip ang nasa kaliwa at kanan.
+  final PageController _carouselController = PageController(viewportFraction: 0.72);
   final ScrollController _scrollController = ScrollController();
   final supabase = Supabase.instance.client;
 
@@ -119,7 +120,7 @@ class _HomePageState extends State<HomePage> {
   // Space between lines inside an expanded package card
   static const double _itemGap = 6;
   // Carousel height
-  static const double _carouselHeight = 230;
+  static const double _carouselHeight = 300;
   // ---------------------------------------------
 
   final List<String> _resortImages = [
@@ -174,6 +175,117 @@ class _HomePageState extends State<HomePage> {
       _openNotifications();
     }
     await _notifications.start();
+  }
+
+  /// I-restart ang auto-slide (pagkatapos mag-swipe ang user).
+  void _restartCarouselTimer() {
+    _carouselTimer?.cancel();
+    _carouselTimer = Timer.periodic(const Duration(seconds: 5), (_) => _autoSlide());
+  }
+
+  /// Larawan [index] ng carousel (galing sa admin Gallery, o default kung wala).
+  ImageProvider _galleryImage(int index) {
+    if (_gallery.isNotEmpty) return NetworkImage('${_gallery[index]['image_url']}');
+    return AssetImage(_resortImages[index % _resortImages.length]);
+  }
+
+  String _galleryCaption(int index) =>
+      _gallery.isNotEmpty ? '${_gallery[index]['caption'] ?? ''}'.trim() : '';
+
+  /// Isang card sa carousel: larawan, pamagat sa itaas, napipindot para palakihin.
+  Widget _galleryCard(int index) {
+    final caption = _galleryCaption(index);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 18, offset: Offset(0, 10))],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Material(
+            color: const Color(0xFFE6EBF0),
+            child: InkWell(
+              onTap: () => _openGalleryViewer(index),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image(
+                    image: _galleryImage(index),
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, progress) =>
+                        progress == null ? child : const Center(child: CircularProgressIndicator()),
+                    errorBuilder: (context, error, stack) =>
+                        Image.asset(_resortImages[index % _resortImages.length], fit: BoxFit.cover),
+                  ),
+                  if (caption.isNotEmpty) ...[
+                    // Madilim sa itaas para mabasa ang pamagat.
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.center,
+                          colors: [Color(0x99000000), Color(0x00000000)],
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 14,
+                      right: 14,
+                      top: 16,
+                      child: Text(
+                        caption,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                          shadows: [Shadow(color: Color(0x80000000), blurRadius: 6)],
+                        ),
+                      ),
+                    ),
+                  ],
+                  // Maliit na palatandaan na puwedeng palakihin.
+                  Positioned(
+                    right: 10,
+                    bottom: 10,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.35), shape: BoxShape.circle),
+                      child: const Icon(Icons.zoom_out_map, color: Colors.white, size: 16),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Buong-screen na tingin sa mga larawan (swipe, pinch para mag-zoom).
+  void _openGalleryViewer(int start) {
+    _carouselTimer?.cancel();
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => _GalleryViewer(
+              count: _carouselCount,
+              initial: start,
+              image: _galleryImage,
+              caption: _galleryCaption,
+            ),
+          ),
+        )
+        .then((_) {
+      if (mounted) _restartCarouselTimer();
+    });
   }
 
   void _autoSlide() {
@@ -684,78 +796,45 @@ class _HomePageState extends State<HomePage> {
             _sectionTitle('GALLERY', subtitle: 'A peek at the resort'),
             SizedBox(
               height: _carouselHeight,
-              child: PageView.builder(
-                controller: _carouselController,
-                itemCount: _carouselCount,
-                onPageChanged: (i) => setState(() => _carouselPage = i),
-                itemBuilder: (context, index) {
-                  final fromGallery = _gallery.isNotEmpty;
-                  final caption = fromGallery ? '${_gallery[index]['caption'] ?? ''}'.trim() : '';
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(20), boxShadow: floatShadow),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            if (fromGallery)
-                              Image.network(
-                                '${_gallery[index]['image_url']}',
-                                fit: BoxFit.cover,
-                                loadingBuilder: (context, child, progress) => progress == null
-                                    ? child
-                                    : Container(
-                                        color: const Color(0xFFE6EBF0),
-                                        alignment: Alignment.center,
-                                        child: const CircularProgressIndicator(),
-                                      ),
-                                errorBuilder: (context, error, stack) => Image.asset(
-                                  _resortImages[index % _resortImages.length],
-                                  fit: BoxFit.cover,
-                                ),
-                              )
-                            else
-                              Image.asset(_resortImages[index], fit: BoxFit.cover),
-                            if (caption.isNotEmpty)
-                              Positioned(
-                                left: 12,
-                                right: 12,
-                                bottom: 12,
-                                child: GlassPanel(
-                                  radius: 14,
-                                  opacity: 0.55,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  child: Text(
-                                    caption,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
+              // Kapag ini-swipe ng user, i-restart ang auto-slide para hindi biglang lumipat.
+              child: NotificationListener<ScrollStartNotification>(
+                onNotification: (n) {
+                  if (n.dragDetails != null) _restartCarouselTimer();
+                  return false;
                 },
+                child: PageView.builder(
+                  controller: _carouselController,
+                  itemCount: _carouselCount,
+                  onPageChanged: (i) => setState(() => _carouselPage = i),
+                  itemBuilder: (context, index) => AnimatedBuilder(
+                    animation: _carouselController,
+                    builder: (context, child) {
+                      // Lumiliit ang mga larawan sa gilid; buo ang nasa gitna.
+                      var page = _carouselPage.toDouble();
+                      if (_carouselController.hasClients && _carouselController.position.haveDimensions) {
+                        page = _carouselController.page ?? page;
+                      }
+                      final t = (page - index).abs().clamp(0.0, 1.0);
+                      return Transform.scale(scale: 1 - t * 0.14, child: child);
+                    },
+                    child: _galleryCard(index),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 for (var i = 0; i < _carouselCount; i++)
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: i == _carouselPage ? 20 : 7,
-                    height: 7,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: i == _carouselPage ? 28 : 10,
+                    height: 10,
                     decoration: BoxDecoration(
-                      color: i == _carouselPage ? AppColors.primary : const Color(0xFFCBD5E1),
-                      borderRadius: BorderRadius.circular(4),
+                      color: i == _carouselPage ? AppColors.primary : const Color(0xFFD5DCE3),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                   ),
               ],
@@ -909,6 +988,26 @@ class _HomePageState extends State<HomePage> {
 
   // PACKAGE CARD
 
+  /// Pangalan ng package. Function Hall: "Function Hall" sa itaas at ang oras
+  /// (Day Tour / Night Tour / Overnight (22 Hours)) sa ilalim, pare-pareho ang ayos.
+  Widget _packageTitle(Package pkg) {
+    const titleStyle = TextStyle(fontSize: 18, fontWeight: FontWeight.bold);
+    final m = RegExp(r'^Function Hall\s*\((.+)\)$').firstMatch(pkg.name.trim());
+    if (m == null) return Text(pkg.name, style: titleStyle);
+    final variant = m.group(1)!.replaceFirst(RegExp(r'^Overnight\s+22 Hours$'), 'Overnight (22 Hours)');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Function Hall', style: titleStyle),
+        const SizedBox(height: 2),
+        Text(
+          variant,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
+        ),
+      ],
+    );
+  }
+
   Widget _buildPackageCard(Package pkg) {
     return AppCard(
       margin: const EdgeInsets.symmetric(
@@ -934,13 +1033,7 @@ class _HomePageState extends State<HomePage> {
           horizontal: 16,
           vertical: 6,
         ),
-        title: Text(
-          pkg.name,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: _packageTitle(pkg),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Column(
@@ -1149,6 +1242,88 @@ class _HomeLinkCard extends StatelessWidget {
             const Icon(Icons.chevron_right, color: AppColors.muted),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Buong-screen na gallery: swipe pakaliwa/pakanan, pinch para mag-zoom.
+class _GalleryViewer extends StatefulWidget {
+  const _GalleryViewer({required this.count, required this.initial, required this.image, required this.caption});
+
+  final int count;
+  final int initial;
+  final ImageProvider Function(int) image;
+  final String Function(int) caption;
+
+  @override
+  State<_GalleryViewer> createState() => _GalleryViewerState();
+}
+
+class _GalleryViewerState extends State<_GalleryViewer> {
+  late final _controller = PageController(initialPage: widget.initial);
+  late int _page = widget.initial;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final caption = widget.caption(_page);
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text('${_page + 1} / ${widget.count}', style: const TextStyle(color: Colors.white)),
+      ),
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _controller,
+            itemCount: widget.count,
+            onPageChanged: (i) => setState(() => _page = i),
+            itemBuilder: (context, i) => InteractiveViewer(
+              minScale: 1,
+              maxScale: 4,
+              child: Center(
+                child: Image(
+                  image: widget.image(i),
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, progress) => progress == null
+                      ? child
+                      : const Center(child: CircularProgressIndicator(color: Colors.white)),
+                  errorBuilder: (context, error, stack) =>
+                      const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 64),
+                ),
+              ),
+            ),
+          ),
+          if (caption.isNotEmpty)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [Color(0xCC000000), Color(0x00000000)],
+                  ),
+                ),
+                child: Text(
+                  caption,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
