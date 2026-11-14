@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -31,42 +30,11 @@ class _SignInPageState extends State<SignInPage> {
 
   // ---------- EASY SETTINGS ----------
   // Laki ng logo (bilog)
-  static const double _logoSize = 150;
-  // Dilim ng litrato: mas mababa = mas maliwanag
-  static const double _gradientTopAlpha = 0.25;
-  static const double _gradientBottomAlpha = 0.88;
-  // Ilang segundo bago lumipat ang litrato
-  static const int _slideSeconds = 5;
+  static const double _logoSize = 160;
+  // Dilim ng background: mas mababa = mas maliwanag
+  static const double _gradientTopAlpha = 0.10;
+  static const double _gradientBottomAlpha = 0.85;
   // -----------------------------------
-
-  // Litrato ng resort para sa slideshow. Uunahin ang Gallery ng admin
-  // (kapag may "show on landing"), tapos ang mga litratong kasama ng app.
-  List<ImageProvider> _slides = const [
-    AssetImage('assets/images/pic1.jpg'),
-    AssetImage('assets/images/pic2.jpg'),
-    AssetImage('assets/images/pic3.jpg'),
-    AssetImage('assets/images/pic4.jpg'),
-    AssetImage('assets/images/pool.jpg'),
-  ];
-
-  Future<void> _loadGallery() async {
-    try {
-      final rows = await supabase
-          .from('gallery_images')
-          .select('image_url')
-          .eq('show_on_landing', true)
-          .order('sort_order')
-          .limit(6);
-      final urls = [
-        for (final r in rows)
-          if ('${r['image_url'] ?? ''}'.isNotEmpty) '${r['image_url']}',
-      ];
-      if (urls.isEmpty || !mounted) return;
-      setState(() => _slides = [for (final u in urls) NetworkImage(u), ..._slides]);
-    } catch (_) {
-      // Walang internet o gallery: mananatili ang mga litrato ng app.
-    }
-  }
 
   Future<void> _ensureGoogleInitialized() async {
     if (_googleInitialized) return;
@@ -105,7 +73,6 @@ class _SignInPageState extends State<SignInPage> {
   @override
   void initState() {
     super.initState();
-    _loadGallery();
     if (widget.openAccountPicker) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _handleGoogleSignIn());
     }
@@ -157,8 +124,12 @@ class _SignInPageState extends State<SignInPage> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // BACKGROUND: SLIDESHOW NG RESORT (dahan-dahang zoom at palit)
-          _ResortSlideshow(images: _slides, seconds: _slideSeconds),
+          // BACKGROUND: tubig ng pool na may anino ng palm
+          Image.asset(
+            'assets/images/login_bg.jpg',
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stack) => const ColoredBox(color: AppColors.ink),
+          ),
 
           // GRADIENT OVERLAY (para mabasa ang text)
           DecoratedBox(
@@ -186,20 +157,18 @@ class _SignInPageState extends State<SignInPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // LOGO sa puting bilog (para lumabas ang puting letra ng logo)
+                          // LOGO (transparent ang paligid; walang puting bilog)
                           Container(
                             width: _logoSize,
                             height: _logoSize,
-                            padding: const EdgeInsets.all(6),
                             decoration: const BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.white,
                               boxShadow: [
-                                BoxShadow(color: Color(0x66000000), blurRadius: 30, offset: Offset(0, 12)),
+                                BoxShadow(color: Color(0x55000000), blurRadius: 28, offset: Offset(0, 12)),
                               ],
                             ),
                             child: Image.asset(
-                              'assets/images/backless.png',
+                              'assets/images/aryana_logo.png',
                               fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) =>
                                   const Icon(Icons.hotel, color: AppColors.primary, size: 64),
@@ -353,79 +322,6 @@ class _SignInPageState extends State<SignInPage> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Slideshow ng resort: dahan-dahang nagpapalit ang litrato (fade) habang
-/// mabagal na nag-zo-zoom (Ken Burns effect).
-class _ResortSlideshow extends StatefulWidget {
-  const _ResortSlideshow({required this.images, required this.seconds});
-
-  final List<ImageProvider> images;
-  final int seconds;
-
-  @override
-  State<_ResortSlideshow> createState() => _ResortSlideshowState();
-}
-
-class _ResortSlideshowState extends State<_ResortSlideshow> {
-  int _index = 0;
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _timer = Timer.periodic(Duration(seconds: widget.seconds), (_) {
-      if (!mounted || widget.images.length < 2) return;
-      setState(() => _index = (_index + 1) % widget.images.length);
-      // I-preload ang susunod para walang patlang.
-      precacheImage(widget.images[(_index + 1) % widget.images.length], context);
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant _ResortSlideshow oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_index >= widget.images.length) _index = 0;
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.images.isEmpty) return const ColoredBox(color: AppColors.ink);
-    final image = widget.images[_index % widget.images.length];
-
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 1400),
-      switchInCurve: Curves.easeInOut,
-      switchOutCurve: Curves.easeInOut,
-      layoutBuilder: (current, previous) => Stack(
-        fit: StackFit.expand,
-        children: [...previous, ?current],
-      ),
-      child: TweenAnimationBuilder<double>(
-        key: ValueKey(_index),
-        tween: Tween(begin: 1.0, end: 1.12),
-        duration: Duration(seconds: widget.seconds + 2),
-        builder: (context, scale, child) => Transform.scale(
-          scale: scale,
-          alignment: _index.isEven ? Alignment.centerLeft : Alignment.centerRight,
-          child: child,
-        ),
-        child: Image(
-          image: image,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-          errorBuilder: (context, error, stack) => const ColoredBox(color: AppColors.ink),
-        ),
       ),
     );
   }
