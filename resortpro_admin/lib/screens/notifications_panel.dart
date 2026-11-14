@@ -203,7 +203,7 @@ class _NotificationsPanelState extends State<NotificationsPanel> {
         onTap: () {
           service.markRead(n);
           Navigator.pop(context);
-          widget.onOpen(notificationModule(type), notificationFilter(type));
+          widget.onOpen(notificationModule(type), notificationOpenFilter(n));
         },
       ),
     );

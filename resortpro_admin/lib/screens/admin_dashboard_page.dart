@@ -14,6 +14,7 @@ import 'modules/calendar_page.dart';
 import 'modules/checkin_page.dart';
 import 'modules/clients_page.dart';
 import 'modules/gallery_page.dart';
+import 'modules/messages_page.dart';
 import 'modules/overview_page.dart';
 import 'modules/packages_page.dart';
 import 'modules/payments_page.dart';
@@ -59,6 +60,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     (icon: Icons.summarize_outlined, selectedIcon: Icons.summarize, label: 'navReports'),
     (icon: Icons.insights_outlined, selectedIcon: Icons.insights, label: 'navAnalytics'),
     (icon: Icons.qr_code_scanner_outlined, selectedIcon: Icons.qr_code_scanner, label: 'navCheckin'),
+    (icon: Icons.forum_outlined, selectedIcon: Icons.forum, label: 'navMessages'),
   ];
 
   @override
@@ -79,6 +81,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   void _onNewNotification(Map<String, dynamic> n) {
     _fetchData();
     if (!mounted) return;
+    // Nasa Messages na: doon na makikita ang bagong mensahe (walang toast).
+    if (n['type'] == 'chat_message' && _index == 12) return;
     // Lalabas sa itaas (kanan kapag malapad ang screen) para hindi matakpan ang mga button sa ibaba.
     final size = MediaQuery.of(context).size;
     final wide = size.width > 700;
@@ -112,7 +116,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             _notifications.markRead(n);
             _openModule(
               notificationModule(n['type'] as String?),
-              notificationFilter(n['type'] as String?),
+              notificationOpenFilter(n),
             );
           },
         ),
@@ -255,6 +259,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         1 => _toConfirmCount,
         4 => _pendingCount,
         5 => (_data?.pendingPayments.length ?? 0) + (_data?.pendingRefunds.length ?? 0),
+        12 => _data?.unreadChats ?? 0,
         _ => 0,
       };
 
@@ -480,6 +485,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       8 => AvailabilityPage(data: data, onChanged: _fetchData),
       9 => ReportsPage(data: data),
       11 => CheckinPage(data: data, onChanged: _fetchData, onOpenBookings: () => _openModule(1)),
+      12 => MessagesPage(
+          key: ValueKey('messages-${_bookingFilter ?? ''}'),
+          onUnreadChanged: _fetchData,
+          initialClientId: (_bookingFilter ?? '').startsWith('chat:') ? _bookingFilter!.substring(5) : null,
+        ),
       _ => AnalyticsPage(data: data),
     };
 
@@ -528,7 +538,7 @@ class _Sidebar extends StatelessWidget {
 
   static const _groups = [
     ('navGroupMain', [0, 1, 11, 2]),
-    ('navGroupGuests', [3, 4, 5]),
+    ('navGroupGuests', [3, 12, 4, 5]),
     ('navGroupResort', [6, 7, 8]),
     ('navGroupInsights', [9, 10]),
   ];

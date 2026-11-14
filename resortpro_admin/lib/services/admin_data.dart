@@ -15,7 +15,11 @@ class AdminData {
     this.blockedDates = const [],
     this.pricingRules = const [],
     this.refunds = const [],
+    this.unreadChats = 0,
   });
+
+  /// Bilang ng mga mensahe ng guest na hindi pa nababasa (Part 16 ng SQL).
+  final int unreadChats;
 
   /// Galing sa refund_requests (Part 10 ng SQL), pinakabago muna.
   final List<Map<String, dynamic>> refunds;
@@ -175,7 +179,16 @@ class AdminData {
       );
     } catch (_) {}
 
+    var unreadChats = 0;
+    try {
+      final threads = await supabase.rpc('chat_threads');
+      for (final t in threads as List) {
+        unreadChats += ((t as Map)['unread'] as num?)?.toInt() ?? 0;
+      }
+    } catch (_) {}
+
     return AdminData(
+      unreadChats: unreadChats,
       bookings: List<Map<String, dynamic>>.from(bookings),
       clients: List<Map<String, dynamic>>.from(clients),
       packages: List<Map<String, dynamic>>.from(packages),

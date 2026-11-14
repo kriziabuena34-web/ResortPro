@@ -11,6 +11,7 @@ import '../widgets/notification_banner.dart';
 import '../widgets/ui_kit.dart';
 import 'account_page.dart';
 import 'booking_page.dart';
+import 'chat_page.dart';
 import 'my_booking_page.dart';
 import 'info_pages.dart';
 import 'my_receipt_list_page.dart';
@@ -144,10 +145,9 @@ class _HomePageState extends State<HomePage> {
   String _packageFilter = 'all'; // all, packages, hall
   String _packageSort = 'default'; // default, low, high
 
-  // Bottom navigation: Home, Bookings, Alerts, Account (+ More sheet)
-  // Bottom navigation: Home, Bookings, Account, More (sheet).
-  static const _tabTitles = ["Aryana's Guests House", 'My Bookings', 'Account'];
-  static const _moreTab = 3;
+  // Bottom navigation (priority): Home, Bookings, Receipts, Account.
+  // Ang iba (Help, Terms, About, Sign out) ay nasa "More" sa tabi ng bell.
+  static const _tabTitles = ["Aryana's Guests House", 'My Bookings', 'My Receipts', 'Account'];
 
   final _notifications = UserNotifications.instance;
 
@@ -218,8 +218,21 @@ class _HomePageState extends State<HomePage> {
   void _onRealtimeNotification() {
     final n = _notifications.latest.value;
     if (n == null || !mounted) return;
-    InAppNotificationBanner.show(context, n, onOpen: _openNotifications);
+    final isChat = n['type'] == 'chat_message';
+    // Bukas na ang chat: doon na makikita ang mensahe, walang banner.
+    if (isChat && ChatPage.isOpen) return;
+    InAppNotificationBanner.show(context, n, onOpen: isChat ? _openChat : _openNotifications);
   }
+
+  /// Bubukas ang Chat sa resort; pagbalik, i-refresh ang notifications (nabasa na ang mga sagot).
+  Future<void> _openChat() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatPage()));
+    if (mounted) _notifications.load();
+  }
+
+  /// Ilang sagot ng resort ang hindi pa nababasa (para sa badge ng Chat).
+  int get _unreadChat =>
+      _notifications.items.where((n) => n['type'] == 'chat_message' && n['is_read'] != true).length;
 
   // FETCH PACKAGES FROM SUPABASE
 
@@ -284,11 +297,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _onNavigationItemTapped(int index) {
-    // "More" ay sheet, hindi tab.
-    if (index == _moreTab) {
-      _showMoreSheet();
-      return;
-    }
     setState(() {
       _selectedIndex = index;
     });
@@ -451,6 +459,9 @@ class _HomePageState extends State<HomePage> {
         return const MyBookingPage(embedded: true);
 
       case 2:
+        return const MyReceiptListPage(embedded: true);
+
+      case 3:
         return const AccountPage();
 
       case 0:
@@ -623,9 +634,8 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   for (final (i, a) in <(IconData, String, VoidCallback)>[
                     (Icons.event_available, 'Book', () => _scrollToPackages()),
-                    (Icons.support_agent, 'Help', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportPage()))),
+                    (Icons.chat_bubble_outline, 'Chat', _openChat),
                     (Icons.map_outlined, 'Map', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ResortMapPage()))),
-                    (Icons.receipt_long, 'Receipts', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyReceiptListPage()))),
                   ].indexed) ...[
                     if (i > 0) const SizedBox(width: 12),
                     Expanded(
@@ -645,7 +655,17 @@ class _HomePageState extends State<HomePage> {
                                   BoxShadow(color: Color(0x400F766E), blurRadius: 10, offset: Offset(0, 4)),
                                 ],
                               ),
-                              child: Icon(a.$1, color: Colors.white, size: 21),
+                              child: a.$2 == 'Chat'
+                                  // Badge: mga sagot ng resort na hindi pa nababasa
+                                  ? ListenableBuilder(
+                                      listenable: _notifications,
+                                      builder: (context, _) => Badge(
+                                        isLabelVisible: _unreadChat > 0,
+                                        label: Text('$_unreadChat'),
+                                        child: Icon(a.$1, color: Colors.white, size: 21),
+                                      ),
+                                    )
+                                  : Icon(a.$1, color: Colors.white, size: 21),
                             ),
                             const SizedBox(height: 8),
                             Text(a.$2, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
@@ -1041,6 +1061,11 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
+          IconButton(
+            tooltip: 'More',
+            onPressed: _showMoreSheet,
+            icon: const Icon(Icons.more_vert),
+          ),
           const SizedBox(width: 4),
         ],
       ),
@@ -1066,13 +1091,14 @@ class _HomePageState extends State<HomePage> {
                 label: 'Bookings',
               ),
               const NavigationDestination(
+                icon: Icon(Icons.receipt_long_outlined),
+                selectedIcon: Icon(Icons.receipt_long),
+                label: 'Receipts',
+              ),
+              const NavigationDestination(
                 icon: Icon(Icons.person_outline),
                 selectedIcon: Icon(Icons.person),
                 label: 'Account',
-              ),
-              const NavigationDestination(
-                icon: Icon(Icons.more_horiz),
-                label: 'More',
               ),
             ],
           );

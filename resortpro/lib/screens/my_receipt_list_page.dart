@@ -5,7 +5,10 @@ import '../utils/format.dart';
 import 'my_receipt_page.dart';
 
 class MyReceiptListPage extends StatefulWidget {
-  const MyReceiptListPage({super.key});
+  const MyReceiptListPage({super.key, this.embedded = false});
+
+  /// True kapag tab sa ibaba (walang sariling AppBar).
+  final bool embedded;
 
   @override
   State<MyReceiptListPage> createState() => _MyReceiptListPageState();
@@ -106,9 +109,7 @@ class _MyReceiptListPageState extends State<MyReceiptListPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('My Receipt')),
-      body: _isLoading
+    final body = _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
           ? OfflineEmpty(message: _errorMessage!, onRetry: _fetchReceipts)
@@ -203,7 +204,8 @@ class _MyReceiptListPageState extends State<MyReceiptListPage> {
       ),
           ),
         ],
-      ),
-    );
+      );
+    if (widget.embedded) return body;
+    return Scaffold(appBar: AppBar(title: const Text('My Receipts')), body: body);
   }
 }

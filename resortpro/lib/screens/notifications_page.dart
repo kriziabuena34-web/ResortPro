@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/notifications.dart';
 import '../utils/format.dart';
+import 'chat_page.dart';
 import 'my_booking_page.dart';
 
 /// Alerts tab: lahat ng notification ng client, may search at filter.
@@ -30,7 +31,9 @@ class _NotificationsPageState extends State<NotificationsPage> {
   void _open(Map<String, dynamic> n) {
     service.markRead(n);
     final category = notificationCategory(n['type'] as String?);
-    if (category == 'booking' || category == 'payment') {
+    if (category == 'chat') {
+      Navigator.push(context, MaterialPageRoute(builder: (context) => const ChatPage()));
+    } else if (category == 'booking' || category == 'payment') {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const MyBookingPage()),

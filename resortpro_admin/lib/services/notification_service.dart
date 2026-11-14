@@ -133,6 +133,8 @@ String notificationTitle(Map<String, dynamic> n) {
       return tr('notifVerificationTitle');
     case 'refund_request':
       return tr('notifRefundTitle');
+    case 'chat_message':
+      return tr('notifChatTitle');
     default:
       return capitalize('${n['type'] ?? ''}'.replaceAll('_', ' '));
   }
@@ -163,6 +165,11 @@ String notificationBody(Map<String, dynamic> n) {
         'date': formatDate(parseDate(d['date'])),
         'amount': peso(asDouble(d['amount'])),
       });
+    case 'chat_message':
+      return tr('notifChatBody', {
+        'client': '${d['client'] ?? ''}'.toUpperCase(),
+        'preview': '${d['preview'] ?? ''}',
+      });
     default:
       return '';
   }
@@ -178,6 +185,8 @@ IconData notificationIcon(String? type) {
       return Icons.badge_outlined;
     case 'refund_request':
       return Icons.currency_exchange;
+    case 'chat_message':
+      return Icons.forum_outlined;
     default:
       return Icons.notifications;
   }
@@ -191,6 +200,8 @@ Color notificationColor(String? type) {
       return const Color(0xFF2E9E5B);
     case 'verification_request':
       return const Color(0xFFE08A00);
+    case 'chat_message':
+      return const Color(0xFF0F766E);
     default:
       return const Color(0xFF7A7F87);
   }
@@ -200,9 +211,18 @@ Color notificationColor(String? type) {
 String? notificationFilter(String? type) =>
     type == 'client_payment' ? 'pending' : (type == 'refund_request' ? 'refunds' : null);
 
+/// Filter na ipapasa kapag binuksan ang notification (chat: aling usapan).
+String? notificationOpenFilter(Map<String, dynamic> n) {
+  final type = n['type'] as String?;
+  if (type == 'chat_message') return 'chat:${n['ref_id'] ?? ''}';
+  return notificationFilter(type);
+}
+
 /// Module na bubuksan kapag pinindot ang notification.
 int notificationModule(String? type) {
   switch (type) {
+    case 'chat_message':
+      return 12; // Messages
     case 'client_payment':
     case 'refund_request':
       return 5; // Payments

@@ -1930,3 +1930,181 @@ revoke all on function public.update_my_profile(text, text, boolean, text) from 
 grant execute on function public.update_my_profile(text, text, boolean, text) to authenticated;
 
 -- Tapos na ang Part 15!
+
+-- ===========================================================================
+-- PART 16 (dinagdag Nov 14, 2026): Chat ng guest at ng resort
+--   Isang tuloy-tuloy na usapan bawat guest (client_id). Text lang.
+--   • Nakikita ng guest ang sarili niyang usapan lang; nakikita ng admin lahat.
+--   • May "seen" (read_at) at real-time.
+--   • May notification sa kabilang panig (isa lang na hindi pa nababasa bawat usapan).
+-- ===========================================================================
+create table if not exists public.chat_messages (
+  id         bigint generated always as identity primary key,
+  client_id  uuid not null,
+  sender     text not null default 'client' check (sender in ('client', 'admin')),
+  sender_id  uuid default auth.uid(),
+  body       text not null check (char_length(body) between 1 and 1000),
+  read_at    timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists chat_messages_thread_idx
+  on public.chat_messages (client_id, created_at desc);
+
+alter table public.chat_messages enable row level security;
+
+drop policy if exists "admins manage chat" on public.chat_messages;
+create policy "admins manage chat" on public.chat_messages
+  for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists "clients read own chat" on public.chat_messages;
+create policy "clients read own chat" on public.chat_messages
+  for select to authenticated
+  using (client_id = auth.uid());
+
+drop policy if exists "clients send own chat" on public.chat_messages;
+create policy "clients send own chat" on public.chat_messages
+  for insert to authenticated
+  with check (client_id = auth.uid() and sender = 'client');
+
+-- Bago i-save: ayusin kung sino ang nagpadala (hindi puwedeng magpanggap).
+create or replace function public.chat_messages_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  new.body := trim(coalesce(new.body, ''));
+  if new.body = '' then
+    raise exception 'EMPTY_MESSAGE';
+  end if;
+  new.sender_id := auth.uid();
+  new.read_at := null;
+  new.created_at := now();
+  if coalesce(public.is_admin(), false) then
+    new.sender := 'admin';
+  else
+    new.sender := 'client';
+    new.client_id := auth.uid();
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_chat_messages_guard on public.chat_messages;
+create trigger trg_chat_messages_guard
+  before insert on public.chat_messages
+  for each row execute function public.chat_messages_guard();
+
+-- Pagkatapos i-save: notification sa kabilang panig.
+create or replace function public.chat_messages_notify()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  preview text := left(new.body, 120);
+begin
+  if new.sender = 'admin' then
+    delete from public.notifications
+     where audience = 'client' and recipient_id = new.client_id
+       and type = 'chat_message' and not is_read;
+    insert into public.notifications (audience, recipient_id, type, data, ref_id)
+    values ('client', new.client_id, 'chat_message', jsonb_build_object('preview', preview), new.client_id::text);
+  else
+    delete from public.notifications
+     where audience = 'admin' and type = 'chat_message'
+       and ref_id = new.client_id::text and not is_read;
+    insert into public.notifications (audience, type, data, ref_id)
+    values ('admin', 'chat_message',
+            jsonb_build_object('client', public.client_display_name(new.client_id), 'preview', preview),
+            new.client_id::text);
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_chat_messages_notify on public.chat_messages;
+create trigger trg_chat_messages_notify
+  after insert on public.chat_messages
+  for each row execute function public.chat_messages_notify();
+
+-- "Seen": markahang nabasa ang mga mensahe ng kabilang panig.
+create or replace function public.mark_chat_read(p_client_id uuid default null)
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  n int;
+begin
+  if auth.uid() is null then
+    raise exception 'NOT_ALLOWED';
+  end if;
+  if coalesce(public.is_admin(), false) then
+    update public.chat_messages set read_at = now()
+     where client_id = p_client_id and sender = 'client' and read_at is null;
+    get diagnostics n = row_count;
+    update public.notifications set is_read = true
+     where audience = 'admin' and type = 'chat_message' and ref_id = p_client_id::text and not is_read;
+  else
+    update public.chat_messages set read_at = now()
+     where client_id = auth.uid() and sender = 'admin' and read_at is null;
+    get diagnostics n = row_count;
+    update public.notifications set is_read = true
+     where audience = 'client' and recipient_id = auth.uid() and type = 'chat_message' and not is_read;
+  end if;
+  return n;
+end $$;
+
+revoke all on function public.mark_chat_read(uuid) from public, anon;
+grant execute on function public.mark_chat_read(uuid) to authenticated;
+
+-- Listahan ng mga usapan para sa admin (pinakabago muna).
+create or replace function public.chat_threads()
+returns table (
+  client_id    uuid,
+  client_name  text,
+  avatar_url   text,
+  last_body    text,
+  last_sender  text,
+  last_at      timestamptz,
+  unread       int
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select t.client_id,
+         public.client_display_name(t.client_id),
+         coalesce(nullif(p.avatar_url, ''), p.google_avatar_url),
+         t.body, t.sender, t.created_at,
+         (select count(*)::int from public.chat_messages u
+           where u.client_id = t.client_id and u.sender = 'client' and u.read_at is null)
+    from (select distinct on (m.client_id) m.client_id, m.body, m.sender, m.created_at
+            from public.chat_messages m
+           order by m.client_id, m.created_at desc) t
+    left join public.profiles p on p.id = t.client_id
+   where coalesce(public.is_admin(), false)
+   order by t.created_at desc;
+$$;
+
+revoke all on function public.chat_threads() from public, anon;
+grant execute on function public.chat_threads() to authenticated;
+
+-- Real-time
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'chat_messages'
+  ) then
+    alter publication supabase_realtime add table public.chat_messages;
+  end if;
+exception when others then
+  raise notice 'Realtime publication not available: %', sqlerrm;
+end $$;
+
+-- Tapos na ang Part 16!

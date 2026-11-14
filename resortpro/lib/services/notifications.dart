@@ -112,6 +112,7 @@ String notificationCategory(String? type) {
   final t = type ?? '';
   if (t.startsWith('payment')) return 'payment';
   if (t.startsWith('account')) return 'account';
+  if (t.startsWith('chat')) return 'chat';
   return 'booking';
 }
 
@@ -147,6 +148,8 @@ String notificationTitle(Map<String, dynamic> n) {
       return 'Verification declined';
     case 'stay_reminder':
       return 'Your stay is tomorrow';
+    case 'chat_message':
+      return 'New message from the resort';
     default:
       return 'ResortPro update';
   }
@@ -194,6 +197,8 @@ String notificationBody(Map<String, dynamic> n) {
           'Please submit a valid ID again in the Account tab.';
     case 'stay_reminder':
       return '$pkg on $date. We look forward to seeing you!';
+    case 'chat_message':
+      return '${d['preview'] ?? 'Tap to read the reply.'}';
     default:
       return '';
   }
@@ -205,6 +210,8 @@ IconData notificationIcon(String? type) {
       return Icons.payments_outlined;
     case 'account':
       return Icons.verified_user_outlined;
+    case 'chat':
+      return Icons.chat_bubble_outline;
     default:
       return Icons.event_available_outlined;
   }
