@@ -98,7 +98,7 @@ class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
 
   // Malaki ang larawan sa gitna; sumisilip ang nasa kaliwa at kanan.
-  final PageController _carouselController = PageController(viewportFraction: 0.72);
+  final PageController _carouselController = PageController(viewportFraction: 0.84);
   final ScrollController _scrollController = ScrollController();
   final supabase = Supabase.instance.client;
 
@@ -120,7 +120,7 @@ class _HomePageState extends State<HomePage> {
   // Space between lines inside an expanded package card
   static const double _itemGap = 6;
   // Carousel height
-  static const double _carouselHeight = 300;
+  static const double _carouselHeight = 280;
   // ---------------------------------------------
 
   final List<String> _resortImages = [
@@ -196,7 +196,7 @@ class _HomePageState extends State<HomePage> {
   Widget _galleryCard(int index) {
     final caption = _galleryCaption(index);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
@@ -815,7 +815,7 @@ class _HomePageState extends State<HomePage> {
                         page = _carouselController.page ?? page;
                       }
                       final t = (page - index).abs().clamp(0.0, 1.0);
-                      return Transform.scale(scale: 1 - t * 0.14, child: child);
+                      return Transform.scale(scale: 1 - t * 0.12, child: child);
                     },
                     child: _galleryCard(index),
                   ),
