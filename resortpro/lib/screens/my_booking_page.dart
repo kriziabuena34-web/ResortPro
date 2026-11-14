@@ -6,6 +6,7 @@ import '../services/checkin_qr.dart';
 import '../services/claim_booking.dart';
 import '../services/offline_cache.dart';
 import '../services/payment_proof.dart';
+import '../theme/app_theme.dart';
 import '../utils/format.dart';
 import 'my_receipt_page.dart';
 
@@ -313,14 +314,58 @@ class _MyBookingPageState extends State<MyBookingPage> {
           ],
         ),
         // Booking na ginawa sa resort (walk-in o tawag): i-link gamit ang code sa resibo.
+        // Mukhang button (may border, arrow, at "Add") para malinaw na napipindot.
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: _claimWalkIn,
-              icon: const Icon(Icons.confirmation_number_outlined, size: 18),
-              label: const Text('Booked at the resort? Add it with your receipt code'),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
+              onTap: _claimWalkIn,
+              borderRadius: BorderRadius.circular(16),
+              child: Ink(
+                padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.confirmation_number_outlined, color: AppColors.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Booked at the resort?', style: TextStyle(fontWeight: FontWeight.w700)),
+                          SizedBox(height: 2),
+                          Text(
+                            'Tap to add it using the code on your receipt',
+                            style: TextStyle(fontSize: 12.5, color: AppColors.muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton.tonal(
+                      onPressed: _claimWalkIn,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        minimumSize: const Size(0, 36),
+                      ),
+                      child: const Text('Add'),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),

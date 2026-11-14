@@ -70,6 +70,8 @@ class _ClaimDialogState extends State<_ClaimDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      // Puwedeng i-scroll kapag nakabukas ang keyboard (iwas sa dilaw-itim na "overflow" strip).
+      scrollable: true,
       icon: const Icon(Icons.confirmation_number_outlined, color: AppColors.primary, size: 36),
       title: const Text('Add a booking made at the resort'),
       content: Column(
