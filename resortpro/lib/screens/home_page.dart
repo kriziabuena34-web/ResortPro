@@ -942,7 +942,7 @@ class _HomePageState extends State<HomePage> {
             // OTHER OFFERED
             if (otherPackages.isNotEmpty) ...[
               const SizedBox(height: _sectionGap),
-              _sectionTitle('OTHER OFFERED', subtitle: 'Function hall for events'),
+              _sectionTitle('OTHER OFFERED', subtitle: 'Function hall for catered events'),
               ...otherPackages.map((pkg) => _buildPackageCard(pkg)),
             ],
 
@@ -1028,6 +1028,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildPackageCard(Package pkg) {
+    final isHall = pkg.name.startsWith('Function Hall');
+    // Ang "for catering only" ay ipinapakita bilang note (hindi kasama sa Additional).
+    final additional = isHall
+        ? pkg.additional.where((a) => !RegExp(r'catering\s+only', caseSensitive: false).hasMatch(a)).toList()
+        : pkg.additional;
     return AppCard(
       margin: const EdgeInsets.symmetric(
         horizontal: _pagePadding,
@@ -1044,7 +1049,7 @@ class _HomePageState extends State<HomePage> {
             gradient: const LinearGradient(colors: [Color(0xFF14B8A6), AppColors.primary]),
           ),
           child: Icon(
-            pkg.name.startsWith('Function Hall') ? Icons.celebration_outlined : Icons.pool_outlined,
+            isHall ? Icons.celebration_outlined : Icons.pool_outlined,
             color: Colors.white,
           ),
         ),
@@ -1083,6 +1088,11 @@ class _HomePageState extends State<HomePage> {
           const Divider(),
           const SizedBox(height: 10),
 
+          if (isHall) ...[
+            const _HallCateringNote(),
+            const SizedBox(height: 14),
+          ],
+
           const Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -1100,7 +1110,7 @@ class _HomePageState extends State<HomePage> {
 
           const SizedBox(height: 14),
 
-          if (pkg.additional.isNotEmpty) ...[
+          if (additional.isNotEmpty) ...[
             const Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -1114,7 +1124,7 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 8),
 
-            ...pkg.additional.map((item) => _buildDetailItem(item)),
+            ...additional.map((item) => _buildDetailItem(item)),
 
             const SizedBox(height: 14),
           ],
@@ -1216,6 +1226,46 @@ class _HomePageState extends State<HomePage> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Paalala sa Function Hall: para sa event na may catering, pero walang catering ang resort.
+class _HallCateringNote extends StatelessWidget {
+  const _HallCateringNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7E6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF5D08A)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.restaurant_outlined, color: Color(0xFFB7791F), size: 20),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: 'Note: ', style: TextStyle(fontWeight: FontWeight.w800)),
+                  TextSpan(
+                    text: 'The function hall is for events with catering only. '
+                        'Catering is not included and is not offered by the resort, '
+                        'so please arrange your own caterer.',
+                  ),
+                ],
+              ),
+              style: TextStyle(color: Color(0xFF7A4B0B), height: 1.4, fontSize: 13.5),
+            ),
+          ),
+        ],
       ),
     );
   }
