@@ -468,6 +468,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           onChanged: _fetchData,
           initialFilter: _bookingFilter,
           onOpenPayments: (id) => _openModule(5, 'pending', id),
+          onOpenCheckin: (id) => _openModule(11, null, id),
         ),
       2 => CalendarPage(data: data),
       3 => ClientsPage(data: data),
@@ -484,7 +485,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       7 => const GalleryPage(),
       8 => AvailabilityPage(data: data, onChanged: _fetchData),
       9 => ReportsPage(data: data),
-      11 => CheckinPage(data: data, onChanged: _fetchData, onOpenBookings: () => _openModule(1)),
+      11 => CheckinPage(
+          key: ValueKey('checkin-${_focusBookingId ?? ''}'),
+          data: data,
+          onChanged: _fetchData,
+          onOpenBookings: () => _openModule(1),
+          focusBookingId: _focusBookingId,
+        ),
       12 => MessagesPage(
           key: ValueKey('messages-${_bookingFilter ?? ''}'),
           onUnreadChanged: _fetchData,

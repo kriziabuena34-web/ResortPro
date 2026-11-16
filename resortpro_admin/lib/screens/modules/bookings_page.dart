@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../l10n/app_strings.dart';
 import '../../services/admin_data.dart';
 import '../../services/booking_workflow.dart';
-import '../../services/checkin_service.dart';
 import '../../services/receipt.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/admin_widgets.dart';
@@ -21,6 +20,7 @@ class BookingsPage extends StatefulWidget {
     required this.onChanged,
     this.initialFilter,
     this.onOpenPayments,
+    this.onOpenCheckin,
   });
 
   final AdminData data;
@@ -28,6 +28,9 @@ class BookingsPage extends StatefulWidget {
 
   /// Buksan ang Payments (Pending) para sa booking na ito.
   final void Function(String bookingId)? onOpenPayments;
+
+  /// Buksan ang Check-in / out para sa booking na ito (QR o code ang kailangan).
+  final void Function(String bookingId)? onOpenCheckin;
 
   /// Pwedeng status (hal. 'reserved') o quick filter:
   /// 'today', 'balance', 'overdue'. Galing sa dashboard reminders.
@@ -257,16 +260,23 @@ class _BookingsPageState extends State<BookingsPage> {
       }
     }
 
+    // Check in / Check out: laging sa Check-in / out page (kailangan ang QR o code ng guest).
+    if (action.toStatus == 'checked_in' || action.toStatus == 'completed') {
+      if (action.toStatus == 'checked_in' && remainingOf(booking) > 0.01) {
+        showToast(context, tr('ciBalanceNeeded', {'amount': peso(remainingOf(booking))}));
+        return;
+      }
+      widget.onOpenCheckin?.call('${booking['id']}');
+      return;
+    }
+
     final hasPendingProof = paymentsOf(booking).any((p) => p['status'] == 'pending');
     final needsConfirmWarning = action.toStatus == 'confirmed' && hasPendingProof;
 
     if (action.destructive ||
-        action.toStatus == 'checked_in' ||
         action.toStatus == 'reserved' ||
         needsConfirmWarning) {
-      final warning = action.toStatus == 'checked_in' && remainingOf(booking) > 0
-          ? tr('checkInBalanceWarning', {'amount': peso(remainingOf(booking))})
-          : needsConfirmWarning
+      final warning = needsConfirmWarning
               ? (hasPendingProof ? tr('confirmPendingProofWarning') : tr('confirmNoPaymentWarning'))
               : null;
 
@@ -285,33 +295,6 @@ class _BookingsPageState extends State<BookingsPage> {
       );
       if (result == null) return;
       note = result;
-    }
-
-    // Check in / Check out: dumaan sa parehong proseso ng QR scan
-    // (bayad muna bago pumasok; multa kapag late; survey bago matapos).
-    if (action.toStatus == 'checked_in' || action.toStatus == 'completed') {
-      await _runBusy(booking, () async {
-        try {
-          final result = await CheckinService.scan(bookingId: '${booking['id']}');
-          await widget.onChanged();
-          if (!mounted) return;
-          await showScanResult(
-            context,
-            result: result,
-            booking: booking,
-            onSurvey: () async {
-              if (await showSurveyDialog(context, booking) && mounted) {
-                showToast(context, tr('svDone'));
-                await widget.onChanged();
-              }
-            },
-          );
-        } catch (e) {
-          if (!mounted) return;
-          showToast(context, CheckinService.friendly(e));
-        }
-      });
-      return;
     }
 
     await _runBusy(booking, () async {

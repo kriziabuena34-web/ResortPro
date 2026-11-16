@@ -10,9 +10,18 @@ import '../../widgets/admin_widgets.dart';
 /// Check-in / Check-out sa pamamagitan ng QR (o pag-type ng code),
 /// at listahan ng mga guest ngayong araw.
 class CheckinPage extends StatefulWidget {
-  const CheckinPage({super.key, required this.data, required this.onChanged, required this.onOpenBookings});
+  const CheckinPage({
+    super.key,
+    required this.data,
+    required this.onChanged,
+    required this.onOpenBookings,
+    this.focusBookingId,
+  });
 
   final AdminData data;
+
+  /// Booking na iche-check in/out (galing sa Bookings). Kailangan pa rin ng QR o code.
+  final String? focusBookingId;
   final Future<void> Function() onChanged;
   final VoidCallback onOpenBookings;
 
@@ -24,12 +33,14 @@ class _CheckinPageState extends State<CheckinPage> {
   final _code = TextEditingController();
   MobileScannerController? _camera;
   bool _busy = false;
+  late String? _focusId = widget.focusBookingId;
   String? _lastScanned;
   DateTime _lastScanAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void dispose() {
     _code.dispose();
+    _list.dispose();
     _camera?.dispose();
     super.dispose();
   }
@@ -63,15 +74,55 @@ class _CheckinPageState extends State<CheckinPage> {
     return null;
   }
 
-  Future<void> _scan({String? code, Map<String, dynamic>? booking}) async {
+  static String _norm(String v) => v.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+
+  Map<String, dynamic>? get _focus => _focusId == null ? null : _bookingById(_focusId);
+
+  /// Piliin ang guest na iche-check in/out; kailangan pa ring i-scan ang QR o i-type ang code.
+  void _setFocus(Map<String, dynamic> b) {
+    setState(() => _focusId = '${b['id']}');
+    _scrollToTop();
+  }
+
+  final _list = ScrollController();
+
+  void _scrollToTop() {
+    if (_list.hasClients) {
+      _list.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    }
+  }
+
+  /// Laging gamit ang QR o code (wala nang check-in sa pindot lang).
+  Future<void> _scan({required String code}) async {
     if (_busy) return;
+    final focus = _focus;
+    // May napiling guest pero ibang code ang na-scan: magtanong muna.
+    if (focus != null) {
+      final expected = _norm('${focus['checkin_code'] ?? ''}');
+      if (expected.isNotEmpty && _norm(code) != expected) {
+        final go = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 40),
+            title: Text(tr('ciMismatchTitle')),
+            content: Text(tr('ciMismatchMsg', {'client': clientNameOf(focus)}), textAlign: TextAlign.center),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(tr('cancel'))),
+              FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(tr('ciMismatchGo'))),
+            ],
+          ),
+        );
+        if (go != true || !mounted) return;
+      }
+    }
     setState(() => _busy = true);
     try {
-      final result = await CheckinService.scan(code: code, bookingId: booking == null ? null : '${booking['id']}');
+      final result = await CheckinService.scan(code: code);
       await widget.onChanged();
       if (!mounted) return;
-      final b = _bookingById(result['booking_id']) ?? booking;
+      final b = _bookingById(result['booking_id']);
       _code.clear();
+      setState(() => _focusId = null);
       await showScanResult(
         context,
         result: result,
@@ -132,9 +183,15 @@ class _CheckinPageState extends State<CheckinPage> {
 
     List<Map<String, dynamic>> of(StayStage s) => relevant.where((b) => stageOf(b) == s).toList();
 
+    final focus = _focus;
     return ListView(
+      controller: _list,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
+        if (focus != null) ...[
+          _focusBanner(focus),
+          const SizedBox(height: 12),
+        ],
         SectionCard(
           title: tr('ciScanTitle'),
           subtitle: tr('ciScanHelp'),
@@ -252,12 +309,12 @@ class _CheckinPageState extends State<CheckinPage> {
 
     final Widget? action = switch (stage) {
       StayStage.arriving => FilledButton.tonalIcon(
-          onPressed: _busy ? null : () => _scan(booking: b),
+          onPressed: _busy ? null : () => _setFocus(b),
           icon: const Icon(Icons.login_rounded, size: 18),
           label: Text(tr('ciIn')),
         ),
       StayStage.inResort => FilledButton.tonalIcon(
-          onPressed: _busy ? null : () => _scan(booking: b),
+          onPressed: _busy ? null : () => _setFocus(b),
           icon: const Icon(Icons.logout_rounded, size: 18),
           label: Text(tr('ciOut')),
         ),
@@ -281,6 +338,43 @@ class _CheckinPageState extends State<CheckinPage> {
         if (fee > 0) tr('ciLateShort', {'fee': peso(fee)}),
       ].join(' · ')),
       trailing: action,
+    );
+  }
+
+  /// Banner: kung sinong guest ang iche-check in/out.
+  Widget _focusBanner(Map<String, dynamic> b) {
+    final out = stageOf(b) == StayStage.inResort;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(out ? Icons.logout_rounded : Icons.login_rounded, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tr(out ? 'ciFocusOut' : 'ciFocusIn', {'client': clientNameOf(b)}),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 2),
+                Text('${packageNameOf(b)} · ${tr('ciFocusHelp')}', style: const TextStyle(color: AppColors.muted)),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: tr('cancel'),
+            onPressed: () => setState(() => _focusId = null),
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
     );
   }
 
