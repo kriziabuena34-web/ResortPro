@@ -21,6 +21,7 @@ class ReportTable {
     required this.rows,
     this.totals,
     this.numericColumns = const {},
+    this.moneyColumns = const {},
   });
 
   final String title;
@@ -31,6 +32,13 @@ class ReportTable {
 
   /// Mga column na numero (naka-right align at walang ₱ sa Excel).
   final Set<int> numericColumns;
+
+  /// Mga column na pera (may ₱). Ang ibang numero (bookings, guests) ay bilang lang.
+  final Set<int> moneyColumns;
+
+  /// Text ng isang cell sa column [i].
+  String cell(Object v, int i, {bool pdf = false}) =>
+      ReportBuilder.cellText(v, money: moneyColumns.contains(i), pdf: pdf);
 }
 
 /// Gumagawa ng mga report mula sa AdminData.
@@ -129,7 +137,7 @@ class ReportBuilder {
       subtitle: '$_resortName · ${_rangeText(range)}',
       headers: [
         monthly ? tr('rpMonth') : tr('fieldDate'),
-        tr('bookingsWord'),
+        tr('rpBookingsCol'),
         tr('fieldGuests'),
         tr('rpCancelledNoShow'),
         tr('seriesBooked'),
@@ -138,6 +146,7 @@ class ReportBuilder {
       rows: rows,
       totals: [tr('rpTotal'), count(bookings), count(guests), count(cancelled), sum(booked), sum(collected)],
       numericColumns: {1, 2, 3, 4, 5},
+      moneyColumns: {4, 5},
     );
   }
 
@@ -188,6 +197,7 @@ class ReportBuilder {
       rows: rows,
       totals: [tr('rpTotal'), '', '', '', '', '', list.fold<int>(0, (s, b) => s + guestsOf(b)), total, paid, balance],
       numericColumns: {6, 7, 8, 9},
+      moneyColumns: {7, 8, 9},
     );
   }
 
@@ -234,6 +244,7 @@ class ReportBuilder {
       rows: rows,
       totals: [tr('rpTotal'), '', '', '', '', '', total],
       numericColumns: {6},
+      moneyColumns: {6},
     );
   }
 
@@ -241,11 +252,16 @@ class ReportBuilder {
   // Export
   // -------------------------------------------------------------------------
 
-  static String cellText(Object v, {bool pdf = false}) {
-    if (v is double) {
+  /// Sa web, pareho ang int at double, kaya ang column ang nagsasabi kung pera ito.
+  static String cellText(Object v, {bool money = false, bool pdf = false}) {
+    if (v is num && money) {
       // Walang ₱ sa PDF dahil hindi ito suportado ng default na font.
-      final s = peso(v);
+      final s = peso(v.toDouble());
       return pdf ? 'PHP ${s.replaceFirst('₱', '')}' : s;
+    }
+    if (v is num) {
+      // Bilang lang (hal. bookings, guests): 1,234
+      return v.round().toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
     }
     return '$v';
   }
@@ -273,8 +289,8 @@ class ReportBuilder {
           pw.TableHelper.fromTextArray(
             headers: t.headers,
             data: [
-              for (final r in t.rows) [for (final c in r) cellText(c, pdf: true)],
-              if (t.totals != null) [for (final c in t.totals!) cellText(c, pdf: true)],
+              for (final r in t.rows) [for (var i = 0; i < r.length; i++) t.cell(r[i], i, pdf: true)],
+              if (t.totals != null) [for (var i = 0; i < t.totals!.length; i++) t.cell(t.totals![i], i, pdf: true)],
             ],
             headerStyle: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
             headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF0E7C86)),
