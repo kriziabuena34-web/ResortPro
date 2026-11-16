@@ -32,6 +32,11 @@ class CheckinService {
     return Map<String, dynamic>.from(r as Map);
   }
 
+  /// Tapusin ang booking nang walang survey (hal. ayaw sumagot o walang phone ang guest).
+  static Future<void> completeWithoutSurvey(String bookingId, {String? reason}) async {
+    await _db.rpc('complete_without_survey', params: {'p_booking_id': bookingId, 'p_reason': reason});
+  }
+
   static Future<void> submitSurvey(
     String bookingId, {
     required int overall,
@@ -82,7 +87,10 @@ class CheckinService {
     if (t.contains('NOT_CHECKED_OUT')) return tr('ciErrNotOut');
     if (t.contains('ALREADY_ANSWERED')) return tr('ciErrAnswered');
     if (t.contains('NOT_ADMIN')) return tr('notAdmin');
-    if (t.contains('booking_scan') || t.contains('submit_booking_survey') || t.contains('resort_settings')) {
+    if (t.contains('booking_scan') ||
+        t.contains('submit_booking_survey') ||
+        t.contains('complete_without_survey') ||
+        t.contains('resort_settings')) {
       return tr('ciErrSetup');
     }
     return tr('failed', {'e': e});
@@ -237,6 +245,24 @@ class _SurveyDialogState extends State<_SurveyDialog> {
             children: [
               Text('${clientNameOf(widget.booking)} · ${packageNameOf(widget.booking)}',
                   style: const TextStyle(color: AppColors.muted)),
+              const SizedBox(height: 10),
+              // Paalala: ang guest mismo ang dapat sumagot.
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.info.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.tablet_android_outlined, color: AppColors.info, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(tr('svHandOver'), style: const TextStyle(fontSize: 13, height: 1.35))),
+                  ],
+                ),
+              ),
               const SizedBox(height: 12),
               for (final k in _ratings.keys) ...[
                 Text(tr('sv_$k') + (k == 'overall' ? ' *' : ''), style: const TextStyle(fontWeight: FontWeight.w600)),

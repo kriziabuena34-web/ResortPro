@@ -2108,3 +2108,47 @@ exception when others then
 end $$;
 
 -- Tapos na ang Part 16!
+
+-- ===========================================================================
+-- PART 17 (dinagdag Nov 16, 2026): "Complete without survey"
+--   Para sa guest na ayaw o hindi makasagot ng survey (hal. walang phone).
+--   Admin lang. Kailangan pa ring naka-check out at bayad na ang buong balanse.
+-- ===========================================================================
+create or replace function public.complete_without_survey(p_booking_id text, p_reason text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  b       record;
+  paid    numeric;
+  balance numeric;
+begin
+  if not coalesce(public.is_admin(), false) then
+    raise exception 'NOT_ALLOWED';
+  end if;
+  select * into b from public.bookings where id::text = p_booking_id for update;
+  if not found then raise exception 'CODE_NOT_FOUND'; end if;
+  if b.checked_out_at is null then raise exception 'NOT_CHECKED_OUT'; end if;
+  if b.status::text = 'completed' then raise exception 'ALREADY_ANSWERED'; end if;
+
+  select coalesce(sum(amount), 0) into paid
+    from public.payments
+   where booking_id::text = b.id::text and coalesce(status, 'verified') = 'verified';
+  balance := greatest(0, coalesce(b.total_amount, 0) - paid);
+  if balance > 0.01 then
+    raise exception 'BALANCE_DUE:%', balance;
+  end if;
+
+  update public.bookings set status = 'completed' where id = b.id;
+  insert into public.booking_logs (booking_id, action, from_status, to_status, note)
+  values (b.id::text, 'survey_skipped', b.status::text, 'completed',
+          'Completed without survey' || coalesce(' · ' || nullif(trim(p_reason), ''), ''));
+  return jsonb_build_object('ok', true);
+end $$;
+
+revoke all on function public.complete_without_survey(text, text) from public, anon;
+grant execute on function public.complete_without_survey(text, text) to authenticated;
+
+-- Tapos na ang Part 17!

@@ -159,6 +159,47 @@ class _CheckinPageState extends State<CheckinPage> {
     }
   }
 
+  /// Tapusin nang walang survey (may opsyonal na dahilan; nakatala sa history).
+  Future<void> _skipSurvey(Map<String, dynamic> booking) async {
+    final reason = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(tr('svSkipQ')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(tr('svSkipMsg', {'client': clientNameOf(booking)})),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reason,
+              decoration: InputDecoration(labelText: '${tr('svSkipReason')} (${tr('optional')})'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(tr('cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(tr('svSkip'))),
+        ],
+      ),
+    );
+    final text = reason.text.trim();
+    reason.dispose();
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await CheckinService.completeWithoutSurvey('${booking['id']}', reason: text.isEmpty ? null : text);
+      if (!mounted) return;
+      showToast(context, tr('svSkipped'));
+      await widget.onChanged();
+    } catch (e) {
+      if (mounted) showToast(context, CheckinService.friendly(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _survey(Map<String, dynamic> booking) async {
     final done = await showSurveyDialog(context, booking);
     if (!done || !mounted) return;
@@ -320,10 +361,30 @@ class _CheckinPageState extends State<CheckinPage> {
         ),
       StayStage.awaitingSurvey => balance > 0.01
           ? OutlinedButton(onPressed: widget.onOpenBookings, child: Text(tr('ciCollect', {'amount': peso(balance)})))
-          : FilledButton.tonalIcon(
-              onPressed: _busy ? null : () => _survey(b),
-              icon: const Icon(Icons.rate_review_outlined, size: 18),
-              label: Text(tr('ciAnswerSurvey')),
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: _busy ? null : () => _survey(b),
+                  icon: const Icon(Icons.rate_review_outlined, size: 18),
+                  label: Text(tr('ciAnswerSurvey')),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: tr('moreActions'),
+                  enabled: !_busy,
+                  onSelected: (_) => _skipSurvey(b),
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'skip',
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.task_alt),
+                        title: Text(tr('svSkip')),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
       _ => null,
     };

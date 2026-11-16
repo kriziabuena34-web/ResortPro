@@ -923,6 +923,8 @@ class _BookingDetailsDialogState extends State<_BookingDetailsDialog> {
         return tr('logPaymentRejected', {'detail': log['note'] ?? ''});
       case 'created':
         return tr('logCreated', {'detail': log['note'] ?? ''});
+      case 'survey_skipped':
+        return tr('logSurveySkipped');
       default:
         return '${log['action']}';
     }
