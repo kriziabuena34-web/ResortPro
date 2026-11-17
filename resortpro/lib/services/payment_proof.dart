@@ -93,78 +93,169 @@ class _PaymentProofFormState extends State<PaymentProofForm> {
     _emit();
   }
 
+  static Widget _label(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 8, left: 2),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.8,
+            color: AppColors.muted,
+          ),
+        ),
+      );
+
+  Widget _methodTile(String value, String label, IconData icon) {
+    final selected = _method == value;
+    return Material(
+      color: selected ? AppColors.ink : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: selected ? AppColors.ink : AppColors.border, width: 1.2),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          if (selected) return;
+          setState(() {
+            _method = value;
+            // Ayusin ang format ayon sa bagong paraan ng bayad.
+            _reference.text = RefFormat.of(_method).format(_reference.text);
+          });
+          _emit();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: selected ? Colors.white : AppColors.ink),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14.5,
+                    color: selected ? Colors.white : AppColors.text,
+                  ),
+                ),
+              ),
+              Icon(
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                size: 18,
+                color: selected ? const Color(0xFF5EEAD4) : AppColors.muted,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final number = _method == 'gcash' ? gcashNumber : mayaNumber;
+    final methodName = _method == 'gcash' ? 'GCash' : 'Maya';
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'gcash', label: Text('GCash'), icon: Icon(Icons.phone_android)),
-            ButtonSegment(value: 'maya', label: Text('Maya'), icon: Icon(Icons.account_balance_wallet)),
+        // 1) Paraan ng bayad
+        _label('PAYMENT METHOD'),
+        Row(
+          children: [
+            Expanded(child: _methodTile('gcash', 'GCash', Icons.phone_android)),
+            const SizedBox(width: 10),
+            Expanded(child: _methodTile('maya', 'Maya', Icons.account_balance_wallet_outlined)),
           ],
-          selected: {_method},
-          onSelectionChanged: (s) {
-            setState(() {
-              _method = s.first;
-              // Ayusin ang format ayon sa bagong paraan ng bayad.
-              _reference.text = RefFormat.of(_method).format(_reference.text);
-            });
-            _emit();
-          },
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 18),
 
-        // Instructions
+        // 2) Saan ipapadala
+        _label('SEND PAYMENT TO'),
         Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
-            borderRadius: BorderRadius.circular(12),
+            color: const Color(0xFFE6EDF5),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFD3DEEA)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Send ${peso(widget.amount)} to:',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      '${_method == 'gcash' ? 'GCash' : 'Maya'}: $number\n$paymentAccountName',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$methodName Number',
+                          style: const TextStyle(fontSize: 12, color: AppColors.muted, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          number,
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.6,
+                            color: AppColors.ink,
+                          ),
+                        ),
+                        Text(
+                          paymentAccountName,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text),
+                        ),
+                      ],
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Copy number',
-                    icon: const Icon(Icons.copy),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.ink,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      visualDensity: VisualDensity.compact,
+                    ),
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: number));
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Number copied.')),
                       );
                     },
+                    icon: const Icon(Icons.copy, size: 16),
+                    label: const Text('Copy'),
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
-              const Text(
-                'After paying, enter the reference number and upload a screenshot of the receipt. '
-                'The resort will verify your payment before confirming your booking.',
-                style: TextStyle(fontSize: 13, height: 1.4),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    const Text('Amount to send', style: TextStyle(fontSize: 13, color: AppColors.muted)),
+                    const Spacer(),
+                    Text(
+                      peso(widget.amount),
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: AppColors.ink),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 18),
 
+        // 3) Reference number
+        _label('REFERENCE NUMBER'),
         // Kusang may espasyo; hindi lalampas sa bilang ng GCash/Maya reference number.
         Builder(builder: (context) {
           final f = RefFormat.of(_method);
@@ -180,14 +271,24 @@ class _PaymentProofFormState extends State<PaymentProofForm> {
             inputFormatters: [f.formatter],
             style: const TextStyle(letterSpacing: 1.2, fontWeight: FontWeight.w600),
             decoration: InputDecoration(
-              labelText: '${_method == 'gcash' ? 'GCash' : 'Maya'} reference number',
               hintText: 'e.g. ${f.example}',
+              prefixIcon: const Icon(Icons.tag),
               helperText: done
                   ? 'Looks complete.'
                   : '${f.length} ${f.digitsOnly ? 'digits' : 'letters/numbers'} · $count of ${f.length}',
               helperStyle: TextStyle(color: done ? AppColors.success : null),
               suffixIcon: done ? const Icon(Icons.check_circle, color: AppColors.success) : null,
-              border: const OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: AppColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: AppColors.ink, width: 1.4),
+              ),
             ),
             onChanged: (_) {
               setState(() {});
@@ -195,28 +296,74 @@ class _PaymentProofFormState extends State<PaymentProofForm> {
             },
           );
         }),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
 
+        // 4) Screenshot ng resibo
+        _label('RECEIPT SCREENSHOT'),
         if (_image == null)
-          OutlinedButton.icon(
-            onPressed: _pickImage,
-            icon: const Icon(Icons.upload_file),
-            label: const Text('Upload receipt screenshot'),
+          Material(
+            color: AppColors.subtle,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: const BorderSide(color: Color(0xFFCBD5E1), width: 1.2),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: _pickImage,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 22),
+                child: Column(
+                  children: [
+                    Icon(Icons.add_photo_alternate_outlined, size: 32, color: AppColors.ink),
+                    SizedBox(height: 8),
+                    Text('Tap to Upload Screenshot', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                    SizedBox(height: 2),
+                    Text(
+                      'Make sure the amount and reference number are visible',
+                      style: TextStyle(fontSize: 12, color: AppColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           )
         else
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.memory(_image!, height: 200, fit: BoxFit.contain),
-              ),
-              TextButton.icon(
-                onPressed: _pickImage,
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Change screenshot'),
-              ),
-            ],
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.memory(_image!, width: 72, height: 96, fit: BoxFit.cover),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.check_circle, size: 18, color: AppColors.success),
+                          SizedBox(width: 6),
+                          Text('Screenshot Added', style: TextStyle(fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'The resort will check this against your reference number.',
+                        style: TextStyle(fontSize: 12, color: AppColors.muted, height: 1.35),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(onPressed: _pickImage, child: const Text('Change')),
+              ],
+            ),
           ),
       ],
     );
@@ -235,6 +382,7 @@ Future<bool> showPayBalanceSheet(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
+    backgroundColor: AppColors.background,
     builder: (sheetContext) => _PayBalanceSheet(bookingId: bookingId, balance: balance, kind: kind),
   );
   return result ?? false;
@@ -285,41 +433,113 @@ class _PayBalanceSheetState extends State<_PayBalanceSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isDown = widget.kind == 'downpayment';
     return Padding(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(context).viewInsets.bottom + 16),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              widget.kind == 'downpayment' ? 'Send downpayment proof' : 'Pay remaining balance',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            // Header: dark board na may halaga
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+              decoration: BoxDecoration(
+                color: AppColors.ink,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isDown ? 'DOWNPAYMENT' : 'REMAINING BALANCE',
+                          style: const TextStyle(
+                            color: AppColors.inkText,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          peso(widget.balance),
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            color: Colors.white,
+                            fontSize: 28,
+                            height: 1.15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          isDown ? 'Send Downpayment Proof' : 'Pay Remaining Balance',
+                          style: const TextStyle(color: Color(0xFF99F6E4), fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: AppColors.inkRaised,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.inkLine),
+                    ),
+                    child: const Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF5EEAD4), size: 26),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 4),
-            Text('Amount: ${peso(widget.balance)}'),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             PaymentProofForm(
               amount: widget.balance,
               onChanged: (p) => setState(() => _proof = p),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: FilledButton(
+              height: 52,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.ink,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: const Color(0xFFCBD5E1),
+                  disabledForegroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
                 onPressed: _proof == null || _submitting ? null : _submit,
-                child: _submitting
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('SUBMIT PAYMENT PROOF'),
+                icon: _submitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.send_rounded, size: 18),
+                label: Text(
+                  _submitting ? 'Sending…' : 'Submit Payment Proof',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                ),
               ),
             ),
             if (_proof == null)
               const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text(
-                  'Enter the reference number (at least 6 digits) and upload a screenshot.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                padding: EdgeInsets.only(top: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.info_outline, size: 15, color: AppColors.muted),
+                    SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'Enter the reference number and upload a screenshot to continue.',
+                        style: TextStyle(fontSize: 12, color: AppColors.muted),
+                      ),
+                    ),
+                  ],
                 ),
               ),
           ],

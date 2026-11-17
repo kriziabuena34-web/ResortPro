@@ -514,131 +514,289 @@ class HelpSupportPage extends StatelessWidget {
     ),
   ];
 
+  static const _faqIcons = [
+    Icons.event_available_outlined,
+    Icons.verified_user_outlined,
+    Icons.payments_outlined,
+    Icons.task_alt,
+    Icons.event_busy_outlined,
+    Icons.more_time,
+    Icons.groups_outlined,
+  ];
+
   Future<void> _launch(BuildContext context, Uri uri) async {
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication) && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the app.')));
     }
   }
 
+  static Widget _heading(String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontFamily: 'Poppins', fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink),
+          ),
+          const SizedBox(height: 2),
+          Text(subtitle, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return _InfoScaffold(
-      title: 'Help and Support',
-      icon: Icons.support_agent_outlined,
-      subtitle: "We're here to help with your booking",
-      children: [
-        // Mabilis na contact (neumorphic)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: _ContactAction(
-                  icon: Icons.call_outlined,
-                  label: 'Call',
-                  onTap: () => _launch(context, Uri(scheme: 'tel', path: resortPhone)),
-                ),
+    void call() => _launch(context, Uri(scheme: 'tel', path: resortPhone));
+    void text() => _launch(context, Uri(scheme: 'sms', path: resortPhone));
+    void email() => _launch(
+          context,
+          Uri(scheme: 'mailto', path: resortEmail, query: 'subject=ResortPro booking inquiry'),
+        );
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Help and Support')),
+      body: AmbientBackground(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          children: [
+            // HERO: dark board na may mabilis na contact
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+              decoration: BoxDecoration(
+                color: AppColors.ink,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: floatShadow,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _ContactAction(
-                  icon: Icons.sms_outlined,
-                  label: 'Text',
-                  onTap: () => _launch(context, Uri(scheme: 'sms', path: resortPhone)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _ContactAction(
-                  icon: Icons.mail_outline,
-                  label: 'Email',
-                  onTap: () => _launch(
-                    context,
-                    Uri(scheme: 'mailto', path: resortEmail, query: 'subject=ResortPro booking inquiry'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        _Section(
-          title: 'Frequently asked questions',
-          icon: Icons.help_outline,
-          child: Column(
-            children: [
-              for (final f in _faqs)
-                Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    shape: const Border(),
-                    collapsedShape: const Border(),
-                    tilePadding: EdgeInsets.zero,
-                    childrenPadding: const EdgeInsets.only(bottom: 12),
-                    title: Text(f.$1, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(f.$2, style: const TextStyle(fontSize: 14, height: 1.5, color: AppColors.muted)),
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: AppColors.inkRaised,
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(color: AppColors.inkLine),
+                        ),
+                        child: const Icon(Icons.support_agent_outlined, color: Color(0xFF5EEAD4), size: 26),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'How Can We Help?',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              "Reach the resort or find quick answers below.",
+                              style: TextStyle(color: AppColors.inkText, fontSize: 13),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-            ],
-          ),
-        ),
-        const _ContactCard(),
-      ],
-    );
-  }
-}
-
-class _ContactAction extends StatelessWidget {
-  const _ContactAction({required this.icon, required this.label, required this.onTap});
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return NeuCard(
-      radius: 18,
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(13),
-              gradient: const LinearGradient(colors: [Color(0xFF14B8A6), AppColors.primary]),
+                  const SizedBox(height: 18),
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: _ContactAction(icon: Icons.call_outlined, label: 'Call', onTap: call, primary: true)),
+                        const SizedBox(width: 10),
+                        Expanded(child: _ContactAction(icon: Icons.sms_outlined, label: 'Text', onTap: text)),
+                        const SizedBox(width: 10),
+                        Expanded(child: _ContactAction(icon: Icons.mail_outline, label: 'Email', onTap: email)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: Icon(icon, color: Colors.white),
-          ),
-          const SizedBox(height: 8),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-        ],
+            const SizedBox(height: 26),
+
+            // FAQ
+            _heading('Frequently Asked Questions', 'Tap a question to see the answer'),
+            for (var i = 0; i < _faqs.length; i++)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _FaqCard(icon: _faqIcons[i % _faqIcons.length], question: _faqs[i].$1, answer: _faqs[i].$2),
+              ),
+            const SizedBox(height: 16),
+
+            // CONTACT
+            _heading('Contact Us', "Aryana's Guests House"),
+            AppCard(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  children: [
+                    _ContactRow(icon: Icons.phone_outlined, label: 'PHONE', value: resortPhone, onTap: call),
+                    const Divider(height: 1, indent: 70),
+                    _ContactRow(icon: Icons.mail_outline, label: 'EMAIL', value: resortEmail, onTap: email),
+                    const Divider(height: 1, indent: 70),
+                    const _ContactRow(icon: Icons.facebook, label: 'FACEBOOK', value: resortFacebook),
+                    const Divider(height: 1, indent: 70),
+                    _ContactRow(
+                      icon: Icons.location_on_outlined,
+                      label: 'ADDRESS',
+                      value: resortAddress,
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ResortMapPage())),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ContactCard extends StatelessWidget {
-  const _ContactCard();
+/// Isang tanong sa FAQ na bumubukas kapag pinindot.
+class _FaqCard extends StatelessWidget {
+  const _FaqCard({required this.icon, required this.question, required this.answer});
+  final IconData icon;
+  final String question;
+  final String answer;
 
   @override
   Widget build(BuildContext context) {
-    return const _Section(
-      title: 'Contact us',
-      icon: Icons.contact_phone_outlined,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _Bullet(icon: Icons.phone_outlined, text: resortPhone),
-          _Bullet(icon: Icons.mail_outline, text: resortEmail),
-          _Bullet(icon: Icons.facebook, text: resortFacebook),
-          _Bullet(icon: Icons.location_on_outlined, text: resortAddress),
-        ],
+    return AppCard(
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          shape: const Border(),
+          collapsedShape: const Border(),
+          tilePadding: const EdgeInsets.fromLTRB(14, 4, 12, 4),
+          childrenPadding: const EdgeInsets.fromLTRB(14, 0, 16, 16),
+          iconColor: AppColors.ink,
+          collapsedIconColor: AppColors.muted,
+          leading: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE6EDF5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 20, color: AppColors.ink),
+          ),
+          title: Text(
+            question,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, color: AppColors.text),
+          ),
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.subtle,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Text(answer, style: const TextStyle(fontSize: 13.5, height: 1.55, color: Color(0xFF334155))),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Isang linya ng contact (may icon, label, at value).
+class _ContactRow extends StatelessWidget {
+  const _ContactRow({required this.icon, required this.label, required this.value, this.onTap});
+  final IconData icon;
+  final String label;
+  final String value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE6EDF5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 20, color: AppColors.ink),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(value, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, height: 1.35)),
+                ],
+              ),
+            ),
+            if (onTap != null) const Icon(Icons.chevron_right, color: AppColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactAction extends StatelessWidget {
+  const _ContactAction({required this.icon, required this.label, required this.onTap, this.primary = false});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: primary ? AppColors.primary : AppColors.inkRaised,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: primary ? AppColors.primary : AppColors.inkLine),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 24),
+              const SizedBox(height: 6),
+              Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13.5)),
+            ],
+          ),
+        ),
       ),
     );
   }
