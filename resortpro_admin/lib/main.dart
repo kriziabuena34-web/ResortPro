@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'l10n/app_strings.dart';
-import 'screens/admin_login_page.dart';
+import 'services/app_router.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -26,6 +26,8 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  final _router = AdminRouterDelegate();
+
   @override
   void initState() {
     super.initState();
@@ -51,11 +53,12 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'ResortPro Admin',
       debugShowCheckedModeBanner: false,
       theme: buildAdminTheme(),
-      home: const AdminLoginPage(),
+      routerDelegate: _router,
+      routeInformationParser: const AdminRouteParser(),
     );
   }
 }

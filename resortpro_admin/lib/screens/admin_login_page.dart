@@ -3,7 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../l10n/app_strings.dart';
 import '../widgets/admin_widgets.dart';
-import 'admin_dashboard_page.dart';
+import '../services/app_router.dart';
+import '../theme/app_theme.dart';
 
 class AdminLoginPage extends StatefulWidget {
   const AdminLoginPage({super.key});
@@ -61,12 +62,7 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
         return;
       }
 
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const AdminDashboardPage()),
-        );
-      }
+      adminSignedIn.value = true;
     } catch (e) {
       // Malinaw na mensahe para sa staff (hindi teknikal na error).
       final t = '$e';
@@ -102,126 +98,166 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
     super.dispose();
   }
 
+  InputDecoration _field(String label, IconData icon, {Widget? suffix}) => InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 20),
+        suffixIcon: suffix,
+        filled: true,
+        fillColor: AppColors.subtle,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
+        enabledBorder:
+            OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.border)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: AppColors.primary, width: 1.6)),
+      );
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    final form = ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 400),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            tr('welcomeBack'),
-            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            tr('loginSubtitle'),
-            style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 28),
-          TextField(
-            controller: _emailController,
-            decoration: InputDecoration(
-              labelText: tr('email'),
-              prefixIcon: const Icon(Icons.mail_outline),
+    final form = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Center(child: _BrandMark(size: 76)),
+        const SizedBox(height: 18),
+        Text(
+          tr('welcomeBack'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontFamily: 'Poppins', fontSize: 26, fontWeight: FontWeight.w700, color: AppColors.ink),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          tr('loginSubtitle'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: AppColors.muted, height: 1.4),
+        ),
+        const SizedBox(height: 28),
+        TextField(
+          controller: _emailController,
+          decoration: _field(tr('email'), Icons.mail_outline_rounded),
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.username, AutofillHints.email],
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _passwordController,
+          decoration: _field(
+            tr('password'),
+            Icons.lock_outline_rounded,
+            suffix: IconButton(
+              tooltip: _showPassword ? tr('hidePassword') : tr('showPassword'),
+              icon: Icon(_showPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20),
+              onPressed: () => setState(() => _showPassword = !_showPassword),
             ),
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
           ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _passwordController,
-            decoration: InputDecoration(
-              labelText: tr('password'),
-              prefixIcon: const Icon(Icons.lock_outline),
-              suffixIcon: IconButton(
-                tooltip: _showPassword ? tr('hidePassword') : tr('showPassword'),
-                icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
-                onPressed: () => setState(() => _showPassword = !_showPassword),
-              ),
+          obscureText: !_showPassword,
+          autofillHints: const [AutofillHints.password],
+          onSubmitted: (_) => _isLoading ? null : _login(),
+        ),
+        if (_errorKey != null) ...[
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF2F2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFECACA)),
             ),
-            obscureText: !_showPassword,
-            onSubmitted: (_) => _isLoading ? null : _login(),
-          ),
-          if (_errorKey != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.error_outline, color: theme.colorScheme.onErrorContainer),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      tr(_errorKey!, {'e': _errorDetail ?? ''}),
-                      style: TextStyle(color: theme.colorScheme.onErrorContainer),
-                    ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, color: AppColors.danger, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    tr(_errorKey!, {'e': _errorDetail ?? ''}),
+                    style: const TextStyle(color: Color(0xFF991B1B), fontSize: 13),
                   ),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 52,
-            child: FilledButton(
-              onPressed: _isLoading ? null : _login,
-              child: _isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(tr('login'), style: const TextStyle(fontSize: 16)),
+                ),
+              ],
             ),
           ),
         ],
+        const SizedBox(height: 22),
+        SizedBox(
+          height: 52,
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.ink,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            onPressed: _isLoading ? null : _login,
+            child: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(tr('login'), style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700)),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.arrow_forward_rounded, size: 19),
+                    ],
+                  ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.shield_outlined, size: 14, color: AppColors.muted),
+            const SizedBox(width: 6),
+            Text(tr('loginSecure'), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+          ],
+        ),
+      ],
+    );
+
+    final card = Container(
+      constraints: const BoxConstraints(maxWidth: 440),
+      padding: const EdgeInsets.fromLTRB(32, 34, 32, 26),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 40, offset: Offset(0, 18))],
       ),
+      child: AutofillGroup(child: form),
     );
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 900;
+          final wide = constraints.maxWidth >= 960;
           final formPane = Stack(
             children: [
               Center(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(28),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!wide) ...[
-                        const _BrandMark(size: 64),
-                        const SizedBox(height: 12),
-                        Text(
-                          'ResortPro Admin',
-                          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 28),
-                      ],
-                      form,
-                    ],
-                  ),
+                  padding: const EdgeInsets.all(24),
+                  child: card,
                 ),
               ),
               const Positioned(top: 12, right: 12, child: SafeArea(child: LanguageMenuButton())),
             ],
           );
 
-          if (!wide) return formPane;
+          if (!wide) {
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.asset('assets/images/login_bg.jpg', fit: BoxFit.cover),
+                Container(color: const Color(0xCC0B1B2B)),
+                formPane,
+              ],
+            );
+          }
 
           return Row(
             children: [
-              Expanded(child: _BrandPanel(theme: theme)),
-              Expanded(child: formPane),
+              const Expanded(flex: 11, child: _BrandPanel()),
+              Expanded(flex: 10, child: formPane),
             ],
           );
         },
@@ -231,9 +267,8 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
 }
 
 class _BrandMark extends StatelessWidget {
-  const _BrandMark({this.size = 56, this.light = false});
+  const _BrandMark({this.size = 56});
   final double size;
-  final bool light;
 
   @override
   Widget build(BuildContext context) {
@@ -246,71 +281,97 @@ class _BrandMark extends StatelessWidget {
   }
 }
 
-/// Kaliwang panel ng login sa malapad na screen.
+/// Kaliwang panel ng login sa malapad na screen: larawan ng resort.
 class _BrandPanel extends StatelessWidget {
-  const _BrandPanel({required this.theme});
-  final ThemeData theme;
+  const _BrandPanel();
 
   @override
   Widget build(BuildContext context) {
     const white = Colors.white;
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0B1B2B), Color(0xFF0E4D5A), Color(0xFF0F766E)],
-        ),
-      ),
-      padding: const EdgeInsets.all(48),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              _BrandMark(size: 48, light: true),
-              SizedBox(width: 12),
-              Text(
-                'ResortPro Admin',
-                style: TextStyle(color: white, fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          const Spacer(),
-          Text(
-            tr('brandHeadline'),
-            style: theme.textTheme.displaySmall?.copyWith(
-              color: white,
-              fontWeight: FontWeight.bold,
-              height: 1.15,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset('assets/images/login_bg.jpg', fit: BoxFit.cover),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x990B1B2B), Color(0x660B1B2B), Color(0xF20B1B2B)],
+              stops: [0, 0.45, 1],
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            tr('brandSub'),
-            style: theme.textTheme.titleMedium?.copyWith(color: white.withValues(alpha: 0.85)),
-          ),
-          const SizedBox(height: 32),
-          for (final f in const [
-            (Icons.insights, 'brandFeature1'),
-            (Icons.notifications_active_outlined, 'brandFeature2'),
-            (Icons.photo_library_outlined, 'brandFeature3'),
-          ])
-            Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: Row(
+        ),
+        Padding(
+          padding: const EdgeInsets.all(48),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
                 children: [
-                  Icon(f.$1, color: white),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(tr(f.$2), style: const TextStyle(color: white, fontSize: 15)),
+                  _BrandMark(size: 50),
+                  SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('ResortPro Admin',
+                          style: TextStyle(fontFamily: 'Poppins', color: white, fontSize: 19, fontWeight: FontWeight.w700)),
+                      Text("Aryana's Guests House", style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 13)),
+                    ],
                   ),
                 ],
               ),
-            ),
-          const Spacer(),
-        ],
-      ),
+              const Spacer(),
+              Text(
+                tr('brandHeadline'),
+                style: const TextStyle(
+                  fontFamily: 'Poppins',
+                  color: white,
+                  fontSize: 40,
+                  fontWeight: FontWeight.w700,
+                  height: 1.15,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                tr('brandSub'),
+                style: TextStyle(color: white.withValues(alpha: 0.85), fontSize: 16, height: 1.45),
+              ),
+              const SizedBox(height: 28),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final f in const [
+                    (Icons.insights_rounded, 'brandFeature1'),
+                    (Icons.notifications_active_outlined, 'brandFeature2'),
+                    (Icons.photo_library_outlined, 'brandFeature3'),
+                  ])
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(12, 9, 14, 9),
+                      decoration: BoxDecoration(
+                        color: white.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: white.withValues(alpha: 0.18)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(f.$1, color: white, size: 18),
+                          const SizedBox(width: 8),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 260),
+                            child: Text(tr(f.$2), style: const TextStyle(color: white, fontSize: 13)),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

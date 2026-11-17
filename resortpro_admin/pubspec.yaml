@@ -67,6 +67,7 @@ flutter:
 
   assets:
     - assets/images/aryana_logo.png
+    - assets/images/login_bg.jpg
 
   fonts:
     - family: Poppins

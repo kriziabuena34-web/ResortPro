@@ -6,7 +6,7 @@ import '../services/admin_data.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/admin_widgets.dart';
-import 'admin_login_page.dart';
+import '../services/app_router.dart';
 import 'modules/analytics_page.dart';
 import 'modules/availability_page.dart';
 import 'modules/bookings_page.dart';
@@ -63,9 +63,38 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     (icon: Icons.forum_outlined, selectedIcon: Icons.forum, label: 'navMessages'),
   ];
 
+  /// Bahagi ng URL ng bawat module (kapareho ang pagkakasunod ng [_modules]).
+  static const _slugs = [
+    'dashboard', 'bookings', 'calendar', 'clients', 'verifications', 'payments', 'packages',
+    'gallery', 'availability', 'reports', 'analytics', 'checkin', 'messages',
+  ];
+
+  static int _indexOfPath(String path) {
+    final slug = path.replaceAll('/', '');
+    final i = _slugs.indexOf(slug);
+    return i < 0 ? 0 : i;
+  }
+
+  /// Kapag pinindot ang back/forward ng browser: lumipat sa module sa URL.
+  void _onPathChanged() {
+    final i = _indexOfPath(adminPath.value);
+    if (i != _index && mounted) {
+      setState(() {
+        _index = i;
+        _bookingFilter = null;
+        _focusBookingId = null;
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _index = _indexOfPath(adminPath.value);
+    adminPath.addListener(_onPathChanged);
+    if (adminPath.value == '/') {
+      WidgetsBinding.instance.addPostFrameCallback((_) => adminPath.value = '/${_slugs[_index]}');
+    }
     _fetchData();
     _notifications.load();
     _notifications.subscribe(_onNewNotification);
@@ -73,6 +102,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   @override
   void dispose() {
+    adminPath.removeListener(_onPathChanged);
     _notifications.unsubscribe();
     super.dispose();
   }
@@ -87,38 +117,74 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     final size = MediaQuery.of(context).size;
     final wide = size.width > 700;
     final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    final type = n['type'] as String?;
+    final color = notificationColor(type);
+    void open() {
+      messenger.hideCurrentSnackBar();
+      _notifications.markRead(n);
+      _openModule(notificationModule(type), notificationOpenFilter(n));
+    }
+
     messenger.showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 6),
-        showCloseIcon: true,
         dismissDirection: DismissDirection.up,
-        margin: wide ? EdgeInsets.only(left: size.width - 456, right: 16, bottom: size.height - 230) : null,
-        content: Row(
-          children: [
-            Icon(notificationIcon(n['type'] as String?), color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        padding: EdgeInsets.zero,
+        margin: wide ? EdgeInsets.only(left: size.width - 436, right: 20, bottom: size.height - 200) : null,
+        content: Material(
+          color: Colors.white,
+          elevation: 10,
+          shadowColor: const Color(0x33000000),
+          borderRadius: BorderRadius.circular(16),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: open,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border(left: BorderSide(color: color, width: 4)),
+              ),
+              padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(notificationTitle(n), style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text(notificationBody(n)),
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(11)),
+                    child: Icon(notificationIcon(type), color: color, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(titleCase(notificationTitle(n)),
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: AppColors.text)),
+                        const SizedBox(height: 2),
+                        Text(notificationBody(n),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: AppColors.muted, fontSize: 12.5, height: 1.35)),
+                        const SizedBox(height: 6),
+                        Text(tr('ntTapToView'),
+                            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: tr('close'),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: messenger.hideCurrentSnackBar,
+                    icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.muted),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
-        action: SnackBarAction(
-          label: tr('view'),
-          onPressed: () {
-            _notifications.markRead(n);
-            _openModule(
-              notificationModule(n['type'] as String?),
-              notificationOpenFilter(n),
-            );
-          },
+          ),
         ),
       ),
     );
@@ -228,29 +294,85 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Future<void> _logout() async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(tr('logoutQ')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('cancel'))),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('logout'))),
-        ],
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 26, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFFFECACA), width: 6),
+                    ),
+                    child: const Icon(Icons.logout_rounded, color: AppColors.danger, size: 24),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  tr('logoutQ'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 19, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  tr('logoutMsg', {'name': staffNameOf(supabase.auth.currentUser?.id) ?? 'Admin'}),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AppColors.muted, height: 1.4),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text(tr('cancel')),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(46),
+                          backgroundColor: AppColors.danger,
+                        ),
+                        onPressed: () => Navigator.pop(context, true),
+                        icon: const Icon(Icons.logout_rounded, size: 18),
+                        label: Text(tr('logout')),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
     if (ok != true) return;
 
     await supabase.auth.signOut();
-    if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const AdminLoginPage()),
-    );
+    adminSignedIn.value = false;
   }
 
-  void _openModule(int index, [String? bookingFilter, String? focusBookingId]) => setState(() {
-        _index = index;
-        _bookingFilter = bookingFilter;
-        _focusBookingId = focusBookingId;
-      });
+  void _openModule(int index, [String? bookingFilter, String? focusBookingId]) {
+    setState(() {
+      _index = index;
+      _bookingFilter = bookingFilter;
+      _focusBookingId = focusBookingId;
+    });
+    // Bagong entry sa history ng browser (para gumana ang ← at →).
+    adminPath.value = '/${_slugs[index]}';
+  }
 
   int get _pendingCount => _data?.pendingAccounts.length ?? 0;
   int get _toConfirmCount => _data?.bookings.where((b) => b['status'] == 'reserved').length ?? 0;
@@ -303,11 +425,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         final actions = <Widget>[
           _bellButton(),
           const LanguageMenuButton(),
-          IconButton(
-            tooltip: tr('refresh'),
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: _isLoading ? null : _fetchData,
-          ),
+          const SizedBox(width: 4),
         ];
 
         if (wide) {
