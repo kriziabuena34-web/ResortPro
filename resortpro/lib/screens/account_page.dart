@@ -257,6 +257,11 @@ class _AccountPageState extends State<AccountPage> {
       ..sort((a, b) => parseDate(a['booking_date'])!.compareTo(parseDate(b['booking_date'])!));
     final completed = _bookings.where((b) => b['status'] == 'completed').length;
     final spent = _bookings.fold<double>(0, (s, b) => s + verifiedPaid(b['payments'] as List?));
+    // Natitirang babayaran sa mga paparating na booking (hindi kasama ang cancelled/no-show).
+    final balanceDue = upcoming.fold<double>(0, (s, b) {
+      final left = asDouble(b['total_amount']) - verifiedPaid(b['payments'] as List?);
+      return s + (left > 0 ? left : 0);
+    });
     final memberSince = DateTime.tryParse(user?.createdAt ?? '');
 
     Widget statTile(String label, String value, String? sub, Color color, IconData icon) => Container(
@@ -457,14 +462,18 @@ class _AccountPageState extends State<AccountPage> {
                   // Dalawang hanay: kusang sumusunod ang taas sa laman (walang overflow).
                   for (final (i, pair) in [
                     [
-                      statTile('Bookings', '${_bookings.length}', null, Colors.white, Icons.event_note_outlined),
                       statTile('Upcoming', '${upcoming.length}',
-                          upcoming.isEmpty ? null : 'Next: ${formatDate(parseDate(upcoming.first['booking_date']))}',
+                          upcoming.isEmpty ? 'No upcoming stay' : 'Next: ${formatDate(parseDate(upcoming.first['booking_date']))}',
                           const Color(0xFF60A5FA), Icons.upcoming_outlined),
+                      statTile('Stays Done', '$completed', 'Completed visits', const Color(0xFF4ADE80),
+                          Icons.task_alt_rounded),
                     ],
                     [
-                      statTile('Completed', '$completed', null, const Color(0xFF4ADE80), Icons.task_alt_rounded),
-                      statTile('Total Spent', peso(spent), null, const Color(0xFFFBBF24), Icons.payments_outlined),
+                      statTile('Balance Due', peso(balanceDue),
+                          balanceDue > 0 ? 'Pay before check-in' : 'Nothing to pay',
+                          balanceDue > 0 ? const Color(0xFFF87171) : Colors.white, Icons.account_balance_wallet_outlined),
+                      statTile('Paid So Far', peso(spent), 'Verified payments', const Color(0xFFFBBF24),
+                          Icons.payments_outlined),
                     ],
                   ].indexed) ...[
                     if (i > 0) const SizedBox(height: 10),
