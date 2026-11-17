@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../l10n/app_strings.dart';
 import '../../services/admin_data.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/admin_widgets.dart';
 import '../../widgets/list_controls.dart';
 
@@ -47,15 +48,21 @@ class _PackagesPageState extends State<PackagesPage> {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) => AlertDialog(
             title: Text(tr('editPackage', {'name': pkg['name']})),
-            content: Column(
+            content: SizedBox(
+              width: 420,
+              child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Text(tr('pkEditHint'), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 16),
                 TextField(
                   controller: priceController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     labelText: tr('price'),
                     prefixText: '₱ ',
+                    prefixIcon: const Icon(Icons.sell_outlined),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -67,6 +74,7 @@ class _PackagesPageState extends State<PackagesPage> {
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           labelText: tr('minPax'),
+                          prefixIcon: const Icon(Icons.group_outlined),
                         ),
                       ),
                     ),
@@ -77,6 +85,7 @@ class _PackagesPageState extends State<PackagesPage> {
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           labelText: tr('maxPax'),
+                          prefixIcon: const Icon(Icons.groups_outlined),
                         ),
                       ),
                     ),
@@ -87,6 +96,7 @@ class _PackagesPageState extends State<PackagesPage> {
                   Text(error!, style: TextStyle(color: Theme.of(dialogContext).colorScheme.error)),
                 ],
               ],
+            ),
             ),
             actions: [
               TextButton(
@@ -146,15 +156,37 @@ class _PackagesPageState extends State<PackagesPage> {
     }
   }
 
+  static const _caps = TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted);
+
+  /// Kulay at icon ayon sa oras ng package (pareho sa Calendar).
+  static ({Color color, IconData icon, String key}) _slotOf(Map<String, dynamic> pkg) {
+    final n = '${pkg['name']}'.toLowerCase();
+    if (n.contains('overnight') || n.contains('22')) {
+      return (color: const Color(0xFF0F766E), icon: Icons.bedtime_rounded, key: 'pkSlotOvernight');
+    }
+    if (n.contains('night')) return (color: const Color(0xFF6366F1), icon: Icons.nights_stay_rounded, key: 'pkSlotNight');
+    return (color: const Color(0xFFF59E0B), icon: Icons.wb_sunny_rounded, key: 'pkSlotDay');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final packages = widget.data.packages;
     final active = widget.data.activeBookings;
 
     if (packages.isEmpty) {
       return EmptyState(icon: Icons.inventory_2_outlined, message: tr('noPackages'));
     }
+
+    List<Map<String, dynamic>> bookingsOf(Map<String, dynamic> pkg) =>
+        active.where((b) => '${b['package_id']}' == '${pkg['id']}').toList();
+    final today = DateUtils.dateOnly(DateTime.now());
+    int upcomingOf(List<Map<String, dynamic>> list) => list.where((b) {
+          final d = bookingDateOf(b);
+          return d != null && !d.isBefore(today);
+        }).length;
+
+    final counts = {for (final p in packages) '${p['id']}': bookingsOf(p).length};
+    final maxCount = counts.values.fold<int>(0, (m, v) => v > m ? v : m);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -164,9 +196,6 @@ class _PackagesPageState extends State<PackagesPage> {
                 ? 2
                 : 1;
 
-        List<Map<String, dynamic>> bookingsOf(Map<String, dynamic> pkg) =>
-            active.where((b) => '${b['package_id']}' == '${pkg['id']}').toList();
-
         final q = _query.trim().toLowerCase();
         final shown = packages
             .where((p) => q.isEmpty || '${p['name']}'.toLowerCase().contains(q))
@@ -175,7 +204,7 @@ class _PackagesPageState extends State<PackagesPage> {
           case _PkgSort.defaultOrder:
             break;
           case _PkgSort.mostBooked:
-            shown.sort((a, b) => bookingsOf(b).length.compareTo(bookingsOf(a).length));
+            shown.sort((a, b) => counts['${b['id']}']!.compareTo(counts['${a['id']}']!));
           case _PkgSort.priceHigh:
             shown.sort((a, b) => asDouble(b['price']).compareTo(asDouble(a['price'])));
           case _PkgSort.priceLow:
@@ -183,43 +212,72 @@ class _PackagesPageState extends State<PackagesPage> {
           case _PkgSort.name:
             shown.sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
         }
+        final sortOptions = {
+          _PkgSort.defaultOrder: tr('sortDefault'),
+          _PkgSort.mostBooked: tr('sortMostBookings'),
+          _PkgSort.priceHigh: tr('sortPriceHigh'),
+          _PkgSort.priceLow: tr('sortPriceLow'),
+          _PkgSort.name: tr('sortName'),
+        };
 
         return ListView(
           padding: pageInsets(context),
           children: [
-            GlassPanel(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SearchBox(
-                      controller: _searchController,
-                      hint: tr('searchPackagesHint'),
-                      onChanged: (v) => setState(() => _query = v),
+            Text(tr('pkSubtitle'), style: const TextStyle(color: AppColors.muted)),
+            const SizedBox(height: 14),
+            _overviewCard(packages, counts, upcomingOf(active), wide: constraints.maxWidth >= 700),
+            const SizedBox(height: 18),
+            AppCard(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: constraints.maxWidth >= 900 ? 380 : double.infinity,
+                      child: SearchBox(
+                        controller: _searchController,
+                        hint: tr('searchPackagesHint'),
+                        onChanged: (v) => setState(() => _query = v),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  SortMenu<_PkgSort>(
-                    value: _sort,
-                    options: {
-                      _PkgSort.defaultOrder: tr('sortDefault'),
-                      _PkgSort.mostBooked: tr('sortMostBookings'),
-                      _PkgSort.priceHigh: tr('sortPriceHigh'),
-                      _PkgSort.priceLow: tr('sortPriceLow'),
-                      _PkgSort.name: tr('sortName'),
-                    },
-                    onChanged: (v) => setState(() => _sort = v),
-                  ),
-                ],
+                    PopupMenuButton<_PkgSort>(
+                      tooltip: tr('sortBy'),
+                      position: PopupMenuPosition.under,
+                      onSelected: (v) => setState(() => _sort = v),
+                      itemBuilder: (context) => [
+                        for (final e in sortOptions.entries)
+                          CheckedPopupMenuItem(value: e.key, checked: e.key == _sort, child: Text(e.value)),
+                      ],
+                      child: FilterPill(
+                        icon: Icons.swap_vert_rounded,
+                        label: sortOptions[_sort] ?? '',
+                        active: _sort != _PkgSort.defaultOrder,
+                        dropdown: true,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             if (shown.isEmpty)
-              EmptyState(icon: Icons.search_off, message: tr('noPackagesMatch'))
+              AppCard(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: EmptyState(icon: Icons.search_off, message: tr('noPackagesMatch')),
+                ),
+              )
             else
               CardGrid(
                 columns: columns,
                 children: [
-                  for (final pkg in shown) _buildPackageCard(theme, pkg, bookingsOf(pkg)),
+                  for (final pkg in shown)
+                    _buildPackageCard(pkg, bookingsOf(pkg), upcomingOf(bookingsOf(pkg)), maxCount),
                 ],
               ),
           ],
@@ -228,18 +286,130 @@ class _PackagesPageState extends State<PackagesPage> {
     );
   }
 
+  Widget _overviewCard(
+    List<Map<String, dynamic>> packages,
+    Map<String, int> counts,
+    int upcoming, {
+    required bool wide,
+  }) {
+    final prices = packages.map((p) => asDouble(p['price'])).toList()..sort();
+    Map<String, dynamic>? top;
+    for (final p in packages) {
+      if (top == null || counts['${p['id']}']! > counts['${top['id']}']!) top = p;
+    }
+    final topCount = top == null ? 0 : counts['${top['id']}']!;
+
+    final tiles = [
+      _tile(tr('pkKPackages'), tr('pkKPackagesSub'), '${packages.length}', Colors.white, Icons.inventory_2_outlined),
+      _tile(tr('pkKTop'), topCount == 0 ? tr('pkKTopNone') : tr('pkKTopSub', {'n': topCount}),
+          topCount == 0 ? '—' : '${top!['name']}', const Color(0xFFFACC15), Icons.local_fire_department_outlined),
+      _tile(tr('pkKUpcoming'), tr('pkKUpcomingSub'), '$upcoming', const Color(0xFF4ADE80), Icons.event_available_outlined),
+      _tile(tr('pkKRange'), tr('pkKRangeSub'),
+          prices.isEmpty ? '—' : '${pesoCompact(prices.first)} – ${pesoCompact(prices.last)}', const Color(0xFF60A5FA),
+          Icons.sell_outlined),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.ink,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 24, offset: Offset(0, 12))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.inventory_2_rounded, color: AppColors.inkText, size: 20),
+              const SizedBox(width: 8),
+              Text(tr('pkOverview'),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 0.8, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (wide)
+            Row(
+              children: [
+                for (var i = 0; i < tiles.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  Expanded(child: tiles[i]),
+                ],
+              ],
+            )
+          else
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.45,
+              children: tiles,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tile(String label, String sub, String value, Color valueColor, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: AppColors.inkRaised,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.inkLine),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(label,
+                    style: const TextStyle(color: AppColors.inkText, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
+              ),
+              Icon(icon, size: 16, color: const Color(0xFF7F93A6)),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(sub,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xFF7F93A6), fontSize: 10.5, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(value, style: TextStyle(color: valueColor, fontSize: 22, fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        child: Row(
+          children: [
+            Icon(icon, size: 17, color: AppColors.muted),
+            const SizedBox(width: 9),
+            SizedBox(width: 80, child: Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 13))),
+            Expanded(
+              child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            ),
+          ],
+        ),
+      );
+
   Widget _buildPackageCard(
-    ThemeData theme,
     Map<String, dynamic> pkg,
     List<Map<String, dynamic>> bookings,
+    int upcoming,
+    int maxCount,
   ) {
     final revenue = bookings.fold<double>(0, (s, b) => s + totalOf(b));
-    final today = DateUtils.dateOnly(DateTime.now());
-    final upcoming = bookings.where((b) {
-      final d = bookingDateOf(b);
-      return d != null && !d.isBefore(today);
-    }).length;
-
+    final slot = _slotOf(pkg);
     final start = formatTime(pkg['start_time']);
     final end = formatTime(pkg['end_time']);
     final minPax = pkg['min_pax'];
@@ -249,67 +419,152 @@ class _PackagesPageState extends State<PackagesPage> {
         : maxPax != null
             ? tr('capUpTo', {'max': maxPax})
             : tr('capNoLimit');
+    final share = maxCount == 0 ? 0.0 : bookings.length / maxCount;
 
-    return AppCard(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    Widget stat(String value, String label) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: AppColors.subtle,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    '${pkg['name']}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                Text(label.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.muted, letterSpacing: 0.5)),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                ),
+              ],
+            ),
+          ),
+        );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(height: 5, color: slot.color),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: slot.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      child: Icon(slot.icon, color: slot.color, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${pkg['name']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                          const SizedBox(height: 2),
+                          Text(tr(slot.key),
+                              style: TextStyle(color: slot.color, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(peso(asDouble(pkg['price'])),
+                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20, color: AppColors.primary)),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    children: [
+                      _infoRow(Icons.schedule_rounded, tr('fieldTime'),
+                          start.isEmpty ? '—' : (end.isEmpty ? start : '$start – $end')),
+                      const Divider(height: 1),
+                      _infoRow(Icons.groups_outlined, tr('fieldCapacity'), capacity),
+                    ],
                   ),
                 ),
-                IconButton(
-                  tooltip: tr('editPackageTooltip'),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+                child: Row(
+                  children: [
+                    stat('${bookings.length}', tr('bookingsWord')),
+                    const SizedBox(width: 8),
+                    stat('$upcoming', tr('statUpcoming')),
+                    const SizedBox(width: 8),
+                    stat(pesoCompact(revenue), tr('statBookedValue')),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(tr('pkPopularity').toUpperCase(), style: _caps),
+                        const Spacer(),
+                        Text('${(share * 100).round()}%',
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: AppColors.muted)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: share,
+                        minHeight: 7,
+                        backgroundColor: const Color(0xFFE6EBF0),
+                        valueColor: AlwaysStoppedAnimation(slot.color),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(18, 10, 14, 12),
+            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+            child: Row(
+              children: [
+                const Spacer(),
+                OutlinedButton.icon(
                   onPressed: () => _editPackage(pkg),
-                  icon: const Icon(Icons.edit_outlined),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: Text(tr('pkEditBtn')),
                 ),
               ],
             ),
-            Text(
-              peso(asDouble(pkg['price'])),
-              style: theme.textTheme.headlineSmall?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (start.isNotEmpty) InfoRow(tr('fieldTime'), end.isEmpty ? start : '$start – $end'),
-            InfoRow(tr('fieldCapacity'), capacity),
-            const Divider(height: 24),
-            Row(
-              children: [
-                _miniStat(theme, '${bookings.length}', tr('bookingsWord')),
-                _miniStat(theme, '$upcoming', tr('statUpcoming')),
-                _miniStat(theme, pesoCompact(revenue), tr('statBookedValue')),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _miniStat(ThemeData theme, String value, String label) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(value, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
         ],
       ),
