@@ -278,6 +278,52 @@ class _MyBookingPageState extends State<MyBookingPage> {
     );
   }
 
+  Widget _pill(String label, bool selected, VoidCallback onTap, {IconData? icon, int? count}) {
+    return Material(
+      color: selected ? AppColors.ink : Colors.white,
+      shape: StadiumBorder(side: BorderSide(color: selected ? AppColors.ink : AppColors.border)),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 16, color: selected ? Colors.white : AppColors.muted),
+                const SizedBox(width: 6),
+              ],
+              Text(label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    color: selected ? Colors.white : AppColors.text,
+                  )),
+              if (count != null) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: selected ? Colors.white24 : const Color(0xFFE6EBF0),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text('$count',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        color: selected ? Colors.white : AppColors.muted,
+                      )),
+                ),
+              ] else
+                const SizedBox(width: 4),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildList() {
     final filtered = _filtered;
     final filters = {
@@ -291,111 +337,198 @@ class _MyBookingPageState extends State<MyBookingPage> {
       children: [
         if (_offlineSavedAt != null) OfflineNotice(savedAt: _offlineSavedAt!, onRetry: _fetchData),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
           child: SearchField(
             controller: _search,
             hint: 'Search package, event, or status',
             onChanged: (v) => setState(() => _query = v),
           ),
         ),
-        FilterChipsRow(
-          children: [
-            for (final e in filters.entries)
-              ChoiceChip(
-                label: Text('${e.value} (${_count(e.key)})'),
-                selected: _filter == e.key,
-                onSelected: (_) => setState(() => _filter = e.key),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              for (final e in filters.entries) ...[
+                _pill(e.value, _filter == e.key, () => setState(() => _filter = e.key), count: _count(e.key)),
+                const SizedBox(width: 8),
+              ],
+              _pill(
+                _newestFirst ? 'Newest First' : 'Oldest First',
+                false,
+                () => setState(() => _newestFirst = !_newestFirst),
+                icon: _newestFirst ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
               ),
-            ActionChip(
-              avatar: Icon(_newestFirst ? Icons.arrow_downward : Icons.arrow_upward, size: 18),
-              label: Text(_newestFirst ? 'Newest first' : 'Oldest first'),
-              onPressed: () => setState(() => _newestFirst = !_newestFirst),
-            ),
-          ],
-        ),
-        // Booking na ginawa sa resort (walk-in o tawag): i-link gamit ang code sa resibo.
-        // Mukhang button (may border, arrow, at "Add") para malinaw na napipindot.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Material(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            child: InkWell(
-              onTap: _claimWalkIn,
-              borderRadius: BorderRadius.circular(16),
-              child: Ink(
-                padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.confirmation_number_outlined, color: AppColors.primary),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Booked at the resort?', style: TextStyle(fontWeight: FontWeight.w700)),
-                          SizedBox(height: 2),
-                          Text(
-                            'Tap to add it using the code on your receipt',
-                            style: TextStyle(fontSize: 12.5, color: AppColors.muted),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton.tonal(
-                      onPressed: _claimWalkIn,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        minimumSize: const Size(0, 36),
-                      ),
-                      child: const Text('Add'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            ],
           ),
         ),
         Expanded(
           child: RefreshIndicator(
             onRefresh: _fetchData,
-            child: filtered.isEmpty
-                ? ListView(
-                    children: [
-                      const SizedBox(height: 80),
-                      const Icon(Icons.event_busy, size: 56, color: Colors.grey),
-                      const SizedBox(height: 12),
-                      Text(
-                        _bookings.isEmpty
-                            ? 'You have no bookings yet.'
-                            : 'No bookings match your filter.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    itemCount: filtered.length,
-                    itemBuilder: (context, index) => _buildCard(filtered[index]),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+              children: [
+                // Booking na ginawa sa resort (walk-in o tawag): i-link gamit ang code sa resibo.
+                Material(
+                  color: AppColors.primary.withValues(alpha: 0.06),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: AppColors.primary.withValues(alpha: 0.25)),
                   ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: _claimWalkIn,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.confirmation_number_outlined, color: Colors.white, size: 21),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Booked at the Resort?', style: TextStyle(fontWeight: FontWeight.w800)),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Add it using the code on your receipt',
+                                  style: TextStyle(fontSize: 12.5, color: AppColors.muted),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(20)),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.add_rounded, size: 16, color: Colors.white),
+                                SizedBox(width: 2),
+                                Text('Add',
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (filtered.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.10),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.event_note_outlined, size: 30, color: AppColors.primary),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _bookings.isEmpty ? 'No Bookings Yet' : 'Nothing Here',
+                          style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 16),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _bookings.isEmpty
+                              ? 'Your bookings will show up here once you book a package.'
+                              : 'No bookings match your filter.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: AppColors.muted),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  for (final b in filtered) _buildCard(b),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
+
+  static const _caps = TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted);
+
+  Widget _section(String title, Widget child) => Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(title.toUpperCase(), style: _caps),
+            const SizedBox(height: 8),
+            child,
+          ],
+        ),
+      );
+
+  Widget _boxed(List<Widget> rows) => Container(
+        decoration: BoxDecoration(
+          color: AppColors.subtle,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          children: [
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0) const Divider(height: 1, color: AppColors.border),
+              rows[i],
+            ],
+          ],
+        ),
+      );
+
+  Widget _infoRow(IconData icon, String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 16, color: AppColors.muted),
+            const SizedBox(width: 8),
+            SizedBox(width: 92, child: Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 13))),
+            Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+          ],
+        ),
+      );
+
+  Widget _alert(IconData icon, String text, Color color) => Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 8),
+            Expanded(child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12.5))),
+          ],
+        ),
+      );
 
   Widget _buildCard(Map<String, dynamic> booking) {
     final pkg = booking['packages'] as Map<String, dynamic>?;
@@ -409,181 +542,291 @@ class _MyBookingPageState extends State<MyBookingPage> {
     final unpaid = (balance - pending).clamp(0, double.infinity).toDouble();
     final hasVerifiedDown = payments.any((p) => p['kind'] == 'downpayment' && isVerifiedPayment(p));
     final rejected = payments.where((p) => p['status'] == 'rejected').toList();
+    final inactive = isInactiveStatus(status);
+    final date = _dateOf(booking);
+    final today = DateUtils.dateOnly(DateTime.now());
+    final isToday = date != null && date == today;
+    final progress = total <= 0 ? 0.0 : (paid / total).clamp(0.0, 1.0);
+    final color = statusColor(status);
 
-    return Card(
+    final guests = [
+      ('Infant/Toddler (0-3)', booking['infants']),
+      ('Child (4-12)', booking['children']),
+      ('Teen (13-19)', booking['teens']),
+      ('Adult (20-59)', booking['adults']),
+      ('Elderly (60+)', booking['elderly']),
+    ].where((g) => asDouble(g.$2) > 0).toList();
+
+    final fullWidth = ButtonStyle(
+      minimumSize: const WidgetStatePropertyAll(Size.fromHeight(46)),
+      shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+    );
+
+    return Container(
       margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: isToday ? AppColors.primary : AppColors.border, width: isToday ? 1.5 : 1),
+        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, 4))],
+      ),
       clipBehavior: Clip.antiAlias,
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: statusColor(status), width: 4)),
-        ),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
-          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          expandedCrossAxisAlignment: CrossAxisAlignment.start,
-          title: Text(
-            packageName,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Column(
+      child: Opacity(
+        opacity: inactive ? 0.75 : 1,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
+            shape: const Border(),
+            collapsedShape: const Border(),
+            leading: Container(
+              width: 50,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                color: isToday ? AppColors.primary : color.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    date == null ? '' : formatDate(date).split(' ').first.toUpperCase(),
+                    style: TextStyle(
+                        fontSize: 10.5, fontWeight: FontWeight.w800, color: isToday ? Colors.white : color),
+                  ),
+                  Text(
+                    date == null ? '?' : '${date.day}',
+                    style: TextStyle(
+                      fontSize: 19,
+                      height: 1.1,
+                      fontWeight: FontWeight.w800,
+                      color: isToday ? Colors.white : AppColors.ink,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            title: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Expanded(
+                  child: Text(
+                    '$packageName',
+                    style: const TextStyle(
+                        fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15.5, color: AppColors.ink),
+                  ),
+                ),
+                const SizedBox(width: 6),
                 StatusChip(status: status),
-                const SizedBox(height: 6),
-                Text('${formatDate(_dateOf(booking))} · ${_formatScheduleTime(pkg)}'),
-                if (pending > 0)
-                  Text(
-                    '${peso(pending)} waiting for verification',
-                    style: const TextStyle(color: Color(0xFFE08A00), fontWeight: FontWeight.w600),
-                  ),
-                if (rejected.isNotEmpty && unpaid > 0 && !isInactiveStatus(status))
-                  const Text(
-                    'A payment was rejected. Please send a new proof.',
-                    style: TextStyle(color: Color(0xFFD64545), fontWeight: FontWeight.w600),
-                  )
-                else if (unpaid > 0 && !isInactiveStatus(status))
-                  Text(
-                    'Balance: ${peso(unpaid)}',
-                    style: const TextStyle(color: Color(0xFFD64545), fontWeight: FontWeight.w600),
-                  ),
               ],
             ),
-          ),
-          children: [
-            const Divider(),
-            Text('Booker: ${_profile?['full_name'] ?? _profile?['google_display_name'] ?? 'Not set'}'),
-            Text('Phone: ${_profile?['phone'] ?? 'Not set'}'),
-            Text(
-              'Booked on: ${formatDateTime(parseDate(booking['created_at']))}',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            if (booking['event_type'] != null) ...[
-              const SizedBox(height: 6),
-              Text('Type of Event: ${booking['event_type']}'),
-            ],
-            const SizedBox(height: 12),
-            const Text('GUESTS', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text('Infant/Toddler (0-3): ${booking['infants']}'),
-            Text('Child (4-12): ${booking['children']}'),
-            Text('Teen (13-19): ${booking['teens']}'),
-            Text('Adult (20-59): ${booking['adults']}'),
-            Text('Elderly (60+): ${booking['elderly']}'),
-            const SizedBox(height: 6),
-            Text(
-              'Total: ${booking['total_pax']} pax',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            const Text('PAYMENTS', style: TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            if (payments.isEmpty) const Text('No payments yet.'),
-            for (final p in payments)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      p['status'] == 'pending'
-                          ? Icons.hourglass_top
-                          : p['status'] == 'rejected'
-                              ? Icons.cancel
-                              : Icons.check_circle,
-                      size: 18,
-                      color: paymentStatusColor(p['status'] as String?),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${peso(asDouble(p['amount']))} · ${'${p['kind'] ?? ''}'} · '
-                        '${paymentStatusLabel(p['status'] as String?)}'
-                        '${'${p['reject_reason'] ?? ''}'.isEmpty ? '' : '\nReason: ${p['reject_reason']}'}',
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${isToday ? 'Today · ' : ''}${formatDate(date)} · ${_formatScheduleTime(pkg)}',
+                    style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 6,
+                            backgroundColor: const Color(0xFFE6EBF0),
+                            valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${peso(paid)} / ${peso(total)}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.text),
+                      ),
+                    ],
+                  ),
+                  if (pending > 0)
+                    _alert(Icons.hourglass_top_rounded, '${peso(pending)} waiting for verification',
+                        const Color(0xFFB45309)),
+                  if (rejected.isNotEmpty && unpaid > 0 && !inactive)
+                    _alert(Icons.error_outline_rounded, 'A payment was rejected. Please send a new proof.',
+                        AppColors.danger)
+                  else if (unpaid > 0 && !inactive)
+                    _alert(Icons.account_balance_wallet_outlined, 'Balance: ${peso(unpaid)}', AppColors.danger),
+                ],
+              ),
+            ),
+            children: [
+              const Divider(height: 1, color: AppColors.border),
+              _section(
+                'Booking Details',
+                _boxed([
+                  _infoRow(Icons.person_outline, 'Booker',
+                      '${_profile?['full_name'] ?? _profile?['google_display_name'] ?? 'Not set'}'),
+                  _infoRow(Icons.phone_outlined, 'Phone', '${_profile?['phone'] ?? 'Not set'}'),
+                  if (booking['event_type'] != null)
+                    _infoRow(Icons.celebration_outlined, 'Event', '${booking['event_type']}'),
+                  _infoRow(Icons.schedule_rounded, 'Booked on', formatDateTime(parseDate(booking['created_at']))),
+                ]),
+              ),
+              _section(
+                'Guests · ${booking['total_pax']} pax',
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final g in guests)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.subtle,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Text.rich(
+                          TextSpan(children: [
+                            TextSpan(
+                                text: '${asDouble(g.$2).toStringAsFixed(0)}  ',
+                                style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary)),
+                            TextSpan(text: g.$1),
+                          ]),
+                          style: const TextStyle(fontSize: 12.5),
+                        ),
+                      ),
                   ],
                 ),
               ),
-            const SizedBox(height: 8),
-            Text('Verified: ${peso(paid)} of ${peso(total)}'),
-            const SizedBox(height: 8),
-            if (unpaid > 0 && !isInactiveStatus(status) && status != 'completed')
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: FilledButton.icon(
-                  onPressed: () => _payBalance(
-                    booking,
-                    hasVerifiedDown || pending > 0 ? unpaid : (total * 0.5).roundToDouble().clamp(0, unpaid).toDouble(),
-                    kind: hasVerifiedDown || pending > 0 ? 'balance' : 'downpayment',
+              _section(
+                'Payments',
+                payments.isEmpty
+                    ? const Text('No payments yet.', style: TextStyle(color: AppColors.muted))
+                    : _boxed([
+                        for (final p in payments)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  p['status'] == 'pending'
+                                      ? Icons.hourglass_top_rounded
+                                      : p['status'] == 'rejected'
+                                          ? Icons.cancel_rounded
+                                          : Icons.check_circle_rounded,
+                                  size: 18,
+                                  color: paymentStatusColor(p['status'] as String?),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${'${p['kind'] ?? ''}'.isEmpty ? 'Payment' : '${p['kind']}'[0].toUpperCase() + '${p['kind']}'.substring(1)} · ${paymentStatusLabel(p['status'] as String?)}',
+                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                      ),
+                                      if ('${p['reject_reason'] ?? ''}'.isNotEmpty)
+                                        Text('Reason: ${p['reject_reason']}',
+                                            style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
+                                Text(peso(asDouble(p['amount'])), style: const TextStyle(fontWeight: FontWeight.w800)),
+                              ],
+                            ),
+                          ),
+                      ]),
+              ),
+              const SizedBox(height: 16),
+              if (unpaid > 0 && !inactive && status != 'completed')
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: FilledButton.icon(
+                    style: fullWidth,
+                    onPressed: () => _payBalance(
+                      booking,
+                      hasVerifiedDown || pending > 0 ? unpaid : (total * 0.5).roundToDouble().clamp(0, unpaid).toDouble(),
+                      kind: hasVerifiedDown || pending > 0 ? 'balance' : 'downpayment',
+                    ),
+                    icon: const Icon(Icons.upload_file_rounded, size: 18),
+                    label: Text(
+                      hasVerifiedDown || pending > 0 ? 'Pay Balance (${peso(unpaid)})' : 'Send Downpayment Proof',
+                    ),
                   ),
-                  icon: const Icon(Icons.upload_file, size: 18),
-                  label: Text(
-                    hasVerifiedDown || pending > 0 ? 'Pay balance (${peso(unpaid)})' : 'Send downpayment proof',
+                ),
+              // QR para sa check-in / check-out (gumagana kahit offline)
+              if (canShowCheckinQr(booking))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: FilledButton.icon(
+                    style: fullWidth.copyWith(backgroundColor: const WidgetStatePropertyAll(AppColors.ink)),
+                    onPressed: () => showCheckinQr(context, booking),
+                    icon: const Icon(Icons.qr_code_2_rounded, size: 18),
+                    label: Text(booking['checked_in_at'] != null ? 'Show Check-Out QR' : 'Show Check-In QR'),
                   ),
                 ),
-              ),
-            // QR para sa check-in / check-out (gumagana kahit offline)
-            if (canShowCheckinQr(booking))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: FilledButton.tonalIcon(
-                  onPressed: () => showCheckinQr(context, booking),
-                  icon: const Icon(Icons.qr_code_2, size: 18),
-                  label: Text(booking['checked_in_at'] != null ? 'Show check-out QR' : 'Show check-in QR'),
+              // Naka-out na: survey para matapos ang stay
+              if (needsCheckoutSurvey(booking))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: FilledButton.icon(
+                    style: fullWidth,
+                    onPressed: () async {
+                      if (await showGuestSurvey(context, booking) && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Thank you! Your stay is now complete.')),
+                        );
+                        await _fetchData();
+                      }
+                    },
+                    icon: const Icon(Icons.rate_review_outlined, size: 18),
+                    label: const Text('Answer Check-Out Survey'),
+                  ),
                 ),
-              ),
-            // Naka-out na: survey para matapos ang stay
-            if (needsCheckoutSurvey(booking))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: FilledButton.icon(
-                  onPressed: () async {
-                    if (await showGuestSurvey(context, booking) && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Thank you! Your stay is now complete.')),
-                      );
-                      await _fetchData();
-                    }
-                  },
-                  icon: const Icon(Icons.rate_review_outlined, size: 18),
-                  label: const Text('Answer check-out survey'),
+              OutlinedButton.icon(
+                style: fullWidth,
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MyReceiptPage(bookingId: '${booking['id']}'),
+                  ),
                 ),
+                icon: const Icon(Icons.receipt_long_rounded, size: 18),
+                label: const Text('View Receipt'),
               ),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => MyReceiptPage(bookingId: '${booking['id']}'),
+              // Hindi nakapag-check in sa araw ng booking
+              if (status == 'no_show') _noShowInfo(),
+              // Refund (kapag na-cancel)
+              if (booking['_refund'] is Map) _refundInfo(Map<String, dynamic>.from(booking['_refund'] as Map)),
+              // Pag-cancel ayon sa refund policy
+              if (canCancelBooking(booking) && _offlineSavedAt == null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+                    onPressed: () async {
+                      if (await showCancelBookingSheet(context, booking) && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text(
+                                  'Booking cancelled. If you asked for a refund, the resort will review your reason.')),
+                        );
+                        await _fetchData();
+                      }
+                    },
+                    icon: const Icon(Icons.event_busy_outlined, size: 18),
+                    label: const Text('Cancel Booking'),
+                  ),
                 ),
-              ),
-              icon: const Icon(Icons.receipt_long, size: 18),
-              label: const Text('View receipt'),
-            ),
-            // Hindi nakapag-check in sa araw ng booking
-            if (status == 'no_show') _noShowInfo(),
-            // Refund (kapag na-cancel)
-            if (booking['_refund'] is Map) _refundInfo(Map<String, dynamic>.from(booking['_refund'] as Map)),
-            // Pag-cancel ayon sa refund policy
-            if (canCancelBooking(booking) && _offlineSavedAt == null)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(foregroundColor: Colors.red.shade700),
-                  onPressed: () async {
-                    if (await showCancelBookingSheet(context, booking) && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Booking cancelled. If you asked for a refund, the resort will review your reason.')),
-                      );
-                      await _fetchData();
-                    }
-                  },
-                  icon: const Icon(Icons.event_busy_outlined, size: 18),
-                  label: const Text('Cancel booking'),
-                ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
