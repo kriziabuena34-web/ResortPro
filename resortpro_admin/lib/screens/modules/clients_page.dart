@@ -17,7 +17,7 @@ class ClientsPage extends StatefulWidget {
   State<ClientsPage> createState() => _ClientsPageState();
 }
 
-enum _ClientSort { name, mostBookings, topSpender, recent }
+enum _ClientSort { name, mostBookings, recent }
 
 class _ClientStats {
   _ClientStats(this.client, this.bookings);
@@ -34,13 +34,35 @@ class _ClientStats {
       .whereType<DateTime>()
       .fold<DateTime?>(null, (m, d) => m == null || d.isAfter(m) ? d : m);
 
-  /// "JUAN DELA CRUZ" (first name, last name, all caps)
-  String get name {
-    final n = upperFirstLast(client['first_name'], client['last_name'], fallback: client['google_display_name']);
-    return n.isEmpty ? tr('noName') : n;
+  String get status => '${client['verification_status'] ?? 'unverified'}';
+
+  static String _part(dynamic v) {
+    final t = '${v ?? ''}'.trim();
+    return t.toUpperCase() == 'N/A' ? '' : t;
   }
 
-  String get status => '${client['verification_status'] ?? 'unverified'}';
+  /// Username ng account (o pangalan sa Google kung wala pa).
+  String get username {
+    final u = _part(client['username']);
+    if (u.isNotEmpty) return u;
+    final g = _part(client['google_display_name']);
+    return g.isEmpty ? tr('noName') : g;
+  }
+
+  /// "KRIZIA RODRIGUEZ BUENA" (first, middle, last, suffix)
+  String get fullName {
+    final n = [
+      _part(client['first_name']),
+      _part(client['middle_name']),
+      _part(client['last_name']),
+      _part(client['suffix']),
+    ].where((e) => e.isNotEmpty).join(' ');
+    return n.toUpperCase();
+  }
+
+  DateTime? get birthDate => parseDate(client['birth_date']);
+
+  DateTime? get joined => parseDate(client['created_at']);
 
   String? get photo {
     for (final k in ['avatar_url', 'google_avatar_url']) {
@@ -55,7 +77,6 @@ class _ClientsPageState extends State<ClientsPage> {
   final _searchController = TextEditingController();
   String _query = '';
   String _status = 'all';
-  bool _withBalance = false;
   _ClientSort _sort = _ClientSort.name;
 
   @override
@@ -67,7 +88,6 @@ class _ClientsPageState extends State<ClientsPage> {
   Map<_ClientSort, String> get _sortOptions => {
         _ClientSort.name: tr('sortName'),
         _ClientSort.mostBookings: tr('sortMostBookings'),
-        _ClientSort.topSpender: tr('sortTopSpender'),
         _ClientSort.recent: tr('sortRecentBooking'),
       };
 
@@ -80,20 +100,18 @@ class _ClientsPageState extends State<ClientsPage> {
     final q = _query.trim().toLowerCase();
     final list = all.where((c) {
       if (_status != 'all' && c.status != _status) return false;
-      if (_withBalance && c.balance <= 0) return false;
       if (q.isEmpty) return true;
-      return c.name.toLowerCase().contains(q) ||
+      return c.username.toLowerCase().contains(q) ||
+          c.fullName.toLowerCase().contains(q) ||
           '${c.client['phone'] ?? ''}'.contains(q) ||
           '${c.client['google_display_name'] ?? ''}'.toLowerCase().contains(q);
     }).toList();
 
     switch (_sort) {
       case _ClientSort.name:
-        list.sort((a, b) => a.name.compareTo(b.name));
+        list.sort((a, b) => a.username.toLowerCase().compareTo(b.username.toLowerCase()));
       case _ClientSort.mostBookings:
         list.sort((a, b) => b.bookingCount.compareTo(a.bookingCount));
-      case _ClientSort.topSpender:
-        list.sort((a, b) => b.totalPaid.compareTo(a.totalPaid));
       case _ClientSort.recent:
         list.sort((a, b) {
           final da = a.lastBooking, db = b.lastBooking;
@@ -175,21 +193,13 @@ class _ClientsPageState extends State<ClientsPage> {
                             dropdown: true,
                           ),
                         ),
-                        FilterPill(
-                          icon: Icons.account_balance_wallet_outlined,
-                          label: tr('filterWithBalance'),
-                          active: _withBalance,
-                          toggle: true,
-                          onTap: () => setState(() => _withBalance = !_withBalance),
-                        ),
-                        if (_status != 'all' || _withBalance || _sort != _ClientSort.name || _query.isNotEmpty)
+                        if (_status != 'all' || _sort != _ClientSort.name || _query.isNotEmpty)
                           TextButton.icon(
                             onPressed: () {
                               _searchController.clear();
                               setState(() {
                                 _query = '';
                                 _status = 'all';
-                                _withBalance = false;
                                 _sort = _ClientSort.name;
                               });
                             },
@@ -229,15 +239,15 @@ class _ClientsPageState extends State<ClientsPage> {
     final verified = all.where((c) => c.status == 'verified').length;
     final pending = all.where((c) => c.status == 'pending').length;
     final repeat = all.where((c) => c.bookingCount >= 2).length;
-    final collected = all.fold<double>(0, (s, c) => s + c.totalPaid);
-    final unpaid = all.fold<double>(0, (s, c) => s + c.balance);
+    final now = DateTime.now();
+    final newThisMonth = all.where((c) => c.joined != null && c.joined!.year == now.year && c.joined!.month == now.month).length;
 
     final tiles = [
       _tile(tr('clKTotal'), tr('clKTotalSub', {'n': verified}), '${all.length}', Colors.white, Icons.people_outline),
       _tile(tr('clKPending'), tr('clKPendingSub'), '$pending', const Color(0xFFFBBF24), Icons.badge_outlined),
       _tile(tr('clKRepeat'), tr('clKRepeatSub'), '$repeat', const Color(0xFF4ADE80), Icons.favorite_outline),
-      _tile(tr('clKCollected'), tr('clKCollectedSub', {'amount': peso(unpaid)}), peso(collected), Colors.white,
-          Icons.payments_outlined),
+      _tile(tr('clKNew'), tr('clKNewSub', {'month': '${monthNamesTr[now.month - 1]} ${now.year}'.toUpperCase()}),
+          '$newThisMonth', Colors.white, Icons.person_add_alt_1_outlined),
     ];
 
     return Container(
@@ -322,29 +332,36 @@ class _ClientsPageState extends State<ClientsPage> {
   // Table
   // ---------------------------------------------------------------------------
 
-  static const _flex = (client: 6, contact: 3, bookings: 2, paid: 3, balance: 3, last: 3, status: 3);
+  // Lapad ng bawat column (pareho sa header at sa bawat hanay).
+  static const _flex = (client: 5, name: 5, birth: 3, contact: 3, last: 3, status: 3);
+  static const _actionWidth = 56.0;
+  static const _rowPadding = EdgeInsets.fromLTRB(24, 12, 20, 12);
+
+  /// Isang cell: may puwang sa kanan para hindi magdikit ang mga column.
+  Widget _cell(int flex, Widget child) =>
+      Expanded(flex: flex, child: Padding(padding: const EdgeInsets.only(right: 16), child: child));
 
   Widget _tableHeader() {
-    Widget h(String t, int flex, {TextAlign align = TextAlign.left}) => Expanded(
-          flex: flex,
-          child: Text(t,
-              textAlign: align,
-              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted)),
+    Widget h(String t, int flex) => _cell(
+          flex,
+          Text(t, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted)),
         );
     return Container(
-      color: AppColors.subtle,
-      padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
+      decoration: const BoxDecoration(
+        color: AppColors.subtle,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      padding: _rowPadding,
       child: Row(
         children: [
           h(tr('clColClient'), _flex.client),
+          h(tr('clColName'), _flex.name),
+          h(tr('clColBirth'), _flex.birth),
           h(tr('clColContact'), _flex.contact),
-          h(tr('clColBookings'), _flex.bookings, align: TextAlign.center),
-          h(tr('clColPaid'), _flex.paid),
-          h(tr('clColBalance'), _flex.balance),
           h(tr('clColLast'), _flex.last),
           h(tr('clColStatus'), _flex.status),
           SizedBox(
-            width: 56,
+            width: _actionWidth,
             child: Text(tr('bkColAction'),
                 textAlign: TextAlign.right,
                 style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted)),
@@ -380,7 +397,7 @@ class _ClientsPageState extends State<ClientsPage> {
       radius: radius,
       backgroundColor: color.withValues(alpha: 0.12),
       foregroundImage: photo == null ? null : NetworkImage(photo),
-      child: Text(c.name.isEmpty ? '?' : c.name[0], style: TextStyle(color: color, fontWeight: FontWeight.w800)),
+      child: Text(c.username.isEmpty ? '?' : c.username[0].toUpperCase(), style: TextStyle(color: color, fontWeight: FontWeight.w800)),
     );
   }
 
@@ -388,6 +405,8 @@ class _ClientsPageState extends State<ClientsPage> {
     final theme = Theme.of(context);
     final pending = c.status == 'pending';
     final phone = '${c.client['phone'] ?? ''}'.trim();
+    final full = c.fullName;
+    final birth = c.birthDate;
 
     final who = Row(
       children: [
@@ -397,15 +416,13 @@ class _ClientsPageState extends State<ClientsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+              Text(c.username, maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5)),
-              if ('${c.client['google_display_name'] ?? ''}'.trim().isNotEmpty)
-                Text('${c.client['google_display_name']}', maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall),
               if (pending || c.bookingCount >= 2) ...[
                 const SizedBox(height: 4),
                 Wrap(
                   spacing: 6,
+                  runSpacing: 4,
                   children: [
                     if (pending) _badge(tr('clNeedsReview'), const Color(0xFFFACC15), AppColors.ink),
                     if (c.bookingCount >= 2) _badge(tr('clRepeat'), const Color(0xFFDCFCE7), const Color(0xFF166534)),
@@ -418,7 +435,6 @@ class _ClientsPageState extends State<ClientsPage> {
       ],
     );
 
-    const money = TextStyle(fontWeight: FontWeight.w700, fontSize: 14);
     final view = IconButton.outlined(
       tooltip: tr('details'),
       onPressed: () => _showClient(c),
@@ -427,6 +443,7 @@ class _ClientsPageState extends State<ClientsPage> {
     final decoration = pending
         ? BoxDecoration(color: const Color(0xFFFFFBEB), border: Border.all(color: const Color(0xFFF5C451), width: 1.5))
         : null;
+    final muted = theme.textTheme.bodyMedium?.copyWith(color: AppColors.muted);
 
     if (wide) {
       return Container(
@@ -434,21 +451,23 @@ class _ClientsPageState extends State<ClientsPage> {
         child: InkWell(
           onTap: () => _showClient(c),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
+            padding: _rowPadding,
             child: Row(
               children: [
-                Expanded(flex: _flex.client, child: who),
-                Expanded(flex: _flex.contact, child: Text(phone.isEmpty ? '—' : phone)),
-                Expanded(flex: _flex.bookings, child: Text('${c.bookingCount}', textAlign: TextAlign.center, style: money)),
-                Expanded(flex: _flex.paid, child: Text(peso(c.totalPaid), style: money)),
-                Expanded(
-                  flex: _flex.balance,
-                  child: Text(c.balance > 0 ? peso(c.balance) : '—',
-                      style: money.copyWith(color: c.balance > 0 ? AppColors.warning : AppColors.muted)),
+                _cell(_flex.client, who),
+                _cell(
+                  _flex.name,
+                  Text(full.isEmpty ? '—' : full,
+                      maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
-                Expanded(flex: _flex.last, child: Text(c.lastBooking == null ? '—' : formatDate(c.lastBooking))),
-                Expanded(flex: _flex.status, child: Align(alignment: Alignment.centerLeft, child: _statusPill(c.status))),
-                SizedBox(width: 56, child: Align(alignment: Alignment.centerRight, child: view)),
+                _cell(_flex.birth, Text(birth == null ? '—' : formatDate(birth), style: birth == null ? muted : null)),
+                _cell(_flex.contact, Text(phone.isEmpty ? '—' : phone, style: phone.isEmpty ? muted : null)),
+                _cell(
+                  _flex.last,
+                  Text(c.lastBooking == null ? '—' : formatDate(c.lastBooking), style: c.lastBooking == null ? muted : null),
+                ),
+                _cell(_flex.status, Align(alignment: Alignment.centerLeft, child: _statusPill(c.status))),
+                SizedBox(width: _actionWidth, child: Align(alignment: Alignment.centerRight, child: view)),
               ],
             ),
           ),
@@ -456,13 +475,13 @@ class _ClientsPageState extends State<ClientsPage> {
       );
     }
 
-    Widget stat(String label, String value, {Color? color}) => Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    Widget line(IconData icon, String text) => Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
             children: [
-              Text(label,
-                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.muted, letterSpacing: 0.5)),
-              Text(value, style: money.copyWith(fontSize: 13.5, color: color)),
+              Icon(icon, size: 15, color: AppColors.muted),
+              const SizedBox(width: 6),
+              Expanded(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
             ],
           ),
         );
@@ -483,13 +502,20 @@ class _ClientsPageState extends State<ClientsPage> {
                   _statusPill(c.status),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  stat(tr('clColBookings'), '${c.bookingCount}'),
-                  stat(tr('clColPaid'), peso(c.totalPaid)),
-                  stat(tr('clColBalance'), c.balance > 0 ? peso(c.balance) : '—',
-                      color: c.balance > 0 ? AppColors.warning : null),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        line(Icons.badge_outlined, full.isEmpty ? '—' : full),
+                        line(Icons.cake_outlined, birth == null ? '—' : formatDate(birth)),
+                        line(Icons.phone_outlined, phone.isEmpty ? '—' : phone),
+                      ],
+                    ),
+                  ),
                   view,
                 ],
               ),
@@ -561,7 +587,9 @@ class _ClientsPageState extends State<ClientsPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(c.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17)),
+                          Text(c.username, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17)),
+                          if (c.fullName.isNotEmpty)
+                            Text(c.fullName, style: const TextStyle(color: AppColors.inkText, fontSize: 12.5)),
                           const SizedBox(height: 4),
                           _statusPill(c.status),
                         ],
@@ -591,6 +619,7 @@ class _ClientsPageState extends State<ClientsPage> {
                         ],
                       ),
                       const SizedBox(height: 16),
+                      InfoRow(tr('clColName'), c.fullName.isEmpty ? tr('notSet') : c.fullName),
                       InfoRow(tr('fieldPhone'), '${c.client['phone'] ?? tr('notSet')}'),
                       InfoRow(tr('birthDate'), formatDate(parseDate(c.client['birth_date']))),
                       InfoRow(tr('idType'), '${c.client['government_id_type'] ?? tr('notSet')}'),
