@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../l10n/app_strings.dart';
 import '../../services/admin_data.dart';
-import '../../services/notification_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/admin_widgets.dart';
 import '../../widgets/charts.dart';
@@ -40,7 +39,6 @@ class _OverviewPageState extends State<OverviewPage> {
     }).toList()
       ..sort((a, b) => bookingDateOf(a)!.compareTo(bookingDateOf(b)!));
     final pending = data.pendingAccounts.length;
-    final reminders = remindersFor(data);
     final verifiedClients =
         data.clients.where((c) => c['verification_status'] == 'verified').length;
 
@@ -237,81 +235,6 @@ class _OverviewPageState extends State<OverviewPage> {
               ),
             ),
             const SizedBox(height: 18),
-
-            // ---- Needs attention ----
-            if (reminders.isNotEmpty) ...[
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFFBEB),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFFF5C451), width: 1.5),
-                ),
-                padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.notification_important_outlined, size: 20, color: Color(0xFF92400E)),
-                        const SizedBox(width: 8),
-                        Text(titleCase(tr('needsAttention')),
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(color: const Color(0xFFFACC15), borderRadius: BorderRadius.circular(10)),
-                          child: Text('${reminders.length}',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.ink)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(tr('needsAttentionSub'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        for (final r in reminders)
-                          Material(
-                            color: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: const BorderSide(color: Color(0xFFF5D08A)),
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: InkWell(
-                              onTap: () => widget.onOpen(r.module, r.bookingStatus),
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 30,
-                                      height: 30,
-                                      decoration: BoxDecoration(
-                                        color: r.color.withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(9),
-                                      ),
-                                      child: Icon(r.icon, color: r.color, size: 17),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(r.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                                    const SizedBox(width: 4),
-                                    const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.muted),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
-            ],
 
             // ---- Monthly revenue ----
             _section(

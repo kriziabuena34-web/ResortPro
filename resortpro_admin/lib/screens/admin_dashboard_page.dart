@@ -395,8 +395,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           tooltip: tr('notifications'),
           onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
           icon: Badge(
+            // Bilang ng hindi pa nababasa + mga kailangang asikasuhin (Needs Attention).
             isLabelVisible: unread + reminders > 0,
-            label: Text(unread > 0 ? '$unread' : '!'),
+            label: Text('${unread + reminders}'),
             child: Icon(unread > 0 ? Icons.notifications_active : Icons.notifications_none),
           ),
         );
