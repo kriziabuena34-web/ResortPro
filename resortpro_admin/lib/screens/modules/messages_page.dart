@@ -26,7 +26,7 @@ class _MessagesPageState extends State<MessagesPage> {
   final _db = Supabase.instance.client;
   final _search = TextEditingController();
   String _query = '';
-  String _filter = 'all'; // all, unread, waiting
+  String _filter = 'all'; // all, unread
 
   List<Map<String, dynamic>> _threads = [];
   bool _loading = true;
@@ -169,7 +169,11 @@ class _MessagesPageState extends State<MessagesPage> {
   Widget _overviewCard({required bool wide}) {
     final unreadThreads = _threads.where((t) => _unreadOf(t) > 0).length;
     final unreadMsgs = _threads.fold<int>(0, (s, t) => s + _unreadOf(t));
-    final waiting = _threads.where(_waiting).length;
+    final weekAgo = DateTime.now().subtract(const Duration(days: 7));
+    final activeWeek = _threads.where((t) {
+      final d = parseDate(t['last_at'])?.toLocal();
+      return d != null && d.isAfter(weekAgo);
+    }).length;
     final today = DateUtils.dateOnly(DateTime.now());
     final repliedToday = _threads.where((t) {
       final d = parseDate(t['last_at'])?.toLocal();
@@ -180,7 +184,7 @@ class _MessagesPageState extends State<MessagesPage> {
       _tile(tr('msgKThreads'), tr('msgKThreadsSub'), '${_threads.length}', Colors.white, Icons.forum_outlined),
       _tile(tr('msgKUnread'), tr('msgKUnreadSub', {'n': unreadThreads}), '$unreadMsgs', const Color(0xFFFBBF24),
           Icons.mark_chat_unread_outlined),
-      _tile(tr('msgKWaiting'), tr('msgKWaitingSub'), '$waiting', const Color(0xFFF87171), Icons.hourglass_top_rounded),
+      _tile(tr('msgKActive'), tr('msgKActiveSub'), '$activeWeek', const Color(0xFF60A5FA), Icons.event_available_outlined),
       _tile(tr('msgKReplied'), tr('msgKRepliedSub'), '$repliedToday', const Color(0xFF4ADE80), Icons.mark_chat_read_outlined),
     ];
 
@@ -266,7 +270,6 @@ class _MessagesPageState extends State<MessagesPage> {
     final q = _query.trim().toLowerCase();
     final shown = _threads.where((t) {
       if (_filter == 'unread' && _unreadOf(t) == 0) return false;
-      if (_filter == 'waiting' && !_waiting(t)) return false;
       return q.isEmpty ||
           '${t['client_name'] ?? ''}'.toLowerCase().contains(q) ||
           '${t['last_body'] ?? ''}'.toLowerCase().contains(q);
@@ -288,7 +291,6 @@ class _MessagesPageState extends State<MessagesPage> {
               items: [
                 (value: 'all', label: tr('filterAll'), count: _threads.length),
                 (value: 'unread', label: tr('msgTabUnread'), count: _threads.where((t) => _unreadOf(t) > 0).length),
-                (value: 'waiting', label: tr('msgTabWaiting'), count: _threads.where(_waiting).length),
               ],
             ),
           ),
