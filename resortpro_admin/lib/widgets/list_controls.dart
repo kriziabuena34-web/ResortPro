@@ -295,18 +295,14 @@ class CountTabs<T> extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                  color: selected && highlight
-                      ? AppColors.accent
-                      : selected
-                          ? Colors.white24
-                          : const Color(0xFFE6EBF0),
+                  color: selected ? Colors.white24 : const Color(0xFFE6EBF0),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text('$n',
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
-                      color: selected && highlight ? AppColors.ink : (selected ? Colors.white : AppColors.muted),
+                      color: selected ? Colors.white : AppColors.muted,
                     )),
               ),
             ],

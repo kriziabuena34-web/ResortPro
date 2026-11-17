@@ -869,18 +869,14 @@ class _BookingsPageState extends State<BookingsPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                  color: selected && highlight
-                      ? AppColors.accent
-                      : selected
-                          ? Colors.white24
-                          : const Color(0xFFE6EBF0),
+                  color: selected ? Colors.white24 : const Color(0xFFE6EBF0),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text('$n',
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
-                      color: selected && highlight ? AppColors.ink : (selected ? Colors.white : AppColors.muted),
+                      color: selected ? Colors.white : AppColors.muted,
                     )),
               ),
             ],
@@ -1245,10 +1241,86 @@ class _BookingDetailsDialogState extends State<_BookingDetailsDialog> {
     }
   }
 
+  static const _capsStyle =
+      TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted);
+
+  Widget _section(String t) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(t.toUpperCase(), style: _capsStyle),
+      );
+
+  Widget _stat(String label, String value, {Color? color}) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.subtle,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.muted, letterSpacing: 0.5)),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(value, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: color)),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _infoRow(IconData icon, String label, String value, {String? sub}) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: AppColors.muted),
+            const SizedBox(width: 10),
+            SizedBox(width: 120, child: Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 13.5))),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(value.isEmpty ? tr('notSet') : value,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                        color: value.isEmpty ? AppColors.muted : AppColors.text,
+                      )),
+                  if (sub != null && sub.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(sub, style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _boxed(List<Widget> rows) => Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          children: [
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0) const Divider(height: 1),
+              rows[i],
+            ],
+          ],
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final booking = widget.booking;
-    final theme = Theme.of(context);
     final payments = paymentsOf(booking);
     final guestRows = [
       (tr('guestInfants'), booking['infants']),
@@ -1256,162 +1328,210 @@ class _BookingDetailsDialogState extends State<_BookingDetailsDialog> {
       (tr('guestTeens'), booking['teens']),
       (tr('guestAdults'), booking['adults']),
       (tr('guestElderly'), booking['elderly']),
-    ].where((g) => asInt(g.$2) > 0).map((g) => '${g.$1}: ${asInt(g.$2)}').join(', ');
+    ].where((g) => asInt(g.$2) > 0).map((g) => '${g.$1}: ${asInt(g.$2)}').join(' · ');
+    final ref = '#${'${booking['id']}'.split('-').first.toUpperCase()}';
+    final claim = '${booking['claim_code'] ?? ''}';
+    final balance = remainingOf(booking);
+    final paid = paidOf(booking);
 
-    return AlertDialog(
-      title: Row(
-        children: [
-          Expanded(child: Text(packageNameOf(booking))),
-          StatusChip(status: booking['status'] as String?),
-        ],
-      ),
-      content: SizedBox(
-        width: 520,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              InfoRow(tr('fieldClient'), clientNameOf(booking)),
-              InfoRow(tr('fieldPhone'), clientPhoneOf(booking) ?? tr('notSet')),
-              InfoRow(tr('filterSource'), sourceLabel(bookingSourceOf(booking))),
-              InfoRow(tr('fieldDate'), formatDate(bookingDateOf(booking))),
-              if (booking['event_type'] != null)
-                InfoRow(tr('fieldEventType'), '${booking['event_type']}'),
-              InfoRow(tr('fieldGuests'), tr('paxCount', {'n': guestsOf(booking)})),
-              if (guestRows.isNotEmpty) InfoRow(tr('fieldBreakdown'), guestRows),
-              InfoRow(tr('bookingRef'), '#${'${booking['id']}'.split('-').first.toUpperCase()}'),
-              if (booking['client_id'] == null && '${booking['claim_code'] ?? ''}'.length == 8)
-                InfoRow(
-                  tr('rcClaimCode'),
-                  '${'${booking['claim_code']}'.substring(0, 4)}-${'${booking['claim_code']}'.substring(4)}',
-                ),
-              const Divider(height: 24),
-              InfoRow(tr('fieldTotal'), peso(totalOf(booking))),
-              InfoRow(tr('fieldPaid'), peso(paidOf(booking))),
-              InfoRow(tr('fieldBalance'), peso(remainingOf(booking))),
-              const SizedBox(height: 12),
-              Text(tr('paymentsHeading'), style: theme.textTheme.titleSmall),
-              const SizedBox(height: 4),
-              if (payments.isEmpty) Text(tr('noPaymentYet')),
-              for (final p in payments)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      Icon(Icons.receipt_long, size: 20, color: methodColor('${p['method']}')),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '${kindLabel(p['kind'] as String?)} · ${methodLabel(p['method'] as String?)}'
-                          '${p['created_at'] != null ? ' · ${formatDate(parseDate(p['created_at']))}' : ''}'
-                          '${p['reference_no'] != null ? ' · Ref ${p['reference_no']}' : ''}'
-                          ' · ${paymentStatusLabel(p['status'] as String?)}',
-                        ),
-                      ),
-                      Text(
-                        peso(asDouble(p['amount'])),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ],
+    final info = [
+      _infoRow(Icons.person_outline, tr('fieldClient'), clientNameOf(booking)),
+      _infoRow(Icons.phone_outlined, tr('fieldPhone'), clientPhoneOf(booking) ?? ''),
+      _infoRow(Icons.event_outlined, tr('fieldDate'), formatDate(bookingDateOf(booking))),
+      if (booking['event_type'] != null) _infoRow(Icons.celebration_outlined, tr('fieldEventType'), '${booking['event_type']}'),
+      _infoRow(Icons.groups_outlined, tr('fieldGuests'), tr('paxCount', {'n': guestsOf(booking)}), sub: guestRows),
+      _infoRow(Icons.storefront_outlined, tr('filterSource'), sourceLabel(bookingSourceOf(booking))),
+      if (booking['client_id'] == null && claim.length == 8)
+        _infoRow(Icons.key_outlined, tr('rcClaimCode'), '${claim.substring(0, 4)}-${claim.substring(4)}'),
+    ];
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 580, maxHeight: 760),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(22, 20, 12, 18),
+              color: AppColors.ink,
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(color: AppColors.inkRaised, borderRadius: BorderRadius.circular(14)),
+                    child: const Icon(Icons.event_note_rounded, color: Colors.white),
                   ),
-                ),
-              const Divider(height: 24),
-              Text(tr('adminNotes'), style: theme.textTheme.titleSmall),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _notes,
-                minLines: 2,
-                maxLines: 4,
-                decoration: InputDecoration(hintText: tr('adminNotesHint')),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(packageNameOf(booking),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17)),
+                        Text('${tr('bookingRef')} $ref',
+                            style: const TextStyle(color: AppColors.inkText, fontSize: 12.5)),
+                        const SizedBox(height: 6),
+                        StatusChip(status: booking['status'] as String?),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: tr('close'),
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.tonal(
-                  onPressed: _saving ? null : _saveNotes,
-                  child: Text(tr('saveNotes')),
-                ),
-              ),
-              const Divider(height: 24),
-              Text(tr('activityHistory'), style: theme.textTheme.titleSmall),
-              const SizedBox(height: 8),
-              FutureBuilder<List<Map<String, dynamic>>>(
-                future: _logs,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  final logs = snapshot.data ?? [];
-                  if (logs.isEmpty) {
-                    return Text(
-                      tr('noActivity'),
-                      style: theme.textTheme.bodySmall,
-                    );
-                  }
-                  return Column(
-                    children: [
-                      for (final log in logs)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        _stat(tr('fieldTotal').toUpperCase(), peso(totalOf(booking))),
+                        const SizedBox(width: 10),
+                        _stat(tr('fieldPaid').toUpperCase(), peso(paid), color: paid > 0 ? AppColors.success : null),
+                        const SizedBox(width: 10),
+                        _stat(tr('fieldBalance').toUpperCase(), peso(balance), color: balance > 0 ? AppColors.warning : null),
+                      ],
+                    ),
+                    const SizedBox(height: 22),
+                    _section(tr('bkDetailsInfo')),
+                    _boxed(info),
+                    const SizedBox(height: 22),
+                    _section('${tr('paymentsHeading')} (${payments.length})'),
+                    if (payments.isEmpty)
+                      Text(tr('noPaymentYet'), style: const TextStyle(color: AppColors.muted))
+                    else
+                      for (final p in payments)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                          ),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                log['action'] == 'payment'
-                                    ? Icons.payments_outlined
-                                    : log['action'] == 'note'
-                                        ? Icons.sticky_note_2_outlined
-                                        : Icons.swap_horiz,
-                                size: 18,
-                                color: theme.colorScheme.primary,
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: methodColor('${p['method']}').withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(Icons.receipt_long, size: 18, color: methodColor('${p['method']}')),
                               ),
-                              const SizedBox(width: 10),
+                              const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(_logText(log)),
-                                    if (staffNameOf(log['actor_id']) != null)
-                                      Text(
-                                        tr('logBy', {'name': staffNameOf(log['actor_id'])!}),
-                                        style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-                                      ),
-                                    if (log['action'] != 'payment' &&
-                                        '${log['note'] ?? ''}'.trim().isNotEmpty)
-                                      Text(
-                                        '“${log['note']}”',
-                                        style: theme.textTheme.bodySmall?.copyWith(
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      ),
+                                    Text('${kindLabel(p['kind'] as String?)} · ${methodLabel(p['method'] as String?)}',
+                                        style: const TextStyle(fontWeight: FontWeight.w700)),
+                                    Text(
+                                      [
+                                        if (p['created_at'] != null) formatDate(parseDate(p['created_at'])),
+                                        if (p['reference_no'] != null) 'Ref ${p['reference_no']}',
+                                        paymentStatusLabel(p['status'] as String?),
+                                      ].join(' · '),
+                                      style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+                                    ),
                                   ],
                                 ),
                               ),
-                              Text(
-                                formatDateTime(parseDate(log['created_at'])),
-                                style: theme.textTheme.bodySmall,
-                              ),
+                              const SizedBox(width: 8),
+                              Text(peso(asDouble(p['amount'])), style: const TextStyle(fontWeight: FontWeight.w800)),
                             ],
                           ),
                         ),
-                    ],
-                  );
-                },
+                    const SizedBox(height: 22),
+                    _section(tr('adminNotes')),
+                    TextField(
+                      controller: _notes,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: InputDecoration(hintText: tr('adminNotesHint')),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.tonal(
+                        onPressed: _saving ? null : _saveNotes,
+                        child: Text(tr('saveNotes')),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _section(tr('activityHistory')),
+                    FutureBuilder<List<Map<String, dynamic>>>(
+                      future: _logs,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        }
+                        final logs = snapshot.data ?? [];
+                        if (logs.isEmpty) {
+                          return Text(tr('noActivity'), style: const TextStyle(color: AppColors.muted));
+                        }
+                        return _boxed([
+                          for (final log in logs)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    log['action'] == 'payment'
+                                        ? Icons.payments_outlined
+                                        : log['action'] == 'note'
+                                            ? Icons.sticky_note_2_outlined
+                                            : Icons.swap_horiz,
+                                    size: 18,
+                                    color: AppColors.primary,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(_logText(log), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                                        if (staffNameOf(log['actor_id']) != null)
+                                          Text(tr('logBy', {'name': staffNameOf(log['actor_id'])!}),
+                                              style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                                        if (log['action'] != 'payment' && '${log['note'] ?? ''}'.trim().isNotEmpty)
+                                          Text('“${log['note']}”',
+                                              style: const TextStyle(
+                                                  color: AppColors.muted, fontSize: 12.5, fontStyle: FontStyle.italic)),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(formatDateTime(parseDate(log['created_at'])),
+                                      style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                        ]);
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(tr('close')),
-        ),
-      ],
     );
   }
 }

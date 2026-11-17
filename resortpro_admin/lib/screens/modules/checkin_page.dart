@@ -647,14 +647,14 @@ class _CheckinPageState extends State<CheckinPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.accent : const Color(0xFFE6EBF0),
+                  color: selected ? Colors.white24 : const Color(0xFFE6EBF0),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text('$n',
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
-                      color: selected ? AppColors.ink : AppColors.muted,
+                      color: selected ? Colors.white : AppColors.muted,
                     )),
               ),
             ],
