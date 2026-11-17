@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../l10n/app_strings.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/admin_widgets.dart';
 import '../../widgets/list_controls.dart';
 
@@ -210,6 +211,8 @@ class _GalleryPageState extends State<GalleryPage> {
   // UI
   // -------------------------------------------------------------------------
 
+  static const _caps = TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted);
+
   @override
   Widget build(BuildContext context) {
     if (_loading && _images.isEmpty) {
@@ -219,7 +222,8 @@ class _GalleryPageState extends State<GalleryPage> {
       return SetupNeededNotice(onRetry: _load);
     }
 
-    final theme = Theme.of(context);
+    final landing = _landingImages.length;
+    final hidden = _images.length - landing;
     final q = _query.trim().toLowerCase();
     final shown = _images.where((i) {
       final onLanding = i['show_on_landing'] == true;
@@ -231,212 +235,401 @@ class _GalleryPageState extends State<GalleryPage> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 1000;
+        final wide = constraints.maxWidth >= 1050;
 
-        final preview = SectionCard(
-          title: tr('landingPreview'),
-          subtitle: tr('landingPreviewSub', {'n': _landingImages.length}),
-          child: _LandingPreview(images: _landingImages),
+        final preview = AppCard(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.smartphone_rounded, size: 18, color: AppColors.muted),
+                    const SizedBox(width: 6),
+                    Text(tr('landingPreview').toUpperCase(), style: _caps),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(tr('landingPreviewSub', {'n': landing}),
+                    style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                const SizedBox(height: 16),
+                _LandingPreview(images: _landingImages),
+              ],
+            ),
+          ),
         );
 
         final manager = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    tr('allPhotos', {'n': _images.length}),
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            GlassPanel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                    SearchBox(
-                      controller: _searchController,
-                      hint: tr('searchCaptionHint'),
-                      onChanged: (v) => setState(() => _query = v),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
+            AppCard(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
                       children: [
-                        for (final f in _GalleryFilter.values)
-                          ChoiceChip(
-                            label: Text(switch (f) {
-                              _GalleryFilter.all => tr('filterAll'),
-                              _GalleryFilter.onLanding => tr('onLanding'),
-                              _GalleryFilter.hidden => tr('hiddenPhotos'),
-                            }),
-                            selected: _filter == f,
-                            onSelected: (_) => setState(() => _filter = f),
+                        Expanded(
+                          child: SearchBox(
+                            controller: _searchController,
+                            hint: tr('searchCaptionHint'),
+                            onChanged: (v) => setState(() => _query = v),
                           ),
+                        ),
+                        const SizedBox(width: 12),
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                          ),
+                          onPressed: _uploading ? null : _upload,
+                          icon: _uploading
+                              ? const SizedBox(
+                                  width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.add_photo_alternate_outlined, size: 19),
+                          label: Text(_uploading ? tr('uploading') : tr('uploadPhotos')),
+                        ),
                       ],
                     ),
-                ],
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: CountTabs<_GalleryFilter>(
+                        value: _filter,
+                        onChanged: (v) => setState(() => _filter = v),
+                        items: [
+                          (value: _GalleryFilter.all, label: tr('filterAll'), count: _images.length),
+                          (value: _GalleryFilter.onLanding, label: tr('onLanding'), count: landing),
+                          (value: _GalleryFilter.hidden, label: tr('hiddenPhotos'), count: hidden),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 16),
-            if (_images.isEmpty)
-              EmptyState(icon: Icons.photo_library_outlined, message: tr('noPhotos'))
-            else if (shown.isEmpty)
-              EmptyState(icon: Icons.search_off, message: tr('noPhotosMatch'))
+            const SizedBox(height: 18),
+            if (_images.isEmpty || shown.isEmpty)
+              AppCard(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: _images.isEmpty
+                      ? EmptyState(icon: Icons.photo_library_outlined, message: tr('noPhotos'))
+                      : EmptyState(icon: Icons.search_off, message: tr('noPhotosMatch')),
+                ),
+              )
             else
               LayoutBuilder(
                 builder: (context, c) {
                   final columns = c.maxWidth >= 900
-                      ? 4
-                      : c.maxWidth >= 600
-                          ? 3
-                          : 2;
+                      ? 3
+                      : c.maxWidth >= 560
+                          ? 2
+                          : 1;
                   return CardGrid(
                     columns: columns,
-                    children: [
-                      for (final image in shown) _photoCard(theme, image),
-                    ],
+                    children: [for (final image in shown) _photoCard(image)],
                   );
                 },
               ),
           ],
         );
 
-        return ModuleBody(
-          fab: AppFab(
-            icon: _uploading ? Icons.hourglass_top : Icons.add_photo_alternate_outlined,
-            label: _uploading ? tr('uploading') : tr('uploadPhotos'),
-            onPressed: _uploading ? null : _upload,
-          ),
-          child: RefreshIndicator(
+        return RefreshIndicator(
           onRefresh: _load,
           child: ListView(
-            padding: pageInsets(context, fab: true),
+            padding: pageInsets(context),
             children: [
+              Text(tr('glSubtitle'), style: const TextStyle(color: AppColors.muted)),
+              const SizedBox(height: 14),
+              _overviewCard(landing, hidden, wide: constraints.maxWidth >= 700),
+              const SizedBox(height: 18),
               if (wide)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(width: 420, child: preview),
-                    const SizedBox(width: 16),
+                    SizedBox(width: 400, child: preview),
+                    const SizedBox(width: 18),
                     Expanded(child: manager),
                   ],
                 )
               else ...[
-                preview,
-                const SizedBox(height: 16),
                 manager,
+                const SizedBox(height: 18),
+                preview,
               ],
             ],
-          ),
           ),
         );
       },
     );
   }
 
-  Widget _photoCard(ThemeData theme, Map<String, dynamic> image) {
+  Widget _overviewCard(int landing, int hidden, {required bool wide}) {
+    final captioned = _images.where((i) => '${i['caption'] ?? ''}'.trim().isNotEmpty).length;
+    final tiles = [
+      _tile(tr('glKTotal'), tr('glKTotalSub'), '${_images.length}', Colors.white, Icons.photo_library_outlined,
+          () => setState(() => _filter = _GalleryFilter.all)),
+      _tile(tr('glKLanding'), tr('glKLandingSub'), '$landing', const Color(0xFF4ADE80), Icons.visibility_outlined,
+          () => setState(() => _filter = _GalleryFilter.onLanding)),
+      _tile(tr('glKHidden'), tr('glKHiddenSub'), '$hidden', const Color(0xFF94A3B8), Icons.visibility_off_outlined,
+          () => setState(() => _filter = _GalleryFilter.hidden)),
+      _tile(tr('glKCaption'), tr('glKCaptionSub', {'n': _images.length - captioned}), '$captioned',
+          const Color(0xFF60A5FA), Icons.short_text_rounded, null),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.ink,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 24, offset: Offset(0, 12))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.collections_rounded, color: AppColors.inkText, size: 20),
+              const SizedBox(width: 8),
+              Text(tr('glOverview'),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 0.8, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (wide)
+            Row(
+              children: [
+                for (var i = 0; i < tiles.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  Expanded(child: tiles[i]),
+                ],
+              ],
+            )
+          else
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.45,
+              children: tiles,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tile(String label, String sub, String value, Color valueColor, IconData icon, VoidCallback? onTap) {
+    return Material(
+      color: AppColors.inkRaised,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppColors.inkLine),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(label,
+                        style: const TextStyle(
+                            color: AppColors.inkText, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
+                  ),
+                  Icon(icon, size: 16, color: const Color(0xFF7F93A6)),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(sub,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFF7F93A6), fontSize: 10.5, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Text(value, style: TextStyle(color: valueColor, fontSize: 24, fontWeight: FontWeight.w800)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _iconBtn(IconData icon, String tooltip, VoidCallback? onTap, {Color color = AppColors.text}) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: 34,
+            height: 34,
+            child: Icon(icon, size: 18, color: onTap == null ? AppColors.border : color),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _photoCard(Map<String, dynamic> image) {
     final index = _images.indexOf(image);
     final onLanding = image['show_on_landing'] == true;
     final caption = '${image['caption'] ?? ''}'.trim();
 
-    return AppCard(
-      margin: EdgeInsets.zero,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],
+      ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          AspectRatio(
-            aspectRatio: 4 / 3,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                GestureDetector(
-                  onTap: () => showDialog(
-                    context: context,
-                    builder: (_) => Dialog(
-                      child: InteractiveViewer(child: Image.network('${image['image_url']}')),
-                    ),
-                  ),
-                  child: Opacity(
-                    opacity: onLanding ? 1 : 0.45,
-                    child: Image.network(
-                      '${image['image_url']}',
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stack) => Container(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        child: const Icon(Icons.broken_image_outlined),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AspectRatio(
+                aspectRatio: 4 / 3,
+                child: Material(
+                  color: AppColors.subtle,
+                  child: InkWell(
+                    onTap: () => showDialog(
+                      context: context,
+                      builder: (_) => Dialog(
+                        clipBehavior: Clip.antiAlias,
+                        child: InteractiveViewer(child: Image.network('${image['image_url']}')),
                       ),
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Opacity(
+                          opacity: onLanding ? 1 : 0.4,
+                          child: Image.network(
+                            '${image['image_url']}',
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stack) =>
+                                const Center(child: Icon(Icons.broken_image_outlined, color: AppColors.muted)),
+                          ),
+                        ),
+                        if (!onLanding)
+                          const Center(
+                            child: CircleAvatar(
+                              radius: 22,
+                              backgroundColor: Color(0x99000000),
+                              child: Icon(Icons.visibility_off_rounded, color: Colors.white, size: 20),
+                            ),
+                          ),
+                        Positioned(
+                          left: 10,
+                          top: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xB3000000),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text('#${index + 1}',
+                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+                          ),
+                        ),
+                        Positioned(
+                          right: 10,
+                          top: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: onLanding ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(onLanding ? tr('glShown') : tr('hiddenPhotos'),
+                                style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w800)),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                Positioned(
-                  left: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '#${index + 1}',
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
+              ),
+              InkWell(
+                onTap: () => _editCaption(image),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          caption.isEmpty ? tr('glAddCaption') : caption,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: caption.isEmpty ? FontWeight.w600 : FontWeight.w600,
+                            color: caption.isEmpty ? AppColors.primary : AppColors.text,
+                            fontStyle: caption.isEmpty ? FontStyle.italic : FontStyle.normal,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.edit_outlined, size: 15, color: AppColors.muted),
+                    ],
                   ),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 6, 12, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(tr('showOnLanding'),
+                          style: const TextStyle(fontSize: 12.5, color: AppColors.muted, fontWeight: FontWeight.w600)),
+                    ),
+                    Transform.scale(
+                      scale: 0.85,
+                      child: Switch(
+                        value: onLanding,
+                        onChanged: (v) => _update(image, {'show_on_landing': v}),
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 14),
+                Row(
+                  children: [
+                    _iconBtn(Icons.arrow_back_rounded, tr('moveEarlier'), index > 0 ? () => _move(image, -1) : null),
+                    const SizedBox(width: 6),
+                    _iconBtn(Icons.arrow_forward_rounded, tr('moveLater'),
+                        index < _images.length - 1 ? () => _move(image, 1) : null),
+                    const Spacer(),
+                    _iconBtn(Icons.delete_outline_rounded, tr('delete'), () => _delete(image), color: AppColors.danger),
+                  ],
                 ),
               ],
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 4, 0),
-            child: Text(
-              caption.isEmpty ? tr('noCaption') : caption,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: caption.isEmpty
-                  ? theme.textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic)
-                  : theme.textTheme.bodyMedium,
-            ),
-          ),
-          SwitchListTile(
-            dense: true,
-            contentPadding: const EdgeInsets.only(left: 12, right: 4),
-            title: Text(tr('showOnLanding'), style: theme.textTheme.bodySmall),
-            value: onLanding,
-            onChanged: (v) => _update(image, {'show_on_landing': v}),
-          ),
-          Wrap(
-            alignment: WrapAlignment.spaceEvenly,
-            children: [
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                tooltip: tr('moveEarlier'),
-                onPressed: index > 0 ? () => _move(image, -1) : null,
-                icon: const Icon(Icons.arrow_back),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                tooltip: tr('moveLater'),
-                onPressed: index < _images.length - 1 ? () => _move(image, 1) : null,
-                icon: const Icon(Icons.arrow_forward),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                tooltip: tr('editCaption'),
-                onPressed: () => _editCaption(image),
-                icon: const Icon(Icons.edit_outlined),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                tooltip: tr('delete'),
-                onPressed: () => _delete(image),
-                icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
-              ),
-            ],
           ),
         ],
       ),
@@ -444,7 +637,7 @@ class _GalleryPageState extends State<GalleryPage> {
   }
 }
 
-/// Kamukha ng carousel sa landing page ng client app.
+/// Kamukha ng carousel sa home ng client app (may silip ng susunod na litrato).
 class _LandingPreview extends StatefulWidget {
   const _LandingPreview({required this.images});
   final List<Map<String, dynamic>> images;
@@ -454,7 +647,7 @@ class _LandingPreview extends StatefulWidget {
 }
 
 class _LandingPreviewState extends State<_LandingPreview> {
-  final _controller = PageController();
+  final _controller = PageController(viewportFraction: 0.84);
   Timer? _timer;
   int _page = 0;
 
@@ -466,7 +659,7 @@ class _LandingPreviewState extends State<_LandingPreview> {
       if (n < 2 || !_controller.hasClients) return;
       _controller.animateToPage(
         (_page + 1) % n,
-        duration: const Duration(milliseconds: 400),
+        duration: const Duration(milliseconds: 450),
         curve: Curves.easeInOut,
       );
     });
@@ -481,116 +674,216 @@ class _LandingPreviewState extends State<_LandingPreview> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final images = widget.images;
+    final page = images.isEmpty ? 0 : _page.clamp(0, images.length - 1);
+
+    Widget bar(double w, {double h = 10, Color color = const Color(0xFFE6EBF0)}) => Container(
+          width: w,
+          height: h,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+        );
 
     return Center(
       child: Container(
-        width: 360,
+        width: 330,
+        padding: const EdgeInsets.all(9),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: theme.colorScheme.outlineVariant, width: 6),
-          color: theme.colorScheme.surface,
+          color: AppColors.ink,
+          borderRadius: BorderRadius.circular(40),
+          boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 24, offset: Offset(0, 12))],
         ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Pekeng app bar, para kamukha ng client app
-            Container(
-              height: 44,
-              color: theme.colorScheme.primary,
-              alignment: Alignment.center,
-              child: Text(
-                'ResortPro',
-                style: TextStyle(color: theme.colorScheme.onPrimary, fontWeight: FontWeight.bold),
-              ),
-            ),
-            SizedBox(
-              height: 230,
-              child: images.isEmpty
-                  ? Container(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      alignment: Alignment.center,
-                      padding: const EdgeInsets.all(24),
-                      child: Text(tr('previewEmpty'), textAlign: TextAlign.center),
-                    )
-                  : Stack(
-                      children: [
-                        PageView.builder(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: Container(
+            color: AppColors.background,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Status bar at notch
+                SizedBox(
+                  height: 30,
+                  child: Stack(
+                    children: [
+                      const Positioned(
+                        left: 22,
+                        top: 9,
+                        child: Text('9:41', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                      ),
+                      Align(
+                        alignment: Alignment.topCenter,
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 7),
+                          width: 86,
+                          height: 18,
+                          decoration: BoxDecoration(color: AppColors.ink, borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                      const Positioned(
+                        right: 20,
+                        top: 8,
+                        child: Row(
+                          children: [
+                            Icon(Icons.signal_cellular_alt_rounded, size: 13),
+                            SizedBox(width: 3),
+                            Icon(Icons.battery_full_rounded, size: 13),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Header na kamukha ng home ng app
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 8, 18, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tr('glPreviewHi'),
+                                style: const TextStyle(fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w600)),
+                            const Text("Aryana's Guests House",
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.notifications_none_rounded, size: 20),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: 200,
+                  child: images.isEmpty
+                      ? Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 18),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE6EBF0),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.all(24),
+                          child: Text(tr('previewEmpty'),
+                              textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted)),
+                        )
+                      : PageView.builder(
                           controller: _controller,
                           itemCount: images.length,
                           onPageChanged: (i) => setState(() => _page = i),
-                          itemBuilder: (context, i) => Image.network(
-                            '${images[i]['image_url']}',
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            errorBuilder: (context, error, stack) =>
-                                const Center(child: Icon(Icons.broken_image_outlined)),
-                          ),
+                          itemBuilder: (context, i) {
+                            final caption = '${images[i]['caption'] ?? ''}'.trim();
+                            return AnimatedPadding(
+                              duration: const Duration(milliseconds: 300),
+                              padding: EdgeInsets.symmetric(horizontal: 5, vertical: i == page ? 0 : 10),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(20),
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    Image.network(
+                                      '${images[i]['image_url']}',
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stack) =>
+                                          const Center(child: Icon(Icons.broken_image_outlined)),
+                                    ),
+                                    if (caption.isNotEmpty)
+                                      Positioned(
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        child: Container(
+                                          padding: const EdgeInsets.fromLTRB(12, 26, 12, 12),
+                                          decoration: const BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                              colors: [Colors.transparent, Colors.black54],
+                                            ),
+                                          ),
+                                          child: Text(caption,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                        if ('${images[_page.clamp(0, images.length - 1)]['caption'] ?? ''}'.isNotEmpty)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            child: Container(
-                              padding: const EdgeInsets.fromLTRB(12, 24, 12, 26),
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [Colors.transparent, Colors.black54],
-                                ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var i = 0; i < images.length; i++)
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        width: i == page ? 18 : 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: i == page ? AppColors.primary : const Color(0xFFCBD5E1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                  ],
+                ),
+                // Placeholder ng Quick actions at packages
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          for (final ic in const [Icons.event_available_rounded, Icons.chat_bubble_outline_rounded, Icons.map_outlined])
+                            Container(
+                              width: 80,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: AppColors.border),
                               ),
-                              child: Text(
-                                '${images[_page.clamp(0, images.length - 1)]['caption']}',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                              ),
+                              child: Icon(ic, color: AppColors.primary, size: 20),
                             ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      bar(110, h: 11, color: const Color(0xFFD5DDE5)),
+                      const SizedBox(height: 10),
+                      for (var i = 0; i < 2; i++)
+                        Container(
+                          height: 48,
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
                           ),
-                        Positioned(
-                          bottom: 8,
-                          left: 0,
-                          right: 0,
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              for (var i = 0; i < images.length; i++)
-                                AnimatedContainer(
-                                  duration: const Duration(milliseconds: 250),
-                                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                                  width: i == _page ? 18 : 7,
-                                  height: 7,
-                                  decoration: BoxDecoration(
-                                    color: i == _page ? Colors.white : Colors.white54,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                ),
+                              bar(30, h: 30),
+                              const SizedBox(width: 10),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [bar(90), const SizedBox(height: 6), bar(56, h: 8)],
+                              ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            // Placeholder ng package cards sa ilalim ng carousel
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  for (var i = 0; i < 2; i++)
-                    Container(
-                      height: 44,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

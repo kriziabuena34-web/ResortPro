@@ -225,7 +225,7 @@ class _PackagesPageState extends State<PackagesPage> {
           children: [
             Text(tr('pkSubtitle'), style: const TextStyle(color: AppColors.muted)),
             const SizedBox(height: 14),
-            _overviewCard(packages, counts, upcomingOf(active), wide: constraints.maxWidth >= 700),
+            _overviewCard(packages, counts, active.fold<double>(0, (s, b) => s + totalOf(b)), wide: constraints.maxWidth >= 700),
             const SizedBox(height: 18),
             AppCard(
               margin: EdgeInsets.zero,
@@ -289,7 +289,7 @@ class _PackagesPageState extends State<PackagesPage> {
   Widget _overviewCard(
     List<Map<String, dynamic>> packages,
     Map<String, int> counts,
-    int upcoming, {
+    double bookedValue, {
     required bool wide,
   }) {
     final prices = packages.map((p) => asDouble(p['price'])).toList()..sort();
@@ -303,7 +303,7 @@ class _PackagesPageState extends State<PackagesPage> {
       _tile(tr('pkKPackages'), tr('pkKPackagesSub'), '${packages.length}', Colors.white, Icons.inventory_2_outlined),
       _tile(tr('pkKTop'), topCount == 0 ? tr('pkKTopNone') : tr('pkKTopSub', {'n': topCount}),
           topCount == 0 ? '—' : '${top!['name']}', const Color(0xFFFACC15), Icons.local_fire_department_outlined),
-      _tile(tr('pkKUpcoming'), tr('pkKUpcomingSub'), '$upcoming', const Color(0xFF4ADE80), Icons.event_available_outlined),
+      _tile(tr('pkKValue'), tr('pkKValueSub'), pesoCompact(bookedValue), const Color(0xFF4ADE80), Icons.payments_outlined),
       _tile(tr('pkKRange'), tr('pkKRangeSub'),
           prices.isEmpty ? '—' : '${pesoCompact(prices.first)} – ${pesoCompact(prices.last)}', const Color(0xFF60A5FA),
           Icons.sell_outlined),
