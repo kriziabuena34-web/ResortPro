@@ -341,11 +341,7 @@ class TermsPage extends StatelessWidget {
                 icon: Icons.pool_outlined,
                 child: TermsList(),
               ),
-              _TermsTab(
-                title: 'ResortPro · Data Privacy',
-                icon: Icons.privacy_tip_outlined,
-                child: DataPrivacyContent(),
-              ),
+              _PrivacyTab(),
             ],
           ),
         ),
@@ -365,6 +361,18 @@ class _TermsTab extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [_Section(title: title, icon: icon, child: child)],
+    );
+  }
+}
+
+class _PrivacyTab extends StatelessWidget {
+  const _PrivacyTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: const [DataPrivacyContent()],
     );
   }
 }

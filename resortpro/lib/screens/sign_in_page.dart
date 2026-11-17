@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_page.dart';
-import 'info_pages.dart';
+import 'data_privacy_page.dart';
 import '../theme/app_theme.dart';
 
 class SignInPage extends StatefulWidget {
@@ -285,7 +285,7 @@ class _SignInPageState extends State<SignInPage> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const TermsPage(initialTab: 1),
+                              builder: (context) => const DataPrivacyPage(),
                             ),
                           );
                         },
@@ -301,7 +301,7 @@ class _SignInPageState extends State<SignInPage> {
                                 text: 'By continuing, you agree to our ',
                               ),
                               TextSpan(
-                                text: 'Terms & Data Privacy',
+                                text: 'Data Privacy Policy',
                                 style: TextStyle(
                                   decoration: TextDecoration.underline,
                                   fontWeight: FontWeight.w600,
