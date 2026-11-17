@@ -299,7 +299,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 800;
-        final extended = constraints.maxWidth >= 1100;
 
         final actions = <Widget>[
           _bellButton(),
@@ -315,12 +314,30 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           return Scaffold(
             key: _scaffoldKey,
             endDrawer: _endDrawer(),
-            body: Row(
+            body: Stack(
               children: [
-                _Sidebar(
-                  extended: extended,
+                Row(
+                  children: [
+                    const SizedBox(width: _HoverSidebar.collapsedWidth),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _TopBar(title: titleCase(tr(_modules[_index].label)), actions: actions),
+                          Expanded(child: AmbientBackground(child: _buildBody())),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: _HoverSidebar(
+                    builder: (expanded) => _Sidebar(
+                  extended: expanded,
                   selected: _index,
-                  labels: [for (final m in _modules) tr(m.label)],
+                  labels: [for (final m in _modules) titleCase(tr(m.label))],
                   icons: [for (final m in _modules) m.icon],
                   selectedIcons: [for (final m in _modules) m.selectedIcon],
                   counts: [for (var i = 0; i < _modules.length; i++) _countFor(i)],
@@ -330,13 +347,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   onEditName: _editMyName,
                   onSelect: _openModule,
                   onLogout: _logout,
-                ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      _TopBar(title: tr(_modules[_index].label), actions: actions),
-                      Expanded(child: AmbientBackground(child: _buildBody())),
-                    ],
+                    ),
                   ),
                 ),
               ],
@@ -347,7 +358,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         return Scaffold(
           key: _scaffoldKey,
           appBar: AppBar(
-            title: Text(tr(_modules[_index].label)),
+            title: Text(titleCase(tr(_modules[_index].label))),
             actions: [...actions, const SizedBox(width: 4)],
           ),
           endDrawer: _endDrawer(),
@@ -357,7 +368,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             child: _Sidebar(
               extended: true,
               selected: _index,
-              labels: [for (final m in _modules) tr(m.label)],
+              labels: [for (final m in _modules) titleCase(tr(m.label))],
               icons: [for (final m in _modules) m.icon],
               selectedIcons: [for (final m in _modules) m.selectedIcon],
               counts: [for (var i = 0; i < _modules.length; i++) _countFor(i)],
@@ -556,7 +567,6 @@ class _Sidebar extends StatelessWidget {
     final initial = shown.isEmpty ? 'A' : shown[0].toUpperCase();
 
     return Container(
-      width: extended ? 264 : 80,
       decoration: const BoxDecoration(color: AppColors.ink),
       clipBehavior: Clip.hardEdge,
       child: SafeArea(
@@ -659,10 +669,10 @@ class _Sidebar extends StatelessWidget {
                       children: [
                         CircleAvatar(
                           radius: 18,
-                          backgroundColor: AppColors.accent,
+                          backgroundColor: const Color(0xFF2B4C6B),
                           child: Text(
                             initial,
-                            style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -678,7 +688,7 @@ class _Sidebar extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: staffName == null ? AppColors.accent : Colors.white,
+                                    color: staffName == null ? const Color(0xFF7DD3FC) : Colors.white,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 13,
                                   ),
@@ -709,6 +719,46 @@ class _Sidebar extends StatelessWidget {
                     ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Sidebar na makitid (icons lang) at lumalapad kapag itinapat ang cursor.
+/// Lumalabas ito sa ibabaw ng page, kaya hindi gumagalaw ang laman.
+class _HoverSidebar extends StatefulWidget {
+  const _HoverSidebar({required this.builder});
+
+  static const collapsedWidth = 80.0;
+  static const expandedWidth = 264.0;
+
+  final Widget Function(bool expanded) builder;
+
+  @override
+  State<_HoverSidebar> createState() => _HoverSidebarState();
+}
+
+class _HoverSidebarState extends State<_HoverSidebar> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        width: _hover ? _HoverSidebar.expandedWidth : _HoverSidebar.collapsedWidth,
+        decoration: BoxDecoration(
+          boxShadow: _hover
+              ? const [BoxShadow(color: Color(0x40000000), blurRadius: 28, offset: Offset(8, 0))]
+              : const [],
+        ),
+        child: LayoutBuilder(
+          // Ipakita lang ang mga label kapag sapat na ang lapad (iwas overflow habang nag-a-animate).
+          builder: (context, c) => widget.builder(c.maxWidth >= 220),
         ),
       ),
     );
@@ -785,13 +835,13 @@ class _NavItemState extends State<_NavItem> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: selected ? Colors.white.withValues(alpha: 0.22) : AppColors.accent,
+                          color: selected ? Colors.white.withValues(alpha: 0.22) : const Color(0xFFEF4444),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           '${widget.count}',
                           style: TextStyle(
-                            color: selected ? Colors.white : AppColors.ink,
+                            color: Colors.white,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),

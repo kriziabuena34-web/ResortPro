@@ -111,7 +111,8 @@ class _OverviewPageState extends State<OverviewPage> {
     };
     final totalGuests = guestTotals.values.fold<int>(0, (s, v) => s + v);
 
-    final arrivalsToday = active.where((b) => bookingDateOf(b) == today).length;
+    final todays = active.where((b) => bookingDateOf(b) == today).toList();
+    final todaysGuests = todays.fold<int>(0, (s, b) => s + guestsOf(b));
     final staffName = staffNameOf(Supabase.instance.client.auth.currentUser?.id) ?? 'Admin';
 
     return LayoutBuilder(
@@ -171,26 +172,38 @@ class _OverviewPageState extends State<OverviewPage> {
                       ),
                       if (width >= 700)
                         Material(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(14),
-                          child: InkWell(
+                          color: const Color(0xFF1E3A55),
+                          shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
+                            side: const BorderSide(color: Color(0xFF34597A)),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
                             onTap: () => widget.onOpen(11),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              padding: const EdgeInsets.fromLTRB(14, 10, 18, 10),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.login_rounded, color: Colors.white, size: 20),
-                                  const SizedBox(width: 10),
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF2B4C6B),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(Icons.groups_rounded, color: Color(0xFFBFDBFE), size: 20),
+                                  ),
+                                  const SizedBox(width: 12),
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('$arrivalsToday',
-                                          style: const TextStyle(
-                                              color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800, height: 1.1)),
-                                      Text(tr('ovArrivalsToday'),
-                                          style: const TextStyle(color: Color(0xFFD7F5EF), fontSize: 11.5)),
+                                      Text(titleCase(tr('ovTodaysGuests')),
+                                          style: const TextStyle(color: Color(0xFFBFDBFE), fontSize: 11.5, fontWeight: FontWeight.w700)),
+                                      Text(
+                                        tr('ovTodaysGuestsValue', {'n': todaysGuests, 'b': todays.length}),
+                                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -241,7 +254,7 @@ class _OverviewPageState extends State<OverviewPage> {
                       children: [
                         const Icon(Icons.notification_important_outlined, size: 20, color: Color(0xFF92400E)),
                         const SizedBox(width: 8),
-                        Text(_tc(tr('needsAttention')),
+                        Text(titleCase(tr('needsAttention')),
                             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
                         const SizedBox(width: 8),
                         Container(
@@ -333,8 +346,8 @@ class _OverviewPageState extends State<OverviewPage> {
               child: GroupedBarChart(
                 labels: monthShort,
                 series: [
-                  ChartSeries(_tc(tr('seriesBooked')), AppColors.primary, booked),
-                  ChartSeries(_tc(tr('seriesCollected')), const Color(0xFF4ADE80), collectedByMonth),
+                  ChartSeries(titleCase(tr('seriesBooked')), AppColors.primary, booked),
+                  ChartSeries(titleCase(tr('seriesCollected')), const Color(0xFF4ADE80), collectedByMonth),
                 ],
                 axisFormat: pesoCompact,
                 valueFormat: peso,
@@ -440,25 +453,6 @@ class _OverviewPageState extends State<OverviewPage> {
     );
   }
 
-  static const _minor = {'a', 'an', 'the', 'and', 'or', 'of', 'by', 'per', 'to', 'in', 'on', 'for', 'vs', 'at',
-      'ng', 'sa', 'ang', 'mga', 'og', 'ug'};
-
-  /// Title Case (hindi ginagalaw ang salitang puro capital at maliliit na salita sa gitna).
-  static String _tc(String text) {
-    var first = true;
-    return text.split(' ').map((w) {
-      if (w.isEmpty) return w;
-      final isFirst = first;
-      first = false;
-      if (w == w.toUpperCase()) return w;
-      final bare = w.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
-      if (!isFirst && _minor.contains(bare)) return w;
-      final i = w.indexOf(RegExp(r'[A-Za-z]'));
-      if (i < 0) return w;
-      return w.substring(0, i) + w[i].toUpperCase() + w.substring(i + 1);
-    }).join(' ');
-  }
-
   Widget _tile(String label, String sub, String value, Color valueColor, IconData icon, VoidCallback onTap) {
     return Material(
       color: AppColors.inkRaised,
@@ -488,7 +482,7 @@ class _OverviewPageState extends State<OverviewPage> {
                 ],
               ),
               const SizedBox(height: 2),
-              Text(sub,
+              Text(titleCase(sub),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: Color(0xFF7F93A6), fontSize: 10.5, fontWeight: FontWeight.w600)),
@@ -537,7 +531,7 @@ class _OverviewPageState extends State<OverviewPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_tc(title), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                      Text(titleCase(title), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
                       if (subtitle != null) Text(subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
                     ],
                   ),

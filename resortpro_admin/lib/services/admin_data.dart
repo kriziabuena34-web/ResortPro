@@ -630,3 +630,25 @@ Color verificationColor(String? status) {
       return const Color(0xFF7A7F87);
   }
 }
+
+const _titleMinor = {'a', 'an', 'the', 'and', 'or', 'of', 'by', 'per', 'to', 'in', 'on', 'for', 'vs', 'at',
+    'ng', 'sa', 'ang', 'mga', 'og', 'ug'};
+
+/// Title Case: malaking unang letra ng bawat salita. Hindi ginagalaw ang salitang
+/// puro capital na (hal. KPI) at ang maliliit na salita sa gitna (of, by, and…).
+String titleCase(String text) {
+  var first = true;
+  return text.split(' ').map((w) {
+    if (w.isEmpty) return w;
+    final isFirst = first;
+    first = false;
+    if (w == w.toUpperCase()) return w;
+    final bare = w.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+    if (!isFirst && _titleMinor.contains(bare)) return w;
+    final i = w.indexOf(RegExp(r'[A-Za-z]'));
+    if (i < 0) return w;
+    // Pati ang salitang may gitling: check-in -> Check-In
+    final head = w.substring(0, i) + w[i].toUpperCase() + w.substring(i + 1);
+    return head.replaceAllMapped(RegExp(r'([-/])([a-z])'), (m) => '${m[1]}${m[2]!.toUpperCase()}');
+  }).join(' ');
+}
