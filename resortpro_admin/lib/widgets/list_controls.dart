@@ -127,11 +127,11 @@ class DateRangeFilter extends StatelessWidget {
       DateUtils.isSameDay(a.start, b.start) && DateUtils.isSameDay(a.end, b.end);
 
   /// Calendar na nasa gitna at hindi full screen.
-  static Future<DateTimeRange?> pickCustom(BuildContext context, DateTimeRange? initial) {
+  static Future<DateTimeRange?> pickCustom(BuildContext context, DateTimeRange? initial, {DateTime? firstDate}) {
     final now = DateTime.now();
     return showDateRangePicker(
       context: context,
-      firstDate: DateTime(now.year - 3),
+      firstDate: firstDate ?? DateTime(now.year - 3),
       lastDate: DateTime(now.year + 3, 12, 31),
       initialDateRange: initial,
       currentDate: now,

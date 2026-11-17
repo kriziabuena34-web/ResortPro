@@ -3,7 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../l10n/app_strings.dart';
 import '../../services/admin_data.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/admin_widgets.dart';
+import '../../widgets/list_controls.dart';
 
 /// Availability control:
 ///  • Blocked dates (maintenance, private event, fully booked)
@@ -71,12 +73,8 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                             ? formatDate(range!.start)
                             : '${formatDate(range!.start)} – ${formatDate(range!.end)}'),
                     onPressed: () async {
-                      final now = DateTime.now();
-                      final picked = await showDateRangePicker(
-                        context: dialogContext,
-                        firstDate: DateTime(now.year, now.month, now.day),
-                        lastDate: DateTime(now.year + 3, 12, 31),
-                      );
+                      final picked = await DateRangeFilter.pickCustom(dialogContext, range,
+                          firstDate: DateUtils.dateOnly(DateTime.now()));
                       if (picked != null) setDialog(() => range = picked);
                     },
                   ),
@@ -308,14 +306,9 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                             ? tr('avAnyDate')
                             : '${formatDate(start)} – ${formatDate(end ?? start)}'),
                         onPressed: () async {
-                          final now = DateTime.now();
-                          final picked = await showDateRangePicker(
-                            context: dialogContext,
-                            firstDate: DateTime(now.year - 1),
-                            lastDate: DateTime(now.year + 3, 12, 31),
-                            initialDateRange: start == null
-                                ? null
-                                : DateTimeRange(start: start!, end: end ?? start!),
+                          final picked = await DateRangeFilter.pickCustom(
+                            dialogContext,
+                            start == null ? null : DateTimeRange(start: start!, end: end ?? start!),
                           );
                           if (picked != null) {
                             setDialog(() {
@@ -442,245 +435,642 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
     }
   }
 
-  String _ruleSummary(Map<String, dynamic> r) {
-    final v = asDouble(r['value']);
-    final adj = switch (r['adjust_type']) {
-      'percent' => '${v >= 0 ? '+' : ''}${v.toStringAsFixed(0)}%',
-      'fixed_amount' => '${v >= 0 ? '+' : '−'}${peso(v.abs())}',
-      _ => '= ${peso(v)}',
-    };
-    final start = parseDate(r['start_date']);
-    final end = parseDate(r['end_date']);
-    final dates = start == null ? tr('avAnyDate') : '${formatDate(start)} – ${formatDate(end ?? start)}';
-    final days = (r['days_of_week'] as List?)?.map(asInt).toList() ?? const <int>[];
-    final dayText = days.isEmpty ? tr('avEveryDay') : days.map((d) => tr(_weekdayKeys[d - 1])).join(', ');
-    return '$adj · ${_packageName(r['package_id'])}\n$dates · $dayText';
-  }
-
   // -------------------------------------------------------------------------
   // UI
   // -------------------------------------------------------------------------
 
+  static const _caps = TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted);
+
+  List<Map<String, dynamic>> get _upcomingBlocks {
+    final today = DateUtils.dateOnly(DateTime.now());
+    return widget.data.blockedDates.where((b) {
+      final d = parseDate(b['block_date']);
+      return d != null && !DateUtils.dateOnly(d).isBefore(today);
+    }).toList()
+      ..sort((a, b) => '${a['block_date']}'.compareTo('${b['block_date']}'));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final fab = switch (_section) {
-      _Section.blocked => AppFab(icon: Icons.block, label: tr('avBlockBtn'), onPressed: _addBlock),
-      _Section.pricing => AppFab(icon: Icons.add, label: tr('avNewRule'), onPressed: () => _editRule()),
-      _Section.preview => null,
-    };
-
-    return ModuleBody(
-      fab: fab,
-      child: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(pageGutter(context), pageGutter(context) - 4, pageGutter(context), 0),
-            child: PillTabs<_Section>(
-              value: _section,
-              onChanged: (v) => setState(() => _section = v),
-              items: [
-                (value: _Section.blocked, icon: Icons.event_busy, label: tr('avBlockedTab')),
-                (value: _Section.pricing, icon: Icons.sell_outlined, label: tr('avPricingTab')),
-                (value: _Section.preview, icon: Icons.preview_outlined, label: tr('avPreviewTab')),
-              ],
+    final upcoming = _upcomingBlocks;
+    final rules = widget.data.pricingRules;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final body = switch (_section) {
+          _Section.blocked => _blockedSection(),
+          _Section.pricing => _pricingSection(constraints.maxWidth),
+          _Section.preview => _previewSection(constraints.maxWidth),
+        };
+        return ListView(
+          padding: pageInsets(context),
+          children: [
+            Text(tr('avSubtitle'), style: const TextStyle(color: AppColors.muted)),
+            const SizedBox(height: 14),
+            _overviewCard(upcoming, rules, wide: constraints.maxWidth >= 700),
+            const SizedBox(height: 18),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: CountTabs<_Section>(
+                value: _section,
+                onChanged: (v) => setState(() => _section = v),
+                items: [
+                  (value: _Section.blocked, label: tr('avBlockedTab'), count: upcoming.length),
+                  (value: _Section.pricing, label: tr('avPricingTab'), count: rules.length),
+                  (value: _Section.preview, label: tr('avPreviewTab'), count: 30),
+                ],
+              ),
             ),
+            const SizedBox(height: 14),
+            ...body,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _overviewCard(List<Map<String, dynamic>> upcoming, List<Map<String, dynamic>> rules, {required bool wide}) {
+    final next = upcoming.isEmpty ? null : parseDate(upcoming.first['block_date']);
+    final activeRules = rules.where((r) => r['is_active'] != false).length;
+    final today = DateUtils.dateOnly(DateTime.now());
+    final pkgs = widget.data.packages;
+    var changed = 0;
+    for (var i = 0; i < 30; i++) {
+      final d = DateTime(today.year, today.month, today.day + i);
+      if (pkgs.any((p) => priceForLocal(p, d, rules) != asDouble(p['price']))) changed++;
+    }
+
+    final tiles = [
+      _tile(tr('avKBlocked'), tr('avKBlockedSub'), '${upcoming.length}', const Color(0xFFF87171), Icons.event_busy_outlined,
+          () => setState(() => _section = _Section.blocked)),
+      _tile(tr('avKNext'), next == null ? tr('avKNextNone') : tr(_weekdayKeys[next.weekday - 1]),
+          next == null ? '—' : '${monthShort[next.month - 1]} ${next.day}', Colors.white, Icons.block_outlined,
+          () => setState(() => _section = _Section.blocked)),
+      _tile(tr('avKRules'), tr('avKRulesSub', {'n': rules.length}), '$activeRules', const Color(0xFF60A5FA),
+          Icons.sell_outlined, () => setState(() => _section = _Section.pricing)),
+      _tile(tr('avKChanged'), tr('avKChangedSub'), '$changed', const Color(0xFFFACC15), Icons.trending_up_rounded,
+          () => setState(() => _section = _Section.preview)),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.ink,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 24, offset: Offset(0, 12))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.event_available_rounded, color: AppColors.inkText, size: 20),
+              const SizedBox(width: 8),
+              Text(tr('avOverview'),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 0.8, fontSize: 13)),
+            ],
           ),
-          Expanded(
-            child: switch (_section) {
-              _Section.blocked => _buildBlocked(),
-              _Section.pricing => _buildPricing(),
-              _Section.preview => _buildPreview(),
-            },
-          ),
+          const SizedBox(height: 14),
+          if (wide)
+            Row(
+              children: [
+                for (var i = 0; i < tiles.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  Expanded(child: tiles[i]),
+                ],
+              ],
+            )
+          else
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.45,
+              children: tiles,
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildBlocked() {
-    final theme = Theme.of(context);
+  Widget _tile(String label, String sub, String value, Color valueColor, IconData icon, VoidCallback onTap) {
+    return Material(
+      color: AppColors.inkRaised,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppColors.inkLine),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(label,
+                        style: const TextStyle(
+                            color: AppColors.inkText, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
+                  ),
+                  Icon(icon, size: 16, color: const Color(0xFF7F93A6)),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(sub,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFF7F93A6), fontSize: 10.5, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Text(value, style: TextStyle(color: valueColor, fontSize: 24, fontWeight: FontWeight.w800)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Card sa itaas ng bawat section: paliwanag + mga control + pangunahing button.
+  Widget _toolbar({required String hint, List<Widget> controls = const [], Widget? action}) => AppCard(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 1),
+                    child: Icon(Icons.info_outline_rounded, size: 18, color: AppColors.primary),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(hint, style: const TextStyle(fontSize: 13, height: 1.4))),
+                ],
+              ),
+              if (controls.isNotEmpty || action != null) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(child: Wrap(spacing: 8, runSpacing: 8, children: controls)),
+                    if (action != null) ...[const SizedBox(width: 12), action],
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+
+  Widget _emptyCard(IconData icon, String message) => AppCard(
+        margin: EdgeInsets.zero,
+        child: Padding(padding: const EdgeInsets.all(24), child: EmptyState(icon: icon, message: message)),
+      );
+
+  Widget _squareBtn(IconData icon, String tooltip, VoidCallback onTap, {Color color = AppColors.text}) => Tooltip(
+        message: tooltip,
+        child: Material(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: const BorderSide(color: AppColors.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: SizedBox(width: 36, height: 36, child: Icon(icon, size: 18, color: color)),
+          ),
+        ),
+      );
+
+  // -------------------------------------------------------------------------
+  // Blocked dates
+  // -------------------------------------------------------------------------
+
+  List<Widget> _blockedSection() {
     final today = DateUtils.dateOnly(DateTime.now());
     final blocks = widget.data.blockedDates.where((b) {
       final d = parseDate(b['block_date']);
       return d != null && (_showPast || !DateUtils.dateOnly(d).isBefore(today));
-    }).toList();
+    }).toList()
+      ..sort((a, b) => '${a['block_date']}'.compareTo('${b['block_date']}'));
 
-    return ListView(
-      padding: pageInsets(context, fab: true),
-      children: [
-        GlassPanel(
-          child: Row(
+    return [
+      _toolbar(
+        hint: tr('avBlockedHint'),
+        controls: [
+          FilterPill(
+            icon: Icons.history_rounded,
+            label: tr('avShowPast'),
+            active: _showPast,
+            toggle: true,
+            onTap: () => setState(() => _showPast = !_showPast),
+          ),
+        ],
+        action: FilledButton.icon(
+          onPressed: _addBlock,
+          icon: const Icon(Icons.event_busy_outlined, size: 18),
+          label: Text(tr('avBlockBtn')),
+        ),
+      ),
+      const SizedBox(height: 18),
+      if (blocks.isEmpty)
+        _emptyCard(Icons.event_available, tr('avNoBlocks'))
+      else
+        AppCard(
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
             children: [
-              Expanded(child: Text(tr('avBlockedHint'), style: theme.textTheme.bodyMedium)),
-              const SizedBox(width: 12),
-              FilterChip(
-                label: Text(tr('avShowPast')),
-                selected: _showPast,
-                onSelected: (v) => setState(() => _showPast = v),
-              ),
+              for (var i = 0; i < blocks.length; i++) ...[
+                if (i > 0) const Divider(height: 1),
+                _blockRow(blocks[i], today),
+              ],
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        if (blocks.isEmpty)
-          EmptyState(icon: Icons.event_available, message: tr('avNoBlocks'))
-        else
-          AppCard(
-            margin: EdgeInsets.zero,
-            child: Column(
-              children: [
-                for (var i = 0; i < blocks.length; i++) ...[
-                  if (i > 0) const Divider(height: 1),
-                  ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: theme.colorScheme.errorContainer,
-                      child: Icon(Icons.block, color: theme.colorScheme.error),
-                    ),
-                    title: Text(formatDate(parseDate(blocks[i]['block_date']))),
-                    subtitle: Text(
-                      '${_packageName(blocks[i]['package_id'])}'
-                      '${'${blocks[i]['reason'] ?? ''}'.isEmpty ? '' : ' · ${blocks[i]['reason']}'}',
-                    ),
-                    trailing: TextButton.icon(
-                      onPressed: () => _removeBlock(blocks[i]),
-                      icon: const Icon(Icons.lock_open, size: 18),
-                      label: Text(tr('avUnblock')),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-      ],
-    );
+    ];
   }
 
-  Widget _buildPricing() {
-    final theme = Theme.of(context);
-    final rules = widget.data.pricingRules;
-
-    return ListView(
-      padding: pageInsets(context, fab: true),
-      children: [
-        GlassPanel(child: Text(tr('avPricingHint'), style: theme.textTheme.bodyMedium)),
-        const SizedBox(height: 16),
-        if (rules.isEmpty)
-          EmptyState(icon: Icons.sell_outlined, message: tr('avNoRules'))
-        else
-          for (final r in rules)
-            AppCard(
-              margin: const EdgeInsets.only(bottom: 16),
-              child: ListTile(
-                contentPadding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-                leading: CircleAvatar(
-                  backgroundColor: theme.colorScheme.primaryContainer,
-                  child: Text('${r['priority'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                ),
-                title: Text('${r['name']}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(_ruleSummary(r)),
-                isThreeLine: true,
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Switch(value: r['is_active'] != false, onChanged: (v) => _toggleRule(r, v)),
-                    IconButton(tooltip: tr('avEditRule'), onPressed: () => _editRule(r), icon: const Icon(Icons.edit_outlined)),
-                    IconButton(
-                      tooltip: tr('delete'),
-                      onPressed: () => _deleteRule(r),
-                      icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
-                    ),
-                  ],
-                ),
+  Widget _blockRow(Map<String, dynamic> b, DateTime today) {
+    final d = parseDate(b['block_date'])!;
+    final past = DateUtils.dateOnly(d).isBefore(today);
+    final reason = '${b['reason'] ?? ''}'.trim();
+    final all = b['package_id'] == null;
+    final soon = !past && DateUtils.dateOnly(d).difference(today).inDays <= 7;
+    return Opacity(
+      opacity: past ? 0.55 : 1,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 12, 16, 12),
+        child: Row(
+          children: [
+            Container(
+              width: 54,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFECACA)),
+              ),
+              child: Column(
+                children: [
+                  Text(monthShort[d.month - 1].toUpperCase(),
+                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.danger)),
+                  Text('${d.day}', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, height: 1.1)),
+                ],
               ),
             ),
-      ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text('${tr(_weekdayKeys[d.weekday - 1])}, ${formatDate(d)}',
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      if (soon) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: const Color(0xFFFACC15), borderRadius: BorderRadius.circular(6)),
+                          child: Text(tr('avSoon'),
+                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      _chip(all ? Icons.select_all_rounded : Icons.inventory_2_outlined, _packageName(b['package_id']),
+                          all ? AppColors.danger : AppColors.primary),
+                      if (reason.isNotEmpty) _chip(Icons.notes_rounded, reason, AppColors.muted),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              onPressed: () => _removeBlock(b),
+              icon: const Icon(Icons.lock_open_rounded, size: 17),
+              label: Text(tr('avUnblock')),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildPreview() {
-    final theme = Theme.of(context);
+  Widget _chip(IconData icon, String text, Color color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 4),
+            Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+          ],
+        ),
+      );
+
+  // -------------------------------------------------------------------------
+  // Pricing rules
+  // -------------------------------------------------------------------------
+
+  List<Widget> _pricingSection(double width) {
+    final rules = [...widget.data.pricingRules]
+      ..sort((a, b) => asInt(b['priority']).compareTo(asInt(a['priority'])));
+    return [
+      _toolbar(
+        hint: tr('avPricingHint'),
+        action: FilledButton.icon(
+          onPressed: () => _editRule(),
+          icon: const Icon(Icons.add_rounded, size: 18),
+          label: Text(tr('avNewRule')),
+        ),
+      ),
+      const SizedBox(height: 18),
+      if (rules.isEmpty)
+        _emptyCard(Icons.sell_outlined, tr('avNoRules'))
+      else
+        CardGrid(
+          columns: width >= 1000 ? 2 : 1,
+          children: [for (final r in rules) _ruleCard(r)],
+        ),
+    ];
+  }
+
+  Widget _ruleCard(Map<String, dynamic> r) {
+    final active = r['is_active'] != false;
+    final v = asDouble(r['value']);
+    final type = '${r['adjust_type']}';
+    final adj = switch (type) {
+      'percent' => '${v >= 0 ? '+' : '−'}${v.abs().toStringAsFixed(0)}%',
+      'fixed_amount' => '${v >= 0 ? '+' : '−'}${peso(v.abs())}',
+      _ => peso(v),
+    };
+    final up = type == 'set_price' ? null : v >= 0;
+    final color = up == null ? AppColors.info : (up ? AppColors.danger : AppColors.success);
+    final start = parseDate(r['start_date']);
+    final end = parseDate(r['end_date']);
+    final dates = start == null ? tr('avAnyDate') : '${formatDate(start)} – ${formatDate(end ?? start)}';
+    final days = (r['days_of_week'] as List?)?.map(asInt).toList() ?? const <int>[];
+
+    Widget row(IconData icon, String label, String value) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(
+            children: [
+              Icon(icon, size: 17, color: AppColors.muted),
+              const SizedBox(width: 9),
+              SizedBox(width: 92, child: Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 13))),
+              Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+            ],
+          ),
+        );
+
+    return Opacity(
+      opacity: active ? 1 : 0.6,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.border),
+          boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 12, 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(adj, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 16)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${r['name']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                            Text(
+                              '${switch (type) {
+                                'percent' => tr('avTypePercent'),
+                                'fixed_amount' => tr('avTypeFixed'),
+                                _ => tr('avTypeSet'),
+                              }} · ${tr('avPriority')} ${r['priority'] ?? 0}',
+                              style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(value: active, onChanged: (x) => _toggleRule(r, x)),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Column(
+                      children: [
+                        row(Icons.inventory_2_outlined, tr('avAppliesTo'), _packageName(r['package_id'])),
+                        const Divider(height: 1),
+                        row(Icons.date_range_outlined, tr('avDateRange'), dates),
+                        const Divider(height: 1),
+                        row(Icons.view_week_outlined, tr('avDays'),
+                            days.isEmpty ? tr('avEveryDay') : days.map((d) => tr(_weekdayKeys[d - 1])).join(', ')),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+              decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+              child: Row(
+                children: [
+                  Text(active ? tr('avRuleOn') : tr('avRuleOff'),
+                      style: TextStyle(
+                          fontSize: 12.5, fontWeight: FontWeight.w700, color: active ? AppColors.success : AppColors.muted)),
+                  const Spacer(),
+                  _squareBtn(Icons.edit_outlined, tr('avEditRule'), () => _editRule(r)),
+                  const SizedBox(width: 6),
+                  _squareBtn(Icons.delete_outline_rounded, tr('delete'), () => _deleteRule(r), color: AppColors.danger),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // 30-day preview
+  // -------------------------------------------------------------------------
+
+  static const _cBase = Color(0xFFF1F5F9);
+  static const _cHigher = Color(0xFFFEE2E2);
+  static const _cLower = Color(0xFFDCFCE7);
+  static const _cBlocked = Color(0xFF334155);
+  static const _cBooked = Color(0xFFDBEAFE);
+
+  List<Widget> _previewSection(double width) {
     final packages = widget.data.packages;
-    if (packages.isEmpty) return EmptyState(icon: Icons.inventory_2_outlined, message: tr('noPackages'));
+    if (packages.isEmpty) return [_emptyCard(Icons.inventory_2_outlined, tr('noPackages'))];
 
     final pkg = widget.data.packageById(_previewPackageId) ?? packages.first;
     final base = asDouble(pkg['price']);
     final today = DateUtils.dateOnly(DateTime.now());
     final days = [for (var i = 0; i < 30; i++) DateTime(today.year, today.month, today.day + i)];
+    // Blangkong cell bago ang unang araw para tumapat sa tamang araw ng linggo.
+    final lead = today.weekday - 1;
 
-    return ListView(
-      padding: pageInsets(context),
-      children: [
-        GlassPanel(child: Text(tr('avPreviewHint'), style: theme.textTheme.bodyMedium)),
-        const SizedBox(height: 16),
-        DropdownButtonFormField<String>(
-          initialValue: '${pkg['id']}',
-          isExpanded: true,
-          decoration: InputDecoration(labelText: tr('navPackages')),
-          items: [
-            for (final p in packages)
-              DropdownMenuItem(value: '${p['id']}', child: Text('${p['name']} · ${peso(asDouble(p['price']))}')),
-          ],
-          onChanged: (v) => setState(() => _previewPackageId = v),
+    return [
+      _toolbar(
+        hint: tr('avPreviewHint'),
+        controls: [
+          PopupMenuButton<String>(
+            tooltip: tr('navPackages'),
+            position: PopupMenuPosition.under,
+            onSelected: (v) => setState(() => _previewPackageId = v),
+            itemBuilder: (context) => [
+              for (final p in packages)
+                CheckedPopupMenuItem(
+                  value: '${p['id']}',
+                  checked: '${p['id']}' == '${pkg['id']}',
+                  child: Text('${p['name']} · ${peso(asDouble(p['price']))}'),
+                ),
+            ],
+            child: FilterPill(
+              icon: Icons.inventory_2_outlined,
+              label: '${pkg['name']} · ${peso(base)}',
+              active: true,
+              dropdown: true,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 18),
+      AppCard(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  for (final k in _weekdayKeys)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(tr(k).toUpperCase(), textAlign: TextAlign.center, style: _caps),
+                      ),
+                    ),
+                ],
+              ),
+              GridView.count(
+                crossAxisCount: 7,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 6,
+                crossAxisSpacing: 6,
+                childAspectRatio: width >= 900 ? 1.5 : 0.9,
+                children: [
+                  for (var i = 0; i < lead; i++) const SizedBox.shrink(),
+                  for (final d in days) _dayTile(pkg, d, base, today),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 16,
+                runSpacing: 8,
+                children: [
+                  _legend(_cBase, tr('avLegendBase')),
+                  _legend(_cHigher, tr('avLegendHigher')),
+                  _legend(_cLower, tr('avLegendLower')),
+                  _legend(_cBooked, tr('avLegendBooked')),
+                  _legend(_cBlocked, tr('avLegendBlocked')),
+                ],
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final d in days) _dayTile(theme, pkg, d, base),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 16,
-          runSpacing: 8,
-          children: [
-            _legend(theme.colorScheme.surfaceContainerHighest, tr('avLegendBase')),
-            _legend(const Color(0xFFFFE7C2), tr('avLegendHigher')),
-            _legend(const Color(0xFFD7F2E1), tr('avLegendLower')),
-            _legend(theme.colorScheme.errorContainer, tr('avLegendBlocked')),
-            _legend(const Color(0xFFDDE6FF), tr('avLegendBooked')),
-          ],
-        ),
-      ],
-    );
+      ),
+    ];
   }
 
-  Widget _dayTile(ThemeData theme, Map<String, dynamic> pkg, DateTime d, double base) {
+  Widget _dayTile(Map<String, dynamic> pkg, DateTime d, double base, DateTime today) {
     final blocked = widget.data.blocksOn(d, packageId: pkg['id']).isNotEmpty;
     final booked = widget.data.isTimeTaken(d, pkg['id']);
     final price = priceForLocal(pkg, d, widget.data.pricingRules);
-    final color = blocked
-        ? theme.colorScheme.errorContainer
+    final isToday = DateUtils.isSameDay(d, today);
+    final bg = blocked
+        ? _cBlocked
         : booked
-            ? const Color(0xFFDDE6FF)
+            ? _cBooked
             : price > base
-                ? const Color(0xFFFFE7C2)
+                ? _cHigher
                 : price < base
-                    ? const Color(0xFFD7F2E1)
-                    : theme.colorScheme.surfaceContainerHighest;
+                    ? _cLower
+                    : _cBase;
+    final fg = blocked ? Colors.white : AppColors.text;
+    final label = blocked
+        ? tr('avLegendBlocked')
+        : booked
+            ? tr('avLegendBooked')
+            : pesoCompact(price);
 
-    return Container(
-      width: 104,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${tr(_weekdayKeys[d.weekday - 1])} ${monthShort[d.month - 1]} ${d.day}',
-            style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            blocked
-                ? tr('avLegendBlocked')
-                : booked
-                    ? tr('avLegendBooked')
-                    : pesoCompact(price),
-            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-          ),
-        ],
+    return Tooltip(
+      message: '${formatDate(d)} · $label',
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isToday ? AppColors.primary : Colors.transparent, width: 2),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(d.day == 1 || isToday ? '${monthShort[d.month - 1]} ${d.day}' : '${d.day}',
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: blocked ? Colors.white70 : AppColors.muted)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(label, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: fg)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -688,9 +1078,17 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
   Widget _legend(Color color, String label) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 14, height: 14, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4))),
+          Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: AppColors.border),
+            ),
+          ),
           const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontSize: 12)),
+          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.muted, fontWeight: FontWeight.w600)),
         ],
       );
 }
