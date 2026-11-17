@@ -100,6 +100,138 @@ class DateRangeChip extends StatelessWidget {
   }
 }
 
+/// Filter ng petsa: mabilisang pagpili (Today, This month…) o sariling range
+/// sa isang maayos na calendar dialog.
+class DateRangeFilter extends StatelessWidget {
+  const DateRangeFilter({super.key, required this.range, required this.onChanged});
+
+  final DateTimeRange? range;
+  final ValueChanged<DateTimeRange?> onChanged;
+
+  static DateTimeRange _day(DateTime d) => DateTimeRange(start: DateUtils.dateOnly(d), end: DateUtils.dateOnly(d));
+
+  static Map<String, DateTimeRange> presets() {
+    final now = DateUtils.dateOnly(DateTime.now());
+    final weekStart = now.subtract(Duration(days: now.weekday - 1));
+    return {
+      'drToday': _day(now),
+      'drYesterday': _day(now.subtract(const Duration(days: 1))),
+      'drThisWeek': DateTimeRange(start: weekStart, end: weekStart.add(const Duration(days: 6))),
+      'drLast7': DateTimeRange(start: now.subtract(const Duration(days: 6)), end: now),
+      'drThisMonth': DateTimeRange(start: DateTime(now.year, now.month), end: DateTime(now.year, now.month + 1, 0)),
+      'drLastMonth': DateTimeRange(start: DateTime(now.year, now.month - 1), end: DateTime(now.year, now.month, 0)),
+    };
+  }
+
+  static bool _same(DateTimeRange a, DateTimeRange b) =>
+      DateUtils.isSameDay(a.start, b.start) && DateUtils.isSameDay(a.end, b.end);
+
+  /// Calendar na nasa gitna at hindi full screen.
+  static Future<DateTimeRange?> pickCustom(BuildContext context, DateTimeRange? initial) {
+    final now = DateTime.now();
+    return showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 3),
+      lastDate: DateTime(now.year + 3, 12, 31),
+      initialDateRange: initial,
+      currentDate: now,
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
+      helpText: tr('drPickTitle'),
+      saveText: tr('drApply'),
+      builder: (context, child) {
+        final theme = Theme.of(context);
+        return Theme(
+          data: theme.copyWith(
+            datePickerTheme: theme.datePickerTheme.copyWith(
+              backgroundColor: Colors.white,
+              headerBackgroundColor: AppColors.ink,
+              headerForegroundColor: Colors.white,
+              rangeSelectionBackgroundColor: AppColors.primary.withValues(alpha: 0.12),
+              rangePickerHeaderBackgroundColor: AppColors.ink,
+              rangePickerHeaderForegroundColor: Colors.white,
+              rangePickerBackgroundColor: Colors.white,
+              todayBorder: const BorderSide(color: AppColors.primary),
+              dayShape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            ),
+          ),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420, maxHeight: 640),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(22),
+                  child: Material(
+                    elevation: 12,
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = range;
+    final p = presets();
+    String? presetKey;
+    if (r != null) {
+      for (final e in p.entries) {
+        if (_same(e.value, r)) presetKey = e.key;
+      }
+    }
+    final label = r == null
+        ? tr('anyDate')
+        : presetKey != null
+            ? tr(presetKey)
+            : DateUtils.isSameDay(r.start, r.end)
+                ? formatDate(r.start)
+                : '${formatDate(r.start)} – ${formatDate(r.end)}';
+
+    return PopupMenuButton<String>(
+      tooltip: tr('fieldDate'),
+      position: PopupMenuPosition.under,
+      onSelected: (v) async {
+        if (v == '__any') return onChanged(null);
+        if (v == '__custom') {
+          final picked = await pickCustom(context, r);
+          if (picked != null) onChanged(picked);
+          return;
+        }
+        onChanged(p[v]);
+      },
+      itemBuilder: (context) => [
+        CheckedPopupMenuItem(value: '__any', checked: r == null, child: Text(tr('anyDate'))),
+        const PopupMenuDivider(),
+        for (final e in p.entries)
+          CheckedPopupMenuItem(value: e.key, checked: presetKey == e.key, child: Text(tr(e.key))),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: '__custom',
+          child: Row(
+            children: [
+              const Icon(Icons.edit_calendar_outlined, size: 18, color: AppColors.primary),
+              const SizedBox(width: 10),
+              Text(r != null && presetKey == null ? '${tr('drCustom')} ✓' : tr('drCustom')),
+            ],
+          ),
+        ),
+      ],
+      child: FilterPill(
+        icon: Icons.calendar_month_outlined,
+        label: label,
+        active: r != null,
+        dropdown: r == null,
+        onClear: () => onChanged(null),
+      ),
+    );
+  }
+}
+
 /// Dropdown para sa sort order.
 class SortMenu<T> extends StatelessWidget {
   const SortMenu({

@@ -586,12 +586,6 @@ class _BookingsPageState extends State<BookingsPage> {
       _sort != _Sort.dateNewest;
 
   Widget _filterBar(Map<_Sort, String> sortOptions) {
-    final r = _range;
-    final rangeLabel = r == null
-        ? tr('anyDate')
-        : DateUtils.isSameDay(r.start, r.end)
-            ? formatDate(r.start)
-            : '${formatDate(r.start)} – ${formatDate(r.end)}';
     String packageLabel = tr('allPackages');
     for (final p in widget.data.packages) {
       if ('${p['id']}' == _packageId) packageLabel = '${p['name']}';
@@ -630,23 +624,7 @@ class _BookingsPageState extends State<BookingsPage> {
           ),
         ),
         // Petsa
-        FilterPill(
-          icon: Icons.calendar_month_outlined,
-          label: rangeLabel,
-          active: r != null,
-          dropdown: r == null,
-          onTap: () async {
-            final now = DateTime.now();
-            final picked = await showDateRangePicker(
-              context: context,
-              firstDate: DateTime(now.year - 3),
-              lastDate: DateTime(now.year + 3, 12, 31),
-              initialDateRange: r,
-            );
-            if (picked != null) setState(() => _range = picked);
-          },
-          onClear: () => setState(() => _range = null),
-        ),
+        DateRangeFilter(range: _range, onChanged: (v) => setState(() => _range = v)),
         // Package
         PopupMenuButton<String>(
           tooltip: tr('filterPackage'),

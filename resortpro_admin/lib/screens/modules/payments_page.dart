@@ -889,18 +889,19 @@ class _PaymentsPageState extends State<PaymentsPage> {
   // Lahat ng bayad
   // -------------------------------------------------------------------------
 
-  static const _flex = (date: 3, client: 6, type: 3, method: 3, ref: 4, amount: 3, status: 3);
+  static const _flex = (date: 3, client: 6, type: 3, method: 3, ref: 5, amount: 3, status: 3);
   static const _rowPadding = EdgeInsets.fromLTRB(20, 12, 20, 12);
 
-  Widget _cell(int flex, Widget child, {bool end = false}) => Expanded(
+  Widget _cell(int flex, Widget child, {bool end = false, double gap = 20}) => Expanded(
         flex: flex,
         child: Padding(
-          padding: EdgeInsets.only(right: end ? 0 : 14),
+          padding: EdgeInsets.only(right: end ? 0 : gap),
           child: child,
         ),
       );
 
   bool get _anyFilter =>
+      _status != 'verified' ||
       _method != 'all' || _kind != 'all' || _range != null || _sort != _PaySort.newest || _query.trim().isNotEmpty;
 
   List<Widget> _allSection(List<_PaymentEntry> entries, double width) {
@@ -951,12 +952,6 @@ class _PaymentsPageState extends State<PaymentsPage> {
       _PaySort.amountHigh: tr('sortAmountHigh'),
       _PaySort.amountLow: tr('sortAmountLow'),
     };
-    final r = _range;
-    final rangeLabel = r == null
-        ? tr('anyDate')
-        : DateUtils.isSameDay(r.start, r.end)
-            ? formatDate(r.start)
-            : '${formatDate(r.start)} – ${formatDate(r.end)}';
     final table = width >= 900;
 
     Widget mini(String label, String value, Color color) => Expanded(
@@ -993,28 +988,10 @@ class _PaymentsPageState extends State<PaymentsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Wrap(
-                spacing: 16,
-                runSpacing: 12,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  SizedBox(
-                    width: width >= 900 ? 340 : double.infinity,
-                    child: SearchBox(
-                      controller: _searchController,
-                      hint: tr('searchPaymentsHint'),
-                      onChanged: (v) => setState(() => _query = v),
-                    ),
-                  ),
-                  CountTabs<String>(
-                    value: _status,
-                    onChanged: (v) => setState(() => _status = v),
-                    items: [
-                      for (final s in const ['verified', 'pending', 'rejected', 'all'])
-                        (value: s, label: s == 'all' ? tr('filterAll') : paymentStatusLabel(s), count: count(s)),
-                    ],
-                  ),
-                ],
+              SearchBox(
+                controller: _searchController,
+                hint: tr('searchPaymentsHint'),
+                onChanged: (v) => setState(() => _query = v),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -1026,7 +1003,31 @@ class _PaymentsPageState extends State<PaymentsPage> {
                     padding: EdgeInsets.only(right: 2),
                     child: Icon(Icons.tune_rounded, size: 18, color: AppColors.muted),
                   ),
+                  PopupMenuButton<String>(
+                    tooltip: tr('pyColStatus'),
+                    position: PopupMenuPosition.under,
+                    onSelected: (v) => setState(() => _status = v),
+                    itemBuilder: (context) => [
+                      for (final st in const ['verified', 'pending', 'rejected', 'all'])
+                        CheckedPopupMenuItem(
+                          value: st,
+                          checked: _status == st,
+                          child: Text('${st == 'all' ? tr('pyAllStatuses') : paymentStatusLabel(st)}  (${count(st)})'),
+                        ),
+                    ],
+                    child: FilterPill(
+                      icon: _status == 'rejected'
+                          ? Icons.block_rounded
+                          : _status == 'pending'
+                              ? Icons.hourglass_top_rounded
+                              : Icons.verified_outlined,
+                      label: _status == 'all' ? tr('pyAllStatuses') : tr('bkStatusChip', {'s': paymentStatusLabel(_status)}),
+                      active: _status != 'verified',
+                      dropdown: true,
+                    ),
+                  ),
                   PopupMenuButton<_PaySort>(
+                    position: PopupMenuPosition.under,
                     tooltip: tr('sortBy'),
                     initialValue: _sort,
                     onSelected: (v) => setState(() => _sort = v),
@@ -1041,25 +1042,10 @@ class _PaymentsPageState extends State<PaymentsPage> {
                       dropdown: true,
                     ),
                   ),
-                  FilterPill(
-                    icon: Icons.calendar_month_outlined,
-                    label: rangeLabel,
-                    active: r != null,
-                    dropdown: r == null,
-                    onTap: () async {
-                      final now = DateTime.now();
-                      final picked = await showDateRangePicker(
-                        context: context,
-                        firstDate: DateTime(now.year - 3),
-                        lastDate: DateTime(now.year + 3, 12, 31),
-                        initialDateRange: r,
-                      );
-                      if (picked != null) setState(() => _range = picked);
-                    },
-                    onClear: () => setState(() => _range = null),
-                  ),
+                  DateRangeFilter(range: _range, onChanged: (v) => setState(() => _range = v)),
                   PopupMenuButton<String>(
                     tooltip: tr('allTypes'),
+                    position: PopupMenuPosition.under,
                     onSelected: (v) => setState(() => _kind = v),
                     itemBuilder: (context) => [
                       for (final k in const ['all', 'downpayment', 'balance'])
@@ -1078,6 +1064,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
                   ),
                   PopupMenuButton<String>(
                     tooltip: tr('allMethods'),
+                    position: PopupMenuPosition.under,
                     onSelected: (v) => setState(() => _method = v),
                     itemBuilder: (context) => [
                       CheckedPopupMenuItem(value: 'all', checked: _method == 'all', child: Text(tr('allMethods'))),
@@ -1094,6 +1081,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
                   if (_anyFilter)
                     TextButton.icon(
                       onPressed: () => setState(() {
+                        _status = 'verified';
                         _method = 'all';
                         _kind = 'all';
                         _range = null;
@@ -1157,7 +1145,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
           h(tr('pyColType'), _flex.type),
           h(tr('pyColMethod'), _flex.method),
           h(tr('pyColRef'), _flex.ref),
-          h(tr('pyColAmount'), _flex.amount, align: TextAlign.right),
+          _cell(_flex.amount, Text(tr('pyColAmount'), textAlign: TextAlign.right, style: _caps), gap: 36),
           h(tr('pyColStatus'), _flex.status, end: true),
         ],
       ),
@@ -1232,6 +1220,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
                 color: e.status == 'rejected' ? AppColors.muted : AppColors.text,
               ),
             ),
+            gap: 36,
           ),
           _cell(_flex.status, Align(alignment: Alignment.centerLeft, child: _statusPill(e.status)), end: true),
         ],
