@@ -178,9 +178,10 @@ class _SignInPageState extends State<SignInPage> {
                           const Text(
                             'ResortPro',
                             style: TextStyle(
+                              fontFamily: 'Poppins',
                               color: Colors.white,
                               fontSize: 34,
-                              fontWeight: FontWeight.w800,
+                              fontWeight: FontWeight.w700,
                               letterSpacing: 0.5,
                               shadows: [Shadow(color: Color(0x88000000), blurRadius: 12)],
                             ),
