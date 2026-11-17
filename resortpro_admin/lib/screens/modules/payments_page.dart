@@ -169,157 +169,6 @@ class _PaymentsPageState extends State<PaymentsPage> {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // UI
-  // -------------------------------------------------------------------------
-
-  @override
-  Widget build(BuildContext context) {
-    final pendingCount = widget.data.pendingPayments.length;
-    final refundCount = widget.data.pendingRefunds.length;
-
-    return Column(
-      children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(pageGutter(context), pageGutter(context) - 4, pageGutter(context), 0),
-          child: PillTabs<String>(
-            value: _tab,
-            onChanged: (v) => setState(() => _tab = v),
-            items: [
-              (
-                value: 'pending',
-                icon: Icons.fact_check_outlined,
-                label: pendingCount > 0 ? '${tr('payPendingTab')}  ·  $pendingCount' : tr('payPendingTab'),
-              ),
-              (
-                value: 'refunds',
-                icon: Icons.currency_exchange,
-                label: refundCount > 0 ? '${tr('payRefundsTab')}  ·  $refundCount' : tr('payRefundsTab'),
-              ),
-              (value: 'all', icon: Icons.receipt_long_outlined, label: tr('payAllTab')),
-            ],
-          ),
-        ),
-        Expanded(
-          child: switch (_tab) {
-            'refunds' => _buildRefunds(),
-            'all' => _buildAll(),
-            _ => _buildPending(),
-          },
-        ),
-      ],
-    );
-  }
-
-  // -------------------------------------------------------------------------
-  // Refunds (policy #6–#8: kalahati ng reservation fee kapag 5+ araw bago)
-  // -------------------------------------------------------------------------
-
-  Widget _buildRefunds() {
-    final refunds = widget.data.refunds;
-    if (refunds.isEmpty) {
-      return EmptyState(icon: Icons.currency_exchange, message: tr('rfNone'));
-    }
-    final pending = refunds.where((r) => r['status'] == 'pending').toList();
-    final done = refunds.where((r) => r['status'] != 'pending').toList();
-    return RefreshIndicator(
-      onRefresh: widget.onChanged,
-      child: ListView(
-        padding: pageInsets(context),
-        children: [
-          Text(tr('rfHint'), style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 12),
-          for (final r in pending) _refundCard(r),
-          if (done.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Text(tr('rfHistory'), style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            for (final r in done) _refundCard(r),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _refundCard(Map<String, dynamic> r) {
-    final booking = widget.data.bookingById(r['booking_id']);
-    final status = '${r['status']}';
-    final busy = _busy.contains('refund-${r['id']}');
-    final method = '${r['payout_method'] ?? ''}';
-    final color = switch (status) {
-      'refunded' => AppColors.success,
-      'rejected' => AppColors.danger,
-      _ => AppColors.warning,
-    };
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: AppCard(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      booking == null ? tr('unknownClient') : clientNameOf(booking),
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(tr('rfStatus_$status'),
-                        style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
-                  ),
-                ],
-              ),
-              if (booking != null)
-                Text('${packageNameOf(booking)} · ${formatDate(bookingDateOf(booking))}',
-                    style: const TextStyle(color: AppColors.muted)),
-              const SizedBox(height: 10),
-              Text(peso(asDouble(r['amount'])),
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.primary)),
-              Text(tr('rfBreakdown', {
-                'days': asInt(r['days_before']),
-                'paid': peso(asDouble(r['paid'])),
-                'fee': peso(asDouble(r['reservation_fee'])),
-              }), style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
-              const Divider(height: 20),
-              InfoRow(tr('rfSendTo'), '${methodLabel(method)} · ${r['payout_number'] ?? ''}'),
-              InfoRow(tr('rfAccountName'), '${r['payout_name'] ?? ''}'),
-              if ('${r['reason'] ?? ''}'.isNotEmpty) InfoRow(tr('rfReason'), '${r['reason']}'),
-              if ('${r['refund_reference'] ?? ''}'.isNotEmpty) InfoRow(tr('rcReference'), '${r['refund_reference']}'),
-              if ('${r['admin_note'] ?? ''}'.isNotEmpty) InfoRow(tr('adminNotes'), '${r['admin_note']}'),
-              if (status == 'pending') ...[
-                const SizedBox(height: 20),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: busy ? null : () => _completeRefund(r),
-                      icon: const Icon(Icons.send, size: 18),
-                      label: Text(tr('rfApprove')),
-                    ),
-                    OutlinedButton(
-                      onPressed: busy ? null : () => _rejectRefund(r),
-                      child: Text(tr('rfRejectInvalid')),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _runRefund(Map<String, dynamic> r, {String? reference, bool reject = false, String? note}) async {
     final key = 'refund-${r['id']}';
     setState(() => _busy.add(key));
@@ -412,57 +261,54 @@ class _PaymentsPageState extends State<PaymentsPage> {
     await _runRefund(r, reject: true, note: note);
   }
 
-  Widget _buildPending() {
-    final focus = _focusId == null ? null : widget.data.bookingById(_focusId);
-    final pending = widget.data.pendingPayments
-        .where((e) => _focusId == null || '${e.booking['id']}' == _focusId)
-        .toList();
-    final focusBar = focus == null
-        ? null
-        : Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Wrap(
-              spacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Chip(
-                  avatar: const Icon(Icons.person_outline, size: 18),
-                  label: Text(tr('payFocusShowing', {'client': clientNameOf(focus)})),
-                ),
-                TextButton(onPressed: () => setState(() => _focusId = null), child: Text(tr('payFocusShowAll'))),
-              ],
-            ),
-          );
-    if (pending.isEmpty) {
-      if (focusBar != null) {
-        return ListView(
-          padding: pageInsets(context),
-          children: [focusBar, EmptyState(icon: Icons.task_alt, message: tr('payNoPending'))],
-        );
-      }
-      return EmptyState(icon: Icons.task_alt, message: tr('payNoPending'));
-    }
+  // -------------------------------------------------------------------------
+  // UI
+  // -------------------------------------------------------------------------
+
+  static const _caps = TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted);
+
+  List<_PaymentEntry> get _allEntries => [
+        for (final b in widget.data.bookings)
+          for (final p in paymentsOf(b)) _PaymentEntry(p, b),
+      ];
+
+  @override
+  Widget build(BuildContext context) {
+    final pendingCount = widget.data.pendingPayments.length;
+    final refundCount = widget.data.pendingRefunds.length;
+    final entries = _allEntries;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 1100 ? 2 : 1;
+        final wide = constraints.maxWidth >= 700;
+        final body = switch (_tab) {
+          'refunds' => _refundsSection(),
+          'all' => _allSection(entries, constraints.maxWidth),
+          _ => _pendingSection(constraints.maxWidth),
+        };
         return RefreshIndicator(
           onRefresh: widget.onChanged,
           child: ListView(
             padding: pageInsets(context),
             children: [
-              ?focusBar,
-              Text(
-                tr('payPendingHint'),
-                style: Theme.of(context).textTheme.bodyMedium,
+              Text(tr('pySubtitle'), style: const TextStyle(color: AppColors.muted)),
+              const SizedBox(height: 14),
+              _overviewCard(entries, wide: wide),
+              const SizedBox(height: 18),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: CountTabs<String>(
+                  value: _tab,
+                  onChanged: (v) => setState(() => _tab = v),
+                  items: [
+                    (value: 'pending', label: tr('payPendingTab'), count: pendingCount),
+                    (value: 'refunds', label: tr('payRefundsTab'), count: refundCount),
+                    (value: 'all', label: tr('payAllTab'), count: entries.length),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              CardGrid(
-                columns: columns,
-                children: [
-                  for (final item in pending) _pendingCard(item.payment, item.booking),
-                ],
-              ),
+              const SizedBox(height: 14),
+              ...body,
             ],
           ),
         );
@@ -470,140 +316,597 @@ class _PaymentsPageState extends State<PaymentsPage> {
     );
   }
 
-  Widget _pendingCard(Map<String, dynamic> payment, Map<String, dynamic> booking) {
-    final theme = Theme.of(context);
-    final busy = _busy.contains('${payment['id']}');
-    final method = '${payment['method'] ?? ''}';
-    final reference = '${payment['reference_no'] ?? ''}'.trim();
+  // -------------------------------------------------------------------------
+  // Buod
+  // -------------------------------------------------------------------------
 
-    return AppCard(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+  Widget _overviewCard(List<_PaymentEntry> entries, {required bool wide}) {
+    final now = DateTime.now();
+    final verified = entries.where((e) => e.status == 'verified');
+    double sumWhere(bool Function(DateTime d) test) => verified.fold<double>(0, (s, e) {
+          final d = e.date?.toLocal();
+          return d != null && test(d) ? s + e.amount : s;
+        });
+    final today = sumWhere((d) => DateUtils.isSameDay(d, now));
+    final month = sumWhere((d) => d.year == now.year && d.month == now.month);
+    final pending = widget.data.pendingPayments;
+    final pendingAmt = pending.fold<double>(0, (s, e) => s + asDouble(e.payment['amount']));
+    final refunds = widget.data.pendingRefunds;
+    final refundAmt = refunds.fold<double>(0, (s, r) => s + asDouble(r['amount']));
+
+    final tiles = [
+      _tile(tr('pyKPending'), tr('pyKPendingSub', {'n': pending.length}), peso(pendingAmt), const Color(0xFFFACC15),
+          Icons.fact_check_outlined, () => setState(() => _tab = 'pending')),
+      _tile(tr('pyKRefunds'), tr('pyKRefundsSub', {'n': refunds.length}), peso(refundAmt), const Color(0xFFF87171),
+          Icons.currency_exchange, () => setState(() => _tab = 'refunds')),
+      _tile(tr('pyKToday'), tr('pyKTodaySub'), peso(today), const Color(0xFF4ADE80), Icons.today_outlined,
+          () => setState(() => _tab = 'all')),
+      _tile(tr('pyKMonth'), tr('pyKMonthSub'), peso(month), Colors.white, Icons.calendar_month_outlined,
+          () => setState(() => _tab = 'all')),
+    ];
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.ink,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 24, offset: Offset(0, 12))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.payments_rounded, color: AppColors.inkText, size: 20),
+              const SizedBox(width: 8),
+              Text(tr('pyOverview'),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 0.8, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (wide)
             Row(
               children: [
-                Expanded(
-                  child: Text(
-                    peso(asDouble(payment['amount'])),
-                    style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                _statusPill('pending'),
+                for (var i = 0; i < tiles.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  Expanded(child: tiles[i]),
+                ],
               ],
+            )
+          else
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.45,
+              children: tiles,
             ),
-            const SizedBox(height: 4),
-            Text(
-              '${kindLabel(payment['kind'] as String?)} · ${methodLabel(method)}',
-              style: theme.textTheme.bodyMedium?.copyWith(color: methodColor(method)),
-            ),
-            const SizedBox(height: 12),
-            InfoRow(tr('fieldClient'), clientNameOf(booking)),
-            InfoRow(tr('navPackages'), packageNameOf(booking)),
-            InfoRow(tr('fieldDate'), formatDate(bookingDateOf(booking))),
-            InfoRow(tr('payReference'), reference.isEmpty ? tr('notSet') : reference),
-            InfoRow(tr('paySubmitted'), formatDateTime(parseDate(payment['created_at']))),
-            InfoRow(
-              tr('fieldBalance'),
-              '${peso(remainingOf(booking))} (${tr('payBeforeThis')})',
-            ),
-            const SizedBox(height: 12),
-            FutureBuilder<String?>(
-              future: _proofUrl(payment['proof_path'] as String?),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
-                }
-                final url = snapshot.data;
-                if (url == null) {
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(tr('payNoProof')),
-                  );
-                }
-                return GestureDetector(
-                  onTap: () => showDialog(
-                    context: context,
-                    builder: (_) => Dialog(child: InteractiveViewer(child: Image.network(url))),
+        ],
+      ),
+    );
+  }
+
+  Widget _tile(String label, String sub, String value, Color valueColor, IconData icon, VoidCallback onTap) {
+    return Material(
+      color: AppColors.inkRaised,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppColors.inkLine),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(label,
+                        style: const TextStyle(
+                            color: AppColors.inkText, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.network(
-                      url,
-                      height: 220,
-                      width: double.infinity,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stack) => Text(tr('idLoadFail')),
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 4),
-            Text(tr('tapToZoom'), style: theme.textTheme.bodySmall),
-            const SizedBox(height: 20),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                FilledButton.icon(
-                  onPressed: busy ? null : () => _verify(payment, booking),
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E9E5B)),
-                  icon: const Icon(Icons.check, size: 18),
-                  label: Text(tr('payVerifyBtn')),
-                ),
-                OutlinedButton.icon(
-                  onPressed: busy ? null : () => _reject(payment, booking),
-                  style: OutlinedButton.styleFrom(foregroundColor: theme.colorScheme.error),
-                  icon: const Icon(Icons.close, size: 18),
-                  label: Text(tr('reject')),
-                ),
-                if (busy)
-                  const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-              ],
-            ),
-          ],
+                  Icon(icon, size: 16, color: const Color(0xFF7F93A6)),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(sub,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFF7F93A6), fontSize: 10.5, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(value, style: TextStyle(color: valueColor, fontSize: 24, fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _statusPill(String status) {
-    final color = paymentStatusColor(status);
+  // -------------------------------------------------------------------------
+  // Mga pirasong ginagamit ng mga card
+  // -------------------------------------------------------------------------
+
+  Widget _hintBox(IconData icon, String text) => Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.20)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: AppColors.primary),
+            const SizedBox(width: 10),
+            Expanded(child: Text(text, style: const TextStyle(fontSize: 13, height: 1.4))),
+          ],
+        ),
+      );
+
+  Widget _infoRow(IconData icon, String label, String value, {Color? color}) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 17, color: AppColors.muted),
+            const SizedBox(width: 9),
+            SizedBox(width: 104, child: Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 13))),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(value.isEmpty ? tr('notSet') : value,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: value.isEmpty ? AppColors.muted : (color ?? AppColors.text),
+                  )),
+            ),
+          ],
+        ),
+      );
+
+  Widget _boxed(List<Widget> rows) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          children: [
+            for (var i = 0; i < rows.length; i++) ...[
+              if (i > 0) const Divider(height: 1),
+              rows[i],
+            ],
+          ],
+        ),
+      );
+
+  Widget _pill(String label, Color color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.30)),
+        ),
+        child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+      );
+
+  Widget _statusPill(String status) => _pill(paymentStatusLabel(status), paymentStatusColor(status));
+
+  IconData _methodIcon(String method) => method == 'cash' ? Icons.payments_outlined : Icons.phone_android_rounded;
+
+  Widget _methodBadge(String method, {double size = 44}) {
+    final color = methodColor(method);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(size * 0.3)),
+      child: Icon(_methodIcon(method), color: color, size: size * 0.48),
+    );
+  }
+
+  /// Kahon ng card na may header, katawan, at mga button sa ibaba.
+  Widget _cardShell({required Widget header, required Widget body, Widget? actions, bool highlight = false}) {
+    final line = highlight ? const Color(0xFFF5C451) : AppColors.border;
+    return Container(
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
+        color: highlight ? const Color(0xFFFFFBEB) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: line, width: highlight ? 1.5 : 1),
+        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],
       ),
-      child: Text(
-        paymentStatusLabel(status),
-        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(padding: const EdgeInsets.fromLTRB(18, 16, 16, 14), child: header),
+              Divider(height: 1, color: line),
+              Padding(padding: const EdgeInsets.all(16), child: body),
+            ],
+          ),
+          if (actions != null)
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+              decoration: BoxDecoration(border: Border(top: BorderSide(color: line))),
+              child: actions,
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildAll() {
-    final theme = Theme.of(context);
+  // -------------------------------------------------------------------------
+  // Hinihintay i-verify
+  // -------------------------------------------------------------------------
 
-    final entries = <_PaymentEntry>[
-      for (final b in widget.data.bookings)
-        for (final p in paymentsOf(b)) _PaymentEntry(p, b),
+  List<Widget> _pendingSection(double width) {
+    final focus = _focusId == null ? null : widget.data.bookingById(_focusId);
+    final pending = widget.data.pendingPayments
+        .where((e) => _focusId == null || '${e.booking['id']}' == _focusId)
+        .toList();
+    return [
+      if (focus != null) ...[
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            FilterPill(
+              icon: Icons.person_outline,
+              label: tr('payFocusShowing', {'client': clientNameOf(focus)}),
+              active: true,
+              onClear: () => setState(() => _focusId = null),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+      ],
+      _hintBox(Icons.info_outline_rounded, tr('payPendingHint')),
+      const SizedBox(height: 14),
+      if (pending.isEmpty)
+        _emptyCard(Icons.task_alt, tr('payNoPending'))
+      else
+        CardGrid(
+          columns: width >= 1100 ? 2 : 1,
+          children: [for (final item in pending) _pendingCard(item.payment, item.booking)],
+        ),
     ];
+  }
 
+  Widget _emptyCard(IconData icon, String message) => AppCard(
+        margin: EdgeInsets.zero,
+        child: Padding(padding: const EdgeInsets.all(24), child: EmptyState(icon: icon, message: message)),
+      );
+
+  Widget _proofImage(Map<String, dynamic> payment, {required double height}) {
+    Widget frame(Widget child) => Container(
+          height: height,
+          decoration: BoxDecoration(
+            color: AppColors.subtle,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: child,
+        );
+    return FutureBuilder<String?>(
+      future: _proofUrl(payment['proof_path'] as String?),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return frame(const Center(child: CircularProgressIndicator()));
+        }
+        final url = snapshot.data;
+        if (url == null) {
+          return frame(
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.image_not_supported_outlined, color: AppColors.danger),
+                    const SizedBox(height: 6),
+                    Text(tr('payNoProof'),
+                        textAlign: TextAlign.center, style: const TextStyle(color: AppColors.danger, fontSize: 12.5)),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        return frame(
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => showDialog(
+                context: context,
+                builder: (_) => Dialog(clipBehavior: Clip.antiAlias, child: InteractiveViewer(child: Image.network(url))),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    url,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stack) =>
+                        Center(child: Text(tr('idLoadFail'), style: const TextStyle(color: AppColors.muted))),
+                  ),
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: const Color(0xB3000000), borderRadius: BorderRadius.circular(20)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.zoom_in_rounded, size: 15, color: Colors.white),
+                          const SizedBox(width: 4),
+                          Text(tr('vfZoom'),
+                              style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _pendingCard(Map<String, dynamic> payment, Map<String, dynamic> booking) {
+    final busy = _busy.contains('${payment['id']}');
+    final method = '${payment['method'] ?? ''}';
+    final reference = '${payment['reference_no'] ?? ''}'.trim();
+    final balance = remainingOf(booking);
+
+    final info = _boxed([
+      _infoRow(Icons.person_outline, tr('fieldClient'), clientNameOf(booking)),
+      _infoRow(Icons.inventory_2_outlined, tr('navPackages'), packageNameOf(booking)),
+      _infoRow(Icons.event_outlined, tr('fieldDate'), formatDate(bookingDateOf(booking))),
+      _infoRow(Icons.tag_rounded, tr('payReference'), reference),
+      _infoRow(Icons.schedule_rounded, tr('paySubmitted'), formatDateTime(parseDate(payment['created_at']))),
+      _infoRow(Icons.account_balance_wallet_outlined, tr('fieldBalance'),
+          '${peso(balance)} (${tr('payBeforeThis')})', color: balance > 0 ? AppColors.warning : null),
+    ]);
+
+    return _cardShell(
+      highlight: true,
+      header: Row(
+        children: [
+          _methodBadge(method),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(peso(asDouble(payment['amount'])),
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+                Text('${kindLabel(payment['kind'] as String?)} · ${methodLabel(method)}',
+                    style: TextStyle(color: methodColor(method), fontWeight: FontWeight.w600, fontSize: 13)),
+              ],
+            ),
+          ),
+          _statusPill('pending'),
+        ],
+      ),
+      body: LayoutBuilder(
+        builder: (context, c) {
+          if (c.maxWidth >= 520) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 210,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(tr('pyProof').toUpperCase(), style: _caps),
+                      const SizedBox(height: 8),
+                      _proofImage(payment, height: 250),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(tr('pyDetails').toUpperCase(), style: _caps),
+                      const SizedBox(height: 8),
+                      info,
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(tr('pyDetails').toUpperCase(), style: _caps),
+              const SizedBox(height: 8),
+              info,
+              const SizedBox(height: 16),
+              Text(tr('pyProof').toUpperCase(), style: _caps),
+              const SizedBox(height: 8),
+              _proofImage(payment, height: 260),
+            ],
+          );
+        },
+      ),
+      actions: Row(
+        children: [
+          if (busy) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          const Spacer(),
+          OutlinedButton.icon(
+            onPressed: busy ? null : () => _reject(payment, booking),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.danger,
+              side: BorderSide(color: AppColors.danger.withValues(alpha: 0.5)),
+            ),
+            icon: const Icon(Icons.close_rounded, size: 18),
+            label: Text(tr('reject')),
+          ),
+          const SizedBox(width: 10),
+          FilledButton.icon(
+            onPressed: busy ? null : () => _verify(payment, booking),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E9E5B)),
+            icon: const Icon(Icons.check_rounded, size: 18),
+            label: Text(tr('payVerifyBtn')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Refunds (policy #6–#8: kalahati ng reservation fee kapag 5+ araw bago)
+  // -------------------------------------------------------------------------
+
+  List<Widget> _refundsSection() {
+    final refunds = widget.data.refunds;
+    final pending = refunds.where((r) => r['status'] == 'pending').toList();
+    final done = refunds.where((r) => r['status'] != 'pending').toList();
+    return [
+      _hintBox(Icons.info_outline_rounded, tr('rfHint')),
+      const SizedBox(height: 14),
+      if (refunds.isEmpty)
+        _emptyCard(Icons.currency_exchange, tr('rfNone'))
+      else ...[
+        if (pending.isNotEmpty) ...[
+          Text('${tr('pyRefundsToDo')} (${pending.length})'.toUpperCase(), style: _caps),
+          const SizedBox(height: 10),
+          for (final r in pending) Padding(padding: const EdgeInsets.only(bottom: 12), child: _refundCard(r)),
+        ],
+        if (done.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text('${tr('rfHistory')} (${done.length})'.toUpperCase(), style: _caps),
+          const SizedBox(height: 10),
+          for (final r in done) Padding(padding: const EdgeInsets.only(bottom: 12), child: _refundCard(r)),
+        ],
+      ],
+    ];
+  }
+
+  Widget _refundCard(Map<String, dynamic> r) {
+    final booking = widget.data.bookingById(r['booking_id']);
+    final status = '${r['status']}';
+    final busy = _busy.contains('refund-${r['id']}');
+    final method = '${r['payout_method'] ?? ''}';
+    final color = switch (status) {
+      'refunded' => AppColors.success,
+      'rejected' => AppColors.danger,
+      _ => AppColors.warning,
+    };
+    final rows = [
+      if (booking != null) _infoRow(Icons.inventory_2_outlined, tr('navPackages'), packageNameOf(booking)),
+      if (booking != null) _infoRow(Icons.event_outlined, tr('fieldDate'), formatDate(bookingDateOf(booking))),
+      _infoRow(Icons.send_to_mobile_outlined, tr('rfSendTo'), '${methodLabel(method)} · ${r['payout_number'] ?? ''}'),
+      _infoRow(Icons.badge_outlined, tr('rfAccountName'), '${r['payout_name'] ?? ''}'),
+      if ('${r['reason'] ?? ''}'.isNotEmpty) _infoRow(Icons.chat_bubble_outline_rounded, tr('rfReason'), '${r['reason']}'),
+      if ('${r['refund_reference'] ?? ''}'.isNotEmpty) _infoRow(Icons.tag_rounded, tr('rcReference'), '${r['refund_reference']}'),
+      if ('${r['admin_note'] ?? ''}'.isNotEmpty) _infoRow(Icons.sticky_note_2_outlined, tr('adminNotes'), '${r['admin_note']}'),
+    ];
+    return _cardShell(
+      highlight: status == 'pending',
+      header: Row(
+        children: [
+          _methodBadge(method),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(booking == null ? tr('unknownClient') : clientNameOf(booking),
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                Text(
+                  tr('rfBreakdown', {
+                    'days': asInt(r['days_before']),
+                    'paid': peso(asDouble(r['paid'])),
+                    'fee': peso(asDouble(r['reservation_fee'])),
+                  }),
+                  style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(peso(asDouble(r['amount'])),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary)),
+              const SizedBox(height: 4),
+              _pill(tr('rfStatus_$status'), color),
+            ],
+          ),
+        ],
+      ),
+      body: _boxed(rows),
+      actions: status != 'pending'
+          ? null
+          : Row(
+              children: [
+                if (busy) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                const Spacer(),
+                OutlinedButton.icon(
+                  onPressed: busy ? null : () => _rejectRefund(r),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.danger,
+                    side: BorderSide(color: AppColors.danger.withValues(alpha: 0.5)),
+                  ),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: Text(tr('rfRejectInvalid')),
+                ),
+                const SizedBox(width: 10),
+                FilledButton.icon(
+                  onPressed: busy ? null : () => _completeRefund(r),
+                  icon: const Icon(Icons.send_rounded, size: 18),
+                  label: Text(tr('rfApprove')),
+                ),
+              ],
+            ),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Lahat ng bayad
+  // -------------------------------------------------------------------------
+
+  static const _flex = (date: 3, client: 6, type: 3, method: 3, ref: 4, amount: 3, status: 3);
+  static const _rowPadding = EdgeInsets.fromLTRB(20, 12, 20, 12);
+
+  Widget _cell(int flex, Widget child, {bool end = false}) => Expanded(
+        flex: flex,
+        child: Padding(
+          padding: EdgeInsets.only(right: end ? 0 : 14),
+          child: child,
+        ),
+      );
+
+  bool get _anyFilter =>
+      _method != 'all' || _kind != 'all' || _range != null || _sort != _PaySort.newest || _query.trim().isNotEmpty;
+
+  List<Widget> _allSection(List<_PaymentEntry> entries, double width) {
     final methods = entries.map((e) => e.method).toSet().toList()..sort();
     final q = _query.trim().toLowerCase();
-    final filtered = entries.where((e) {
-      if (_status != 'all' && e.status != _status) return false;
+    bool matchesExceptStatus(_PaymentEntry e) {
       if (_method != 'all' && e.method != _method) return false;
       if (_kind != 'all' && e.kind != _kind) return false;
       if (!inRange(e.date, _range)) return false;
@@ -612,7 +915,11 @@ class _PaymentsPageState extends State<PaymentsPage> {
           packageNameOf(e.booking).toLowerCase().contains(q) ||
           '${e.payment['reference_no'] ?? ''}'.toLowerCase().contains(q) ||
           e.amount.toStringAsFixed(0).contains(q);
-    }).toList();
+    }
+
+    final base = entries.where(matchesExceptStatus).toList();
+    int count(String s) => s == 'all' ? base.length : base.where((e) => e.status == s).length;
+    final filtered = base.where((e) => _status == 'all' || e.status == _status).toList();
 
     int byDate(_PaymentEntry a, _PaymentEntry b) {
       final da = a.date, db = b.date;
@@ -633,168 +940,353 @@ class _PaymentsPageState extends State<PaymentsPage> {
         filtered.sort((a, b) => a.amount.compareTo(b.amount));
     }
 
-    final verified = filtered.where((e) => e.status == 'verified').toList();
+    final verified = base.where((e) => e.status == 'verified').toList();
     final total = verified.fold<double>(0, (s, e) => s + e.amount);
     final down = verified.where((e) => e.kind == 'downpayment').fold<double>(0, (s, e) => s + e.amount);
-    final balance = verified.where((e) => e.kind == 'balance').fold<double>(0, (s, e) => s + e.amount);
+    final bal = verified.where((e) => e.kind == 'balance').fold<double>(0, (s, e) => s + e.amount);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
+    final sortOptions = {
+      _PaySort.newest: tr('sortDateNewest'),
+      _PaySort.oldest: tr('sortDateOldest'),
+      _PaySort.amountHigh: tr('sortAmountHigh'),
+      _PaySort.amountLow: tr('sortAmountLow'),
+    };
+    final r = _range;
+    final rangeLabel = r == null
+        ? tr('anyDate')
+        : DateUtils.isSameDay(r.start, r.end)
+            ? formatDate(r.start)
+            : '${formatDate(r.start)} – ${formatDate(r.end)}';
+    final table = width >= 900;
 
-        return ListView(
-          padding: pageInsets(context),
-          children: [
-            StatGrid(
+    Widget mini(String label, String value, Color color) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+            decoration: BoxDecoration(
+              color: AppColors.subtle,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                StatCard(
-                  icon: Icons.payments,
-                  label: tr('totalReceived'),
-                  value: peso(total),
-                  caption: tr('transactions', {'n': verified.length}),
-                  color: AppColors.success,
-                ),
-                StatCard(
-                  icon: Icons.bookmark_added_outlined,
-                  label: tr('downpayments'),
-                  value: peso(down),
-                  color: theme.colorScheme.primary,
-                ),
-                StatCard(
-                  icon: Icons.price_check,
-                  label: tr('balancePayments'),
-                  value: peso(balance),
-                  color: AppColors.info,
+                Text(label.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.muted, letterSpacing: 0.5)),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(value, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: color)),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            GlassPanel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+          ),
+        );
+
+    return [
+      AppCard(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                spacing: 16,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                    SearchBox(
+                  SizedBox(
+                    width: width >= 900 ? 340 : double.infinity,
+                    child: SearchBox(
                       controller: _searchController,
                       hint: tr('searchPaymentsHint'),
                       onChanged: (v) => setState(() => _query = v),
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        SortMenu<_PaySort>(
-                          value: _sort,
-                          options: {
-                            _PaySort.newest: tr('sortDateNewest'),
-                            _PaySort.oldest: tr('sortDateOldest'),
-                            _PaySort.amountHigh: tr('sortAmountHigh'),
-                            _PaySort.amountLow: tr('sortAmountLow'),
-                          },
-                          onChanged: (v) => setState(() => _sort = v),
-                        ),
-                        DateRangeChip(range: _range, onChanged: (r) => setState(() => _range = r)),
-                        for (final s in const ['verified', 'pending', 'rejected', 'all'])
-                          ChoiceChip(
-                            label: Text(s == 'all' ? tr('filterAll') : paymentStatusLabel(s)),
-                            selected: _status == s,
-                            onSelected: (_) => setState(() => _status = s),
-                          ),
-                      ],
+                  ),
+                  CountTabs<String>(
+                    value: _status,
+                    onChanged: (v) => setState(() => _status = v),
+                    items: [
+                      for (final s in const ['verified', 'pending', 'rejected', 'all'])
+                        (value: s, label: s == 'all' ? tr('filterAll') : paymentStatusLabel(s), count: count(s)),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(right: 2),
+                    child: Icon(Icons.tune_rounded, size: 18, color: AppColors.muted),
+                  ),
+                  PopupMenuButton<_PaySort>(
+                    tooltip: tr('sortBy'),
+                    initialValue: _sort,
+                    onSelected: (v) => setState(() => _sort = v),
+                    itemBuilder: (context) => [
+                      for (final e in sortOptions.entries)
+                        CheckedPopupMenuItem<_PaySort>(value: e.key, checked: e.key == _sort, child: Text(e.value)),
+                    ],
+                    child: FilterPill(
+                      icon: Icons.swap_vert_rounded,
+                      label: sortOptions[_sort] ?? '',
+                      active: _sort != _PaySort.newest,
+                      dropdown: true,
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final k in const ['all', 'downpayment', 'balance'])
-                          ChoiceChip(
-                            label: Text(k == 'all' ? tr('allTypes') : kindLabel(k)),
-                            selected: _kind == k,
-                            onSelected: (_) => setState(() => _kind = k),
-                          ),
-                        ChoiceChip(
-                          label: Text(tr('allMethods')),
-                          selected: _method == 'all',
-                          onSelected: (_) => setState(() => _method = 'all'),
+                  ),
+                  FilterPill(
+                    icon: Icons.calendar_month_outlined,
+                    label: rangeLabel,
+                    active: r != null,
+                    dropdown: r == null,
+                    onTap: () async {
+                      final now = DateTime.now();
+                      final picked = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(now.year - 3),
+                        lastDate: DateTime(now.year + 3, 12, 31),
+                        initialDateRange: r,
+                      );
+                      if (picked != null) setState(() => _range = picked);
+                    },
+                    onClear: () => setState(() => _range = null),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: tr('allTypes'),
+                    onSelected: (v) => setState(() => _kind = v),
+                    itemBuilder: (context) => [
+                      for (final k in const ['all', 'downpayment', 'balance'])
+                        CheckedPopupMenuItem(
+                          value: k,
+                          checked: _kind == k,
+                          child: Text(k == 'all' ? tr('allTypes') : kindLabel(k)),
                         ),
-                        for (final m in methods)
-                          ChoiceChip(
-                            label: Text(methodLabel(m)),
-                            selected: _method == m,
-                            onSelected: (_) => setState(() => _method = m),
-                          ),
-                      ],
+                    ],
+                    child: FilterPill(
+                      icon: Icons.category_outlined,
+                      label: _kind == 'all' ? tr('allTypes') : kindLabel(_kind),
+                      active: _kind != 'all',
+                      dropdown: true,
+                    ),
+                  ),
+                  PopupMenuButton<String>(
+                    tooltip: tr('allMethods'),
+                    onSelected: (v) => setState(() => _method = v),
+                    itemBuilder: (context) => [
+                      CheckedPopupMenuItem(value: 'all', checked: _method == 'all', child: Text(tr('allMethods'))),
+                      for (final m in methods)
+                        CheckedPopupMenuItem(value: m, checked: _method == m, child: Text(methodLabel(m))),
+                    ],
+                    child: FilterPill(
+                      icon: _method == 'all' ? Icons.account_balance_wallet_outlined : _methodIcon(_method),
+                      label: _method == 'all' ? tr('allMethods') : methodLabel(_method),
+                      active: _method != 'all',
+                      dropdown: true,
+                    ),
+                  ),
+                  if (_anyFilter)
+                    TextButton.icon(
+                      onPressed: () => setState(() {
+                        _method = 'all';
+                        _kind = 'all';
+                        _range = null;
+                        _sort = _PaySort.newest;
+                        _query = '';
+                        _searchController.clear();
+                      }),
+                      icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                      label: Text(tr('bkResetFilters')),
                     ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
-            if (filtered.isEmpty)
-              EmptyState(icon: Icons.receipt_long, message: tr('noPaymentYet'))
-            else
-              AppCard(
-                margin: EdgeInsets.zero,
-                child: Column(
-                  children: [
-                    for (var i = 0; i < filtered.length; i++) ...[
-                      if (i > 0) const Divider(height: 1),
-                      _buildRow(filtered[i]),
-                    ],
-                  ],
-                ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  mini(tr('totalReceived'), peso(total), AppColors.success),
+                  const SizedBox(width: 10),
+                  mini(tr('downpayments'), peso(down), AppColors.primary),
+                  const SizedBox(width: 10),
+                  mini(tr('balancePayments'), peso(bal), AppColors.info),
+                ],
               ),
-          ],
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: 18),
+      if (filtered.isEmpty)
+        _emptyCard(Icons.receipt_long, tr('noPaymentYet'))
+      else
+        AppCard(
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (table) _tableHeader(),
+              for (var i = 0; i < filtered.length; i++) ...[
+                if (i > 0 || table) const Divider(height: 1),
+                table ? _tableRow(filtered[i]) : _listRow(filtered[i]),
+              ],
+            ],
+          ),
+        ),
+    ];
+  }
+
+  Widget _tableHeader() {
+    Widget h(String t, int flex, {bool end = false, TextAlign align = TextAlign.left}) => _cell(
+          flex,
+          Text(t, textAlign: align, style: _caps),
+          end: end,
         );
-      },
+    return Container(
+      color: AppColors.subtle,
+      padding: _rowPadding,
+      child: Row(
+        children: [
+          h(tr('pyColDate'), _flex.date),
+          h(tr('pyColClient'), _flex.client),
+          h(tr('pyColType'), _flex.type),
+          h(tr('pyColMethod'), _flex.method),
+          h(tr('pyColRef'), _flex.ref),
+          h(tr('pyColAmount'), _flex.amount, align: TextAlign.right),
+          h(tr('pyColStatus'), _flex.status, end: true),
+        ],
+      ),
     );
   }
 
-  /// "· Verified by John Sairon" / "· Received by John Sairon"
-  String _byLine(_PaymentEntry e) {
+  /// "Verified by John Sairon" / "Received by John Sairon"
+  String? _byLine(_PaymentEntry e) {
     final reviewer = staffNameOf(e.payment['reviewed_by']);
-    if (reviewer != null && e.status != 'pending') return ' · ${tr('payVerifiedBy', {'name': reviewer})}';
+    if (reviewer != null && e.status != 'pending') return tr('payVerifiedBy', {'name': reviewer});
     final receiver = staffNameOf(e.payment['received_by']);
-    if (receiver != null) return ' · ${tr('payReceivedBy', {'name': receiver})}';
-    return '';
+    if (receiver != null) return tr('payReceivedBy', {'name': receiver});
+    return null;
   }
 
-  Widget _buildRow(_PaymentEntry e) {
-    final color = methodColor(e.method);
+  Widget _tableRow(_PaymentEntry e) {
     final reference = '${e.payment['reference_no'] ?? ''}'.trim();
     final reason = '${e.payment['reject_reason'] ?? ''}'.trim();
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: color.withValues(alpha: 0.15),
-        child: Icon(e.method == 'cash' ? Icons.money : Icons.phone_android, color: color),
-      ),
-      title: Text(
-        '${packageNameOf(e.booking)} · ${clientNameOf(e.booking)}',
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        '${kindLabel(e.kind)} · ${methodLabel(e.method)} · ${formatDate(e.date)}'
-        '${reference.isEmpty ? '' : ' · Ref $reference'}'
-        '${_byLine(e)}'
-        '${e.status == 'rejected' && reason.isNotEmpty ? '\n${tr('payRejectedReason', {'reason': reason})}' : ''}',
-      ),
-      isThreeLine: e.status == 'rejected' && reason.isNotEmpty,
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
+    final by = _byLine(e);
+    const muted = TextStyle(color: AppColors.muted, fontSize: 12.5);
+    return Padding(
+      padding: _rowPadding,
+      child: Row(
         children: [
-          Text(
-            peso(e.amount),
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
-              decoration: e.status == 'rejected' ? TextDecoration.lineThrough : null,
+          _cell(_flex.date, Text(formatDate(e.date), style: const TextStyle(fontWeight: FontWeight.w600))),
+          _cell(
+            _flex.client,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(clientNameOf(e.booking),
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(packageNameOf(e.booking), maxLines: 1, overflow: TextOverflow.ellipsis, style: muted),
+                if (e.status == 'rejected' && reason.isNotEmpty)
+                  Text(tr('payRejectedReason', {'reason': reason}),
+                      maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+              ],
             ),
           ),
-          const SizedBox(height: 2),
-          Text(
-            paymentStatusLabel(e.status),
-            style: TextStyle(color: paymentStatusColor(e.status), fontSize: 12, fontWeight: FontWeight.w600),
+          _cell(_flex.type, Text(kindLabel(e.kind))),
+          _cell(
+            _flex.method,
+            Row(
+              children: [
+                Icon(_methodIcon(e.method), size: 16, color: methodColor(e.method)),
+                const SizedBox(width: 6),
+                Flexible(child: Text(methodLabel(e.method), overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+          ),
+          _cell(
+            _flex.ref,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(reference.isEmpty ? '—' : reference,
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: reference.isEmpty ? AppColors.muted : AppColors.text)),
+                if (by != null) Text(by, maxLines: 1, overflow: TextOverflow.ellipsis, style: muted),
+              ],
+            ),
+          ),
+          _cell(
+            _flex.amount,
+            Text(
+              peso(e.amount),
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                decoration: e.status == 'rejected' ? TextDecoration.lineThrough : null,
+                color: e.status == 'rejected' ? AppColors.muted : AppColors.text,
+              ),
+            ),
+          ),
+          _cell(_flex.status, Align(alignment: Alignment.centerLeft, child: _statusPill(e.status)), end: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _listRow(_PaymentEntry e) {
+    final reference = '${e.payment['reference_no'] ?? ''}'.trim();
+    final reason = '${e.payment['reject_reason'] ?? ''}'.trim();
+    final by = _byLine(e);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _methodBadge(e.method, size: 40),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(clientNameOf(e.booking),
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                  [
+                    packageNameOf(e.booking),
+                    kindLabel(e.kind),
+                    methodLabel(e.method),
+                    formatDate(e.date),
+                    if (reference.isNotEmpty) 'Ref $reference',
+                    ?by,
+                  ].join(' · '),
+                  style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+                ),
+                if (e.status == 'rejected' && reason.isNotEmpty)
+                  Text(tr('payRejectedReason', {'reason': reason}),
+                      style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                peso(e.amount),
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  decoration: e.status == 'rejected' ? TextDecoration.lineThrough : null,
+                ),
+              ),
+              const SizedBox(height: 4),
+              _statusPill(e.status),
+            ],
           ),
         ],
       ),
