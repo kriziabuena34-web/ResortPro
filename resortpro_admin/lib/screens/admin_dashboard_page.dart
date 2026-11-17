@@ -579,19 +579,7 @@ class _Sidebar extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: extended ? MainAxisAlignment.start : MainAxisAlignment.center,
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF14B8A6), AppColors.primary],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.beach_access_rounded, color: Colors.white, size: 22),
-                  ),
+                  Image.asset('assets/images/aryana_logo.png', width: 44, height: 44, filterQuality: FilterQuality.medium),
                   if (extended) ...[
                     const SizedBox(width: 12),
                     const Expanded(
@@ -601,6 +589,7 @@ class _Sidebar extends StatelessWidget {
                           Text(
                             'ResortPro',
                             style: TextStyle(
+                              fontFamily: 'Poppins',
                               color: Colors.white,
                               fontSize: 17,
                               fontWeight: FontWeight.w700,
@@ -886,14 +875,30 @@ class _TopBar extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 21,
+                    fontFamily: 'Poppins',
+                    fontSize: 24,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: -0.4,
-                    color: AppColors.text,
+                    letterSpacing: -0.5,
+                    height: 1.15,
+                    color: AppColors.ink,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(date, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today_rounded, size: 13, color: AppColors.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      date,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),

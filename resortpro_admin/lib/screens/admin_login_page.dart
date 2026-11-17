@@ -237,19 +237,11 @@ class _BrandMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
+    return Image.asset(
+      'assets/images/aryana_logo.png',
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: light ? Colors.white.withValues(alpha: 0.18) : scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(size * 0.3),
-      ),
-      child: Icon(
-        Icons.beach_access_rounded,
-        size: size * 0.55,
-        color: light ? Colors.white : scheme.primary,
-      ),
+      filterQuality: FilterQuality.medium,
     );
   }
 }
