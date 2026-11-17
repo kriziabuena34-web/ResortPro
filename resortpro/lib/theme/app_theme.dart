@@ -76,18 +76,21 @@ ThemeData buildAppTheme() {
       bodySmall: text.bodySmall?.copyWith(color: AppColors.muted, height: 1.4),
       labelLarge: text.labelLarge?.copyWith(fontWeight: FontWeight.w600, letterSpacing: 0.1),
     ),
+    // Header: light na kulay ng board (navy) para naka-highlight ang heading.
     appBarTheme: const AppBarTheme(
-      backgroundColor: AppColors.surface,
-      foregroundColor: AppColors.text,
+      backgroundColor: Color(0xFFE6EDF5),
+      foregroundColor: AppColors.ink,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       scrolledUnderElevation: 0,
-      shape: Border(bottom: BorderSide(color: AppColors.border)),
+      shape: Border(bottom: BorderSide(color: Color(0xFFD3DEEA))),
       titleTextStyle: TextStyle(
-        color: AppColors.text,
+        fontFamily: 'Poppins',
+        color: AppColors.ink,
         fontSize: 20,
+        height: 1.2,
         fontWeight: FontWeight.w700,
-        letterSpacing: -0.3,
+        letterSpacing: 0,
       ),
     ),
     cardTheme: CardThemeData(

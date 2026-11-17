@@ -189,19 +189,12 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                 children: [
                   const Spacer(flex: 3),
 
-                  // Logo na palutang-lutang, may umiikot na singsing
+                  // Logo na palutang-lutang
                   AnimatedBuilder(
                     animation: _wave,
                     builder: (context, child) => Transform.translate(
                       offset: Offset(0, math.sin(_wave.value * 2 * math.pi) * 6),
-                      child: SizedBox(
-                        width: 184,
-                        height: 184,
-                        child: CustomPaint(
-                          painter: _OrbitPainter(_wave.value),
-                          child: Center(child: child),
-                        ),
-                      ),
+                      child: child,
                     ),
                     child: Container(
                       width: 148,
@@ -209,7 +202,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
                         boxShadow: [
-                          BoxShadow(color: Color(0x802DD4BF), blurRadius: 34, spreadRadius: -6),
+                          BoxShadow(color: Color(0x552DD4BF), blurRadius: 30, spreadRadius: -8),
                           BoxShadow(color: Color(0x88000000), blurRadius: 24, offset: Offset(0, 14)),
                         ],
                       ),
@@ -235,38 +228,24 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     ),
                   ),
                   const SizedBox(height: 12),
-                  // Naka-highlight na pangalan ng resort
+                  // Naka-highlight na pangalan ng resort (light turquoise)
                   Container(
-                    padding: const EdgeInsets.fromLTRB(14, 7, 16, 7),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
-                      gradient: LinearGradient(
-                        colors: [
-                          AppColors.accent.withValues(alpha: 0.26),
-                          AppColors.accent.withValues(alpha: 0.10),
-                        ],
-                      ),
-                      border: Border.all(color: AppColors.accent.withValues(alpha: 0.6)),
-                      boxShadow: [
-                        BoxShadow(color: AppColors.accent.withValues(alpha: 0.18), blurRadius: 18),
-                      ],
+                      color: const Color(0xFF5EEAD4).withValues(alpha: 0.12),
+                      border: Border.all(color: const Color(0xFF5EEAD4).withValues(alpha: 0.45)),
                     ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.house_rounded, size: 16, color: Color(0xFFF3D08A)),
-                        SizedBox(width: 8),
-                        Text(
-                          "Aryana's Guests House",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: Color(0xFFF8E3B5),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.6,
-                          ),
-                        ),
-                      ],
+                    child: const Text(
+                      "Aryana's Guests House",
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Color(0xFF99F6E4),
+                        fontSize: 14.5,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
 
@@ -337,60 +316,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       ),
     );
   }
-}
-
-/// Manipis na singsing na umiikot sa paligid ng logo.
-class _OrbitPainter extends CustomPainter {
-  _OrbitPainter(this.phase);
-  final double phase;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final r = size.width / 2 - 3;
-
-    // Mahinang buong bilog
-    canvas.drawCircle(
-      center,
-      r,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.08)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
-
-    // Umiikot na arko na may kumikinang na dulo
-    final angle = phase * 2 * math.pi;
-    final rect = Rect.fromCircle(center: center, radius: r);
-    canvas.drawArc(
-      rect,
-      angle,
-      math.pi * 0.9,
-      false,
-      Paint()
-        ..shader = SweepGradient(
-          startAngle: 0,
-          endAngle: math.pi * 0.9,
-          colors: const [Color(0x002DD4BF), Color(0xFF5EEAD4)],
-          transform: GradientRotation(angle),
-        ).createShader(rect)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5
-        ..strokeCap = StrokeCap.round,
-    );
-    final tip = center + Offset(math.cos(angle + math.pi * 0.9), math.sin(angle + math.pi * 0.9)) * r;
-    canvas.drawCircle(
-      tip,
-      6,
-      Paint()
-        ..color = const Color(0x665EEAD4)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
-    );
-    canvas.drawCircle(tip, 3, Paint()..color = Colors.white);
-  }
-
-  @override
-  bool shouldRepaint(covariant _OrbitPainter old) => old.phase != phase;
 }
 
 /// Ang loading line (alon) at ang life ring sa dulo nito.
@@ -472,71 +397,30 @@ class _WavePainter extends CustomPainter {
     final end = width - ringSize / 2;
     final filledTo = start + (end - start) * progress;
 
-    // Track (hindi pa napupuno): madilim na channel na may manipis na gilid
+    // Track (hindi pa napupuno)
     final track = _path(start, end, width);
     canvas.drawPath(
       track,
       Paint()
-        ..color = Colors.white.withValues(alpha: 0.10)
+        ..color = Colors.white.withValues(alpha: 0.12)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 10
-        ..strokeCap = StrokeCap.round,
-    );
-    canvas.drawPath(
-      track,
-      Paint()
-        ..color = AppColors.ink.withValues(alpha: 0.55)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 7
+        ..strokeWidth = 6
         ..strokeCap = StrokeCap.round,
     );
 
     if (filledTo <= start + 1) return;
-    final filled = _path(start, filledTo, width);
-    final shaderRect = Rect.fromLTWH(start, 0, math.max(1, filledTo - start), size.height);
 
-    // Liwanag sa likod ng napunong bahagi
+    // Napunong bahagi ng loading (simple na gradient)
     canvas.drawPath(
-      filled,
-      Paint()
-        ..color = const Color(0xFF2DD4BF).withValues(alpha: 0.40)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 14
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
-    );
-
-    // Napunong bahagi ng loading
-    canvas.drawPath(
-      filled,
+      _path(start, filledTo, width),
       Paint()
         ..shader = const LinearGradient(
-          colors: [Color(0xFF0EA5E9), Color(0xFF2DD4BF), Color(0xFF99F6E4)],
-        ).createShader(shaderRect)
+          colors: [Color(0xFF38BDF8), Color(0xFF5EEAD4)],
+        ).createShader(Rect.fromLTWH(start, 0, math.max(1, filledTo - start), size.height))
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 7
+        ..strokeWidth = 6
         ..strokeCap = StrokeCap.round,
     );
-
-    // Manipis na kinang sa ibabaw (parang tubig)
-    canvas.drawPath(
-      filled.shift(const Offset(0, -1.6)),
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.45)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.4
-        ..strokeCap = StrokeCap.round,
-    );
-
-    // Maliliit na bula na lumulutang sa napunong bahagi
-    final bubble = Paint();
-    for (var i = 0; i < 6; i++) {
-      final t = (phase + i / 6) % 1.0;
-      final bx = start + (filledTo - start) * ((i * 0.37 + 0.11) % 1.0);
-      final by = lineY + waveOffset(bx, width, phase) - 6 - t * 18;
-      bubble.color = Colors.white.withValues(alpha: 0.5 * (1 - t));
-      canvas.drawCircle(Offset(bx, by), 1.6 * (1 - t) + 0.4, bubble);
-    }
   }
 
   @override
@@ -578,86 +462,37 @@ class _LifeRingPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
     final outer = size.width / 2 - 1;
-    final thickness = outer * 0.40;
+    final thickness = outer * 0.36;
     final inner = outer - thickness;
-    final mid = outer - thickness / 2;
-    final rect = Rect.fromCircle(center: center, radius: mid);
+    final rect = Rect.fromCircle(center: center, radius: outer - thickness / 2);
 
-    // Anino sa tubig
+    // Malambot na anino
     canvas.drawCircle(
-      center.translate(0, 4),
+      center.translate(0, 3),
       outer,
       Paint()
-        ..color = const Color(0x66000000)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        ..color = const Color(0x44000000)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
     );
 
-    // Pula at puting bahagi (8 segment), may 3D na lilim
+    // Coral at puting bahagi (4 + 4 segment), malinis at flat
     const segments = 8;
     const sweep = 2 * math.pi / segments;
     for (var i = 0; i < segments; i++) {
-      final red = i.isEven;
       canvas.drawArc(
         rect,
-        -math.pi / 2 + i * sweep,
+        -math.pi / 2 - sweep / 2 + i * sweep,
         sweep,
         false,
         Paint()
-          ..shader = RadialGradient(
-            colors: red
-                ? const [Color(0xFFB91C1C), Color(0xFFEF4444), Color(0xFFB91C1C)]
-                : const [Color(0xFFCBD5E1), Colors.white, Color(0xFFCBD5E1)],
-            stops: [inner / outer, mid / outer, 1],
-          ).createShader(Rect.fromCircle(center: center, radius: outer))
+          ..color = i.isEven ? const Color(0xFFEF5350) : const Color(0xFFF8FAFC)
           ..style = PaintingStyle.stroke
           ..strokeWidth = thickness,
       );
     }
 
-    // Lubid sa paligid (may tali sa bawat puting bahagi)
-    final rope = Paint()
-      ..color = const Color(0xFFF5E6C8)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6;
-    canvas.drawCircle(center, mid, rope);
-    for (var i = 0; i < segments; i++) {
-      if (i.isEven) continue;
-      final a = -math.pi / 2 + (i + 0.5) * sweep;
-      final dir = Offset(math.cos(a), math.sin(a));
-      canvas.drawLine(center + dir * (inner + 1), center + dir * (outer - 1), rope..strokeWidth = 2.2);
-    }
-
-    // Kinang sa itaas-kaliwa
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: outer - 3),
-      math.pi * 1.05,
-      math.pi * 0.45,
-      false,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.45)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round,
-    );
-
-    // Mga gilid
-    final edge = Paint()
-      ..color = const Color(0x40000000)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    canvas.drawCircle(center, outer, edge);
-    canvas.drawCircle(center, inner, edge);
-
-    // Butas sa gitna (navy) para mabasa ang porsyento
-    canvas.drawCircle(center, inner - 0.5, Paint()..color = AppColors.ink);
-    canvas.drawCircle(
-      center,
-      inner - 0.5,
-      Paint()
-        ..color = const Color(0xFF2DD4BF).withValues(alpha: 0.35)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
+    // Navy na gitna para mabasa ang porsyento
+    canvas.drawCircle(center, inner, Paint()..color = AppColors.ink);
   }
 
   @override

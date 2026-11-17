@@ -192,7 +192,10 @@ class _ChatPageState extends State<ChatPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Aryana's Guests House", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  Text(
+                    "Aryana's Guests House",
+                    style: TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink),
+                  ),
                   Text('Chat with the resort', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 ],
               ),

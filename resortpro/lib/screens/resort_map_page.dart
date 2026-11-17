@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -13,6 +14,10 @@ import '../widgets/ui_kit.dart';
 
 /// Realtime map: pin ng resort, live na lokasyon mo (blue dot), distansya,
 /// at "Get directions" na bubukas sa Google Maps.
+///
+/// Offline: GPS ang gamit sa lokasyon (hindi kailangan ng internet), at
+/// naka-save sa phone ang mapa ng paligid ng resort at ang huling ruta.
+/// Stand-by: kapag hindi ginagalaw ang mapa, kusa itong nakatutok sa iyo.
 class ResortMapPage extends StatefulWidget {
   const ResortMapPage({super.key});
 
@@ -27,7 +32,20 @@ class _ResortMapPageState extends State<ResortMapPage> {
   StreamSubscription<Position>? _positionSub;
   LatLng? _me;
   String? _locationNote; // dahilan kapag walang lokasyon
-  bool _followMe = false;
+  double? _heading; // direksyon ng galaw mo (kapag naglalakad o nakasakay)
+
+  /// Nakatutok ang mapa sa iyo (stand-by). Hihinto kapag ginalaw ang mapa,
+  /// at babalik pagkalipas ng [_standbyAfter] na walang galaw.
+  bool _followMe = true;
+  DateTime _lastTouch = DateTime.fromMillisecondsSinceEpoch(0);
+  static const _standbyAfter = Duration(seconds: 12);
+  Timer? _ticker;
+
+  // Internet at offline na mapa
+  bool? _online;
+  DateTime? _mapSavedAt;
+  int _saveDone = 0, _saveTotal = 0;
+  bool _saving = false;
 
   // Totoong ruta sa kalsada
   final _tiles = OfflineTileProvider();
@@ -43,6 +61,104 @@ class _ResortMapPageState extends State<ResortMapPage> {
     RouteService.loadSaved().then((r) {
       if (mounted && _route == null && r != null) setState(() => _route = r);
     });
+    OfflineMapSaver.savedAt().then((d) {
+      if (mounted) setState(() => _mapSavedAt = d);
+    });
+    _checkOnline();
+    // Bawat 2 segundo: bumalik sa stand-by; bawat 30 segundo: tingnan ang internet.
+    var ticks = 0;
+    _ticker = Timer.periodic(const Duration(seconds: 2), (_) {
+      _standbyTick();
+      if (++ticks % 15 == 0) _checkOnline();
+    });
+  }
+
+  Future<void> _checkOnline() async {
+    final online = await OfflineMapSaver.isOnline();
+    if (!mounted) return;
+    final cameOnline = online && _online != true;
+    setState(() => _online = online);
+    if (cameOnline) {
+      _lastRouteTry = null;
+      _maybeRefreshRoute();
+      _autoSaveMap();
+    }
+  }
+
+  /// Kusang i-save ang mapa para sa offline (isang beses, o kapag luma na).
+  void _autoSaveMap() {
+    final saved = _mapSavedAt;
+    final stale = saved == null || DateTime.now().difference(saved) > const Duration(days: 30);
+    if (stale && _online == true && !_saving) _saveMap(silent: true);
+  }
+
+  Future<void> _saveMap({bool silent = false}) async {
+    if (_saving) return;
+    if (_online != true) {
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Connect to the internet first to save the map for offline use.')),
+        );
+      }
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _saveDone = 0;
+      _saveTotal = 0;
+    });
+    await OfflineMapSaver.save(
+      resort: _resort,
+      me: _me,
+      route: _route?.points ?? const [],
+      onProgress: (done, total) {
+        if (mounted) {
+          setState(() {
+            _saveDone = done;
+            _saveTotal = total;
+          });
+        }
+      },
+    );
+    final at = await OfflineMapSaver.savedAt();
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      _mapSavedAt = at;
+    });
+    if (!silent) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Map saved. You can now use it even without internet.')),
+      );
+    }
+  }
+
+  /// Stand-by: kapag ilang segundo nang hindi ginagalaw ang mapa, tumutok ulit sa iyo.
+  void _standbyTick() {
+    final me = _me;
+    if (!mounted || me == null || _followMe) return;
+    if (DateTime.now().difference(_lastTouch) < _standbyAfter) return;
+    setState(() => _followMe = true);
+    _safeMove(me, math.max(_map.camera.zoom, 16));
+  }
+
+  /// Ilipat ang mapa; tahimik na lalaktawan kapag hindi pa naipapakita ang mapa.
+  void _safeMove(LatLng to, [double? zoom]) {
+    try {
+      _map.move(to, zoom ?? _map.camera.zoom);
+    } catch (_) {
+      // Hindi pa naka-render ang mapa: subukan ulit pagkatapos ng unang frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          if (mounted) _map.move(to, zoom ?? 16);
+        } catch (_) {}
+      });
+    }
+  }
+
+  void _touched() {
+    _lastTouch = DateTime.now();
+    if (_followMe) setState(() => _followMe = false);
   }
 
   /// Kunin ulit ang ruta kapag: wala pa, lumayo ka ng 150 m sa pinanggalingan,
@@ -66,10 +182,13 @@ class _ResortMapPageState extends State<ResortMapPage> {
       _routeLoading = false;
       if (fresh != null) _route = fresh;
     });
+    // May bagong ruta mula sa internet: isama ang daan sa offline na mapa.
+    if (fresh != null && !fresh.fromCache) _autoSaveMap();
   }
 
   @override
   void dispose() {
+    _ticker?.cancel();
     _positionSub?.cancel();
     super.dispose();
   }
@@ -89,18 +208,32 @@ class _ResortMapPageState extends State<ResortMapPage> {
         return;
       }
 
-      // Live na lokasyon: nag-a-update habang gumagalaw ka.
+      // Huling alam na lokasyon: ipakita agad (gumagana kahit offline).
+      try {
+        final last = await Geolocator.getLastKnownPosition();
+        if (last != null && mounted && _me == null) {
+          setState(() => _me = LatLng(last.latitude, last.longitude));
+          _safeMove(_me!, 16);
+        }
+      } catch (_) {}
+
+      // Live na lokasyon (GPS, hindi kailangan ng internet): nag-a-update habang gumagalaw ka.
       _positionSub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 5),
       ).listen((p) {
         if (!mounted) return;
         final first = _me == null;
         setState(() {
           _me = LatLng(p.latitude, p.longitude);
           _locationNote = null;
+          // May direksyon lang kapag gumagalaw (mahigit ~3.6 km/h).
+          if (p.speed > 1 && p.heading >= 0) {
+            _heading = p.heading;
+          } else if (p.speed < 0.3) {
+            _heading = null;
+          }
         });
-        if (first) _fitBoth();
-        if (_followMe) _map.move(_me!, _map.camera.zoom);
+        if (first || _followMe) _safeMove(_me!, first ? 16 : null);
         _maybeRefreshRoute();
       }, onError: (_) {
         if (mounted) setState(() => _locationNote = 'Could not get your location.');
@@ -158,16 +291,20 @@ class _ResortMapPageState extends State<ResortMapPage> {
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('Resort Map'),
-        backgroundColor: Colors.white.withValues(alpha: 0.85),
+        backgroundColor: const Color(0xFFE6EDF5).withValues(alpha: 0.9),
       ),
       body: Stack(
         children: [
           FlutterMap(
             mapController: _map,
-            options: const MapOptions(
+            options: MapOptions(
               initialCenter: _resort,
               initialZoom: 15,
-              interactionOptions: InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+              interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+              // Ginalaw ng user ang mapa: huminto muna sa pagtutok sa kanya.
+              onPositionChanged: (camera, hasGesture) {
+                if (hasGesture) _touched();
+              },
             ),
             children: [
               TileLayer(
@@ -220,9 +357,9 @@ class _ResortMapPageState extends State<ResortMapPage> {
                   if (me != null)
                     Marker(
                       point: me,
-                      width: 26,
-                      height: 26,
-                      child: const _MeDot(),
+                      width: 44,
+                      height: 44,
+                      child: _MeDot(heading: _heading),
                     ),
                 ],
               ),
@@ -243,7 +380,7 @@ class _ResortMapPageState extends State<ResortMapPage> {
                   icon: Icons.villa_outlined,
                   tooltip: 'Show resort',
                   onTap: () {
-                    setState(() => _followMe = false);
+                    _touched();
                     _map.move(_resort, 16);
                   },
                 ),
@@ -255,8 +392,8 @@ class _ResortMapPageState extends State<ResortMapPage> {
                   onTap: me == null
                       ? null
                       : () {
-                          setState(() => _followMe = !_followMe);
-                          if (_followMe) _map.move(me, 16);
+                          setState(() => _followMe = true);
+                          _map.move(me, math.max(_map.camera.zoom, 16));
                         },
                 ),
                 const SizedBox(height: 10),
@@ -264,7 +401,7 @@ class _ResortMapPageState extends State<ResortMapPage> {
                   icon: Icons.zoom_out_map,
                   tooltip: 'Show both',
                   onTap: () {
-                    setState(() => _followMe = false);
+                    _touched();
                     _fitBoth();
                   },
                 ),
@@ -355,13 +492,22 @@ class _ResortMapPageState extends State<ResortMapPage> {
                         ),
                     ],
                   ),
+                  const SizedBox(height: 10),
+                  _OfflineRow(
+                    online: _online,
+                    savedAt: _mapSavedAt,
+                    saving: _saving,
+                    done: _saveDone,
+                    total: _saveTotal,
+                    onSave: () => _saveMap(),
+                  ),
                   const SizedBox(height: 12),
                   SizedBox(
                     height: 48,
                     child: FilledButton.icon(
                       onPressed: _openDirections,
                       icon: const Icon(Icons.directions),
-                      label: const Text('Get directions'),
+                      label: Text(_online == false ? 'Get directions (needs internet)' : 'Get directions'),
                     ),
                   ),
                 ],
@@ -424,25 +570,122 @@ class _PinTail extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class _MeDot extends StatelessWidget {
-  const _MeDot();
+/// Asul na tuldok ng lokasyon mo, may pulsing na bilog at arrow ng direksyon kapag gumagalaw.
+class _MeDot extends StatefulWidget {
+  const _MeDot({this.heading});
+  final double? heading;
+
+  @override
+  State<_MeDot> createState() => _MeDotState();
+}
+
+class _MeDotState extends State<_MeDot> with SingleTickerProviderStateMixin {
+  late final _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.info.withValues(alpha: 0.22),
-      ),
+    final heading = widget.heading;
+    return Stack(
       alignment: Alignment.center,
-      child: Container(
-        width: 14,
-        height: 14,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.info,
-          border: Border.all(color: Colors.white, width: 2.5),
+      children: [
+        AnimatedBuilder(
+          animation: _pulse,
+          builder: (context, _) => Container(
+            width: 18 + 26 * _pulse.value,
+            height: 18 + 26 * _pulse.value,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.info.withValues(alpha: 0.28 * (1 - _pulse.value)),
+            ),
+          ),
         ),
+        if (heading != null)
+          Transform.rotate(
+            angle: heading * math.pi / 180,
+            child: const Align(
+              alignment: Alignment.topCenter,
+              child: Icon(Icons.navigation, size: 18, color: AppColors.info),
+            ),
+          ),
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.info,
+            border: Border.all(color: Colors.white, width: 2.5),
+            boxShadow: const [BoxShadow(color: Color(0x332563EB), blurRadius: 6)],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Estado ng internet at ng naka-save na mapa para sa offline.
+class _OfflineRow extends StatelessWidget {
+  const _OfflineRow({
+    required this.online,
+    required this.savedAt,
+    required this.saving,
+    required this.done,
+    required this.total,
+    required this.onSave,
+  });
+
+  final bool? online;
+  final DateTime? savedAt;
+  final bool saving;
+  final int done, total;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final offline = online == false;
+    final color = offline ? AppColors.warning : AppColors.success;
+    final String text;
+    if (saving) {
+      text = total == 0 ? 'Saving map for offline…' : 'Saving map for offline… ${(done * 100 / total).round()}%';
+    } else if (savedAt != null) {
+      text = offline ? 'Offline · using the map saved on your phone' : 'Map saved for offline use';
+    } else {
+      text = offline ? 'Offline · only places you viewed before will show' : 'Save the map so it works without internet';
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(offline ? Icons.cloud_off_rounded : Icons.offline_pin_rounded, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(text, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                if (saving && total > 0) ...[
+                  const SizedBox(height: 4),
+                  LinearProgressIndicator(value: done / total, minHeight: 3, borderRadius: BorderRadius.circular(2)),
+                ],
+              ],
+            ),
+          ),
+          if (!saving && !offline)
+            TextButton(
+              onPressed: onSave,
+              child: Text(savedAt == null ? 'Save' : 'Update'),
+            ),
+        ],
       ),
     );
   }
