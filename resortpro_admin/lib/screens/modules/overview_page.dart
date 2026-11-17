@@ -27,7 +27,6 @@ class _OverviewPageState extends State<OverviewPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final data = widget.data;
     final active = data.activeBookings;
     final today = DateUtils.dateOnly(DateTime.now());
@@ -112,6 +111,9 @@ class _OverviewPageState extends State<OverviewPage> {
     };
     final totalGuests = guestTotals.values.fold<int>(0, (s, v) => s + v);
 
+    final arrivalsToday = active.where((b) => bookingDateOf(b) == today).length;
+    final staffName = staffNameOf(Supabase.instance.client.auth.currentUser?.id) ?? 'Admin';
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -119,225 +121,261 @@ class _OverviewPageState extends State<OverviewPage> {
 
         Widget pair(Widget a, Widget b) {
           if (!twoColumns) {
-            return Column(children: [a, const SizedBox(height: 16), b]);
+            return Column(children: [a, const SizedBox(height: 18), b]);
           }
-          return EqualHeightRow(children: [a, b]);
+          return EqualHeightRow(spacing: 18, children: [a, b]);
         }
+
+        final tiles = [
+          _tile(tr('kpiCollected').toUpperCase(), tr('ovCollectedSub'), peso(collected), const Color(0xFF4ADE80),
+              Icons.payments_outlined, () => widget.onOpen(5)),
+          _tile(tr('kpiOutstanding').toUpperCase(), tr('ovOutstandingSub'), peso(outstanding), const Color(0xFFFBBF24),
+              Icons.account_balance_wallet_outlined, () => widget.onOpen(1, 'balance')),
+          _tile(tr('kpiActive').toUpperCase(), tr('kpiInactiveCount', {'n': data.bookings.length - active.length}),
+              '${active.length}', Colors.white, Icons.event_available_outlined, () => widget.onOpen(1)),
+          _tile(tr('kpiNext14').toUpperCase(), tr('kpiUpcomingCaption'), '${upcoming.length}', const Color(0xFF60A5FA),
+              Icons.upcoming_outlined, () => widget.onOpen(2)),
+          _tile(tr('kpiPending').toUpperCase(), tr('kpiVerifiedCaption', {'n': verifiedClients}), '$pending',
+              pending > 0 ? const Color(0xFFF87171) : Colors.white, Icons.verified_user_outlined, () => widget.onOpen(4)),
+        ];
 
         return ListView(
           padding: pageInsets(context),
           children: [
-            // Welcome banner
+            // ---- Hero: bati + mga KPI ----
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
+              padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [AppColors.ink, Color(0xFF0E4D5A), AppColors.primary],
-                ),
+                color: AppColors.ink,
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 24, offset: Offset(0, 12))],
               ),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          tr('greeting', {
-                            'name': staffNameOf(Supabase.instance.client.auth.currentUser?.id) ?? 'Admin',
-                          }),
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tr('greeting', {'name': staffName}),
+                                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 4),
+                            Text(
+                              [?currentStaffTitle(), tr('summaryToday', {'date': formatDate(today)})].join('  ·  '),
+                              style: const TextStyle(color: AppColors.inkText, fontSize: 13.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (width >= 700)
+                        Material(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(14),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () => widget.onOpen(11),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.login_rounded, color: Colors.white, size: 20),
+                                  const SizedBox(width: 10),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('$arrivalsToday',
+                                          style: const TextStyle(
+                                              color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800, height: 1.1)),
+                                      Text(tr('ovArrivalsToday'),
+                                          style: const TextStyle(color: Color(0xFFD7F5EF), fontSize: 11.5)),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                        if (currentStaffTitle() != null) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            currentStaffTitle()!,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                          ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  if (width >= 1100)
+                    Row(
+                      children: [
+                        for (var i = 0; i < tiles.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 12),
+                          Expanded(child: tiles[i]),
                         ],
-                        const SizedBox(height: 4),
-                        Text(
-                          tr('summaryToday', {'date': formatDate(today)}),
-                          style: const TextStyle(color: Color(0xFFCFE3E6), fontSize: 14),
+                      ],
+                    )
+                  else
+                    GridView.count(
+                      crossAxisCount: width >= 700 ? 3 : 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      childAspectRatio: width >= 700 ? 2.0 : 1.4,
+                      children: tiles,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // ---- Needs attention ----
+            if (reminders.isNotEmpty) ...[
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFF5C451), width: 1.5),
+                ),
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.notification_important_outlined, size: 20, color: Color(0xFF92400E)),
+                        const SizedBox(width: 8),
+                        Text(_tc(tr('needsAttention')),
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: const Color(0xFFFACC15), borderRadius: BorderRadius.circular(10)),
+                          child: Text('${reminders.length}',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.ink)),
                         ),
                       ],
                     ),
-                  ),
-                  if (width >= 700)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '${upcoming.length}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800,
+                    const SizedBox(height: 2),
+                    Text(tr('needsAttentionSub'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        for (final r in reminders)
+                          Material(
+                            color: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: const BorderSide(color: Color(0xFFF5D08A)),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: InkWell(
+                              onTap: () => widget.onOpen(r.module, r.bookingStatus),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 30,
+                                      height: 30,
+                                      decoration: BoxDecoration(
+                                        color: r.color.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(9),
+                                      ),
+                                      child: Icon(r.icon, color: r.color, size: 17),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(r.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.muted),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
-                          Text(
-                            tr('kpiNext14'),
-                            style: const TextStyle(color: Color(0xFFCFE3E6), fontSize: 12),
-                          ),
-                        ],
-                      ),
+                      ],
                     ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // KPI cards
-            StatGrid(
-              children: [
-                StatCard(
-                  icon: Icons.payments_outlined,
-                  label: tr('kpiCollected'),
-                  value: peso(collected),
-                  color: AppColors.success,
-                  onTap: () => widget.onOpen(5),
-                ),
-                StatCard(
-                  icon: Icons.account_balance_wallet_outlined,
-                  label: tr('kpiOutstanding'),
-                  value: peso(outstanding),
-                  color: AppColors.accent,
-                  onTap: () => widget.onOpen(1, 'balance'),
-                ),
-                StatCard(
-                  icon: Icons.event_available_outlined,
-                  label: tr('kpiActive'),
-                  value: '${active.length}',
-                  caption: tr('kpiInactiveCount', {'n': data.bookings.length - active.length}),
-                  color: theme.colorScheme.primary,
-                  onTap: () => widget.onOpen(1),
-                ),
-                StatCard(
-                  icon: Icons.upcoming_outlined,
-                  label: tr('kpiNext14'),
-                  value: '${upcoming.length}',
-                  caption: tr('kpiUpcomingCaption'),
-                  color: AppColors.info,
-                  onTap: () => widget.onOpen(2),
-                ),
-                StatCard(
-                  icon: Icons.verified_user_outlined,
-                  label: tr('kpiPending'),
-                  value: '$pending',
-                  caption: tr('kpiVerifiedCaption', {'n': verifiedClients}),
-                  color: pending > 0 ? const Color(0xFFD64545) : const Color(0xFF7A7F87),
-                  onTap: () => widget.onOpen(4),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Needs attention (reminders)
-            if (reminders.isNotEmpty) ...[
-              SectionCard(
-                title: tr('needsAttention'),
-                subtitle: tr('needsAttentionSub'),
-                child: Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    for (final r in reminders)
-                      ActionChip(
-                        avatar: Icon(r.icon, color: r.color, size: 18),
-                        label: Text(r.title),
-                        side: BorderSide(color: r.color.withValues(alpha: 0.4)),
-                        backgroundColor: r.color.withValues(alpha: 0.08),
-                        onPressed: () => widget.onOpen(r.module, r.bookingStatus),
-                      ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
             ],
 
-            // Monthly revenue
-            SectionCard(
+            // ---- Monthly revenue ----
+            _section(
+              icon: Icons.bar_chart_rounded,
               title: tr('monthlyRevenue'),
-              subtitle: tr('monthlySubtitle', {
-                'n': yearBookings,
-                'amount': peso(yearTotal),
-                'year': _year,
-              }),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    tooltip: tr('prevYear'),
-                    onPressed: _year > minYear ? () => setState(() => _year--) : null,
-                    icon: const Icon(Icons.chevron_left),
-                  ),
-                  Text('$_year', style: theme.textTheme.titleMedium),
-                  IconButton(
-                    tooltip: tr('nextYear'),
-                    onPressed: _year < maxYear ? () => setState(() => _year++) : null,
-                    icon: const Icon(Icons.chevron_right),
-                  ),
-                ],
+              subtitle: tr('monthlySubtitle', {'n': yearBookings, 'amount': peso(yearTotal), 'year': _year}),
+              trailing: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.subtle,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: tr('prevYear'),
+                      onPressed: _year > minYear ? () => setState(() => _year--) : null,
+                      icon: const Icon(Icons.chevron_left_rounded),
+                    ),
+                    Text('$_year', style: const TextStyle(fontWeight: FontWeight.w800)),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: tr('nextYear'),
+                      onPressed: _year < maxYear ? () => setState(() => _year++) : null,
+                      icon: const Icon(Icons.chevron_right_rounded),
+                    ),
+                  ],
+                ),
               ),
               child: GroupedBarChart(
                 labels: monthShort,
                 series: [
-                  ChartSeries(tr('seriesBooked'), theme.colorScheme.primary, booked),
-                  ChartSeries(tr('seriesCollected'), const Color(0xFF2E9E5B), collectedByMonth),
+                  ChartSeries(_tc(tr('seriesBooked')), AppColors.primary, booked),
+                  ChartSeries(_tc(tr('seriesCollected')), const Color(0xFF4ADE80), collectedByMonth),
                 ],
                 axisFormat: pesoCompact,
                 valueFormat: peso,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
 
             pair(
-              SectionCard(
+              _section(
+                icon: Icons.donut_large_rounded,
                 title: tr('byStatus'),
                 subtitle: tr('byStatusSub'),
                 child: DonutChart(
                   centerLabel: tr('bookingsWord'),
                   slices: [
-                    for (final k in statusKeys)
-                      DonutSlice(statusLabel(k), statusCounts[k]!.toDouble(), statusColor(k)),
+                    for (final k in statusKeys) DonutSlice(statusLabel(k), statusCounts[k]!.toDouble(), statusColor(k)),
                   ],
                 ),
               ),
-              SectionCard(
+              _section(
+                icon: Icons.inventory_2_outlined,
                 title: tr('topPackages'),
                 subtitle: tr('topPackagesSub'),
                 child: HorizontalBarList(
-                  color: theme.colorScheme.primary,
+                  color: AppColors.primary,
                   items: [
                     for (final name in topPackages.take(6))
                       BarItem(
                         name,
                         pkgCount[name]!.toDouble(),
-                        trailing: tr('pkgBookingsValue', {
-                          'n': pkgCount[name],
-                          'amount': pesoCompact(pkgRevenue[name]!),
-                        }),
+                        trailing: tr('pkgBookingsValue', {'n': pkgCount[name], 'amount': pesoCompact(pkgRevenue[name]!)}),
                       ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
 
             pair(
-              SectionCard(
+              _section(
+                icon: Icons.account_balance_wallet_outlined,
                 title: tr('byMethod'),
                 subtitle: tr('byMethodSub'),
                 child: methods.isEmpty
@@ -345,17 +383,15 @@ class _OverviewPageState extends State<OverviewPage> {
                     : DonutChart(
                         centerLabel: tr('collectedWord'),
                         valueFormat: pesoCompact,
-                        slices: [
-                          for (final m in methods)
-                            DonutSlice(methodLabel(m), methodTotals[m]!, methodColor(m)),
-                        ],
+                        slices: [for (final m in methods) DonutSlice(methodLabel(m), methodTotals[m]!, methodColor(m))],
                       ),
               ),
-              SectionCard(
+              _section(
+                icon: Icons.groups_outlined,
                 title: tr('guestDemo'),
                 subtitle: tr('guestDemoSub', {'n': totalGuests}),
                 child: HorizontalBarList(
-                  color: const Color(0xFF8E5CD9),
+                  color: const Color(0xFF6366F1),
                   items: totalGuests == 0
                       ? []
                       : [
@@ -370,38 +406,30 @@ class _OverviewPageState extends State<OverviewPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
 
-            SectionCard(
+            // ---- Upcoming ----
+            _section(
+              icon: Icons.upcoming_outlined,
               title: tr('upcomingTitle'),
               subtitle: tr('upcomingSub'),
-              trailing: TextButton(
+              padBody: false,
+              trailing: OutlinedButton.icon(
                 onPressed: () => widget.onOpen(2),
-                child: Text(tr('openCalendar')),
+                icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                label: Text(tr('openCalendar')),
               ),
               child: upcoming.isEmpty
                   ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Center(child: Text(tr('noUpcoming'))),
+                      padding: const EdgeInsets.all(24),
+                      child: EmptyState(icon: Icons.event_available, message: tr('noUpcoming')),
                     )
                   : Column(
                       children: [
-                        for (final b in upcoming.take(8))
-                          ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: _DateBadge(date: bookingDateOf(b)!),
-                            title: Text(packageNameOf(b)),
-                            subtitle: Text('${clientNameOf(b)} · ${tr('paxCount', {'n': guestsOf(b)})}'),
-                            trailing: remainingOf(b) > 0
-                                ? Text(
-                                    tr('balanceAmount', {'amount': peso(remainingOf(b))}),
-                                    style: const TextStyle(
-                                      color: Color(0xFFE08A00),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  )
-                                : const StatusChip(status: 'fully_paid'),
-                          ),
+                        for (var i = 0; i < upcoming.take(8).length; i++) ...[
+                          if (i > 0) const Divider(height: 1),
+                          _upcomingRow(upcoming[i], today),
+                        ],
                       ],
                     ),
             ),
@@ -411,37 +439,194 @@ class _OverviewPageState extends State<OverviewPage> {
       },
     );
   }
+
+  static const _minor = {'a', 'an', 'the', 'and', 'or', 'of', 'by', 'per', 'to', 'in', 'on', 'for', 'vs', 'at',
+      'ng', 'sa', 'ang', 'mga', 'og', 'ug'};
+
+  /// Title Case (hindi ginagalaw ang salitang puro capital at maliliit na salita sa gitna).
+  static String _tc(String text) {
+    var first = true;
+    return text.split(' ').map((w) {
+      if (w.isEmpty) return w;
+      final isFirst = first;
+      first = false;
+      if (w == w.toUpperCase()) return w;
+      final bare = w.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+      if (!isFirst && _minor.contains(bare)) return w;
+      final i = w.indexOf(RegExp(r'[A-Za-z]'));
+      if (i < 0) return w;
+      return w.substring(0, i) + w[i].toUpperCase() + w.substring(i + 1);
+    }).join(' ');
+  }
+
+  Widget _tile(String label, String sub, String value, Color valueColor, IconData icon, VoidCallback onTap) {
+    return Material(
+      color: AppColors.inkRaised,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppColors.inkLine),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: AppColors.inkText, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
+                  ),
+                  Icon(icon, size: 16, color: const Color(0xFF7F93A6)),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(sub,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFF7F93A6), fontSize: 10.5, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(value, style: TextStyle(color: valueColor, fontSize: 22, fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _section({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+    required Widget child,
+    bool padBody = true,
+  }) {
+    return AppCard(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 18, 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, size: 20, color: AppColors.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_tc(title), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
+                      if (subtitle != null) Text(subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                    ],
+                  ),
+                ),
+                if (trailing != null) ...[const SizedBox(width: 12), trailing],
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          if (padBody) Padding(padding: const EdgeInsets.all(20), child: child) else child,
+        ],
+      ),
+    );
+  }
+
+  Widget _upcomingRow(Map<String, dynamic> b, DateTime today) {
+    final d = bookingDateOf(b)!;
+    final days = d.difference(today).inDays;
+    final when = days == 0
+        ? tr('ovToday')
+        : days == 1
+            ? tr('ovTomorrow')
+            : tr('ovInDays', {'n': days});
+    final balance = remainingOf(b);
+    return InkWell(
+      onTap: () => widget.onOpen(1),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        child: Row(
+          children: [
+            _DateBadge(date: d, today: days == 0),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(packageNameOf(b), style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text('${clientNameOf(b)}  ·  ${tr('paxCount', {'n': guestsOf(b)})}  ·  $when',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            if (balance > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFF5C451)),
+                ),
+                child: Text(tr('balanceAmount', {'amount': peso(balance)}),
+                    style: const TextStyle(color: Color(0xFF92400E), fontWeight: FontWeight.w700, fontSize: 12)),
+              )
+            else
+              const StatusChip(status: 'fully_paid'),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _DateBadge extends StatelessWidget {
-  const _DateBadge({required this.date});
+  const _DateBadge({required this.date, this.today = false});
   final DateTime date;
+  final bool today;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final fg = today ? Colors.white : AppColors.primary;
     return Container(
-      width: 48,
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      width: 50,
+      padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(10),
+        color: today ? AppColors.primary : AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: today ? 1 : 0.25)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            monthShort[date.month - 1].toUpperCase(),
-            style: TextStyle(fontSize: 10, color: theme.colorScheme.onPrimaryContainer),
-          ),
-          Text(
-            '${date.day}',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-          ),
+          Text(monthShort[date.month - 1].toUpperCase(),
+              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: fg)),
+          Text('${date.day}',
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, height: 1.1, color: fg)),
         ],
       ),
     );
