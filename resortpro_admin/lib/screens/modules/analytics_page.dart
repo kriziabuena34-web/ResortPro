@@ -24,6 +24,26 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
   String _pct(double v) => '${(v * 100).toStringAsFixed(1)}%';
 
+  static const _minor = {'a', 'an', 'the', 'and', 'or', 'of', 'by', 'per', 'to', 'in', 'on', 'for', 'vs', 'at',
+      'ng', 'sa', 'ang', 'mga', 'og', 'ug'};
+
+  /// Title Case: malaking unang letra ng bawat salita. Hindi ginagalaw ang
+  /// salitang puro capital na (hal. KPI) at ang maliliit na salita sa gitna.
+  static String _tc(String text) {
+    var first = true;
+    return text.split(' ').map((w) {
+      if (w.isEmpty) return w;
+      final isFirst = first;
+      first = false;
+      if (w == w.toUpperCase()) return w;
+      final bare = w.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+      if (!isFirst && _minor.contains(bare)) return w;
+      final i = w.indexOf(RegExp(r'[A-Za-z]'));
+      if (i < 0) return w;
+      return w.substring(0, i) + w[i].toUpperCase() + w.substring(i + 1);
+    }).join(' ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final a = Analytics(widget.data);
@@ -88,8 +108,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             // ---- Forecast ----
             _section(
               icon: Icons.insights_rounded,
-              title: tr('anForecastTitle'),
-              subtitle: tr('anForecastSub'),
+              title: _tc(tr('anForecastTitle')),
+              subtitle: _tc(tr('anForecastSub')),
               trailing: _toggle(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -98,16 +118,17 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                     labels: allLabels,
                     highlightFrom: labels.length,
                     axisFormat: fmt,
+                    valueFormat: fmtFull,
                     series: [
-                      LineSeries(tr('anActual'), AppColors.primary, [...history, for (var i = 0; i < _horizon; i++) null]),
+                      LineSeries(_tc(tr('anActual')), AppColors.primary, [...history, for (var i = 0; i < _horizon; i++) null]),
                       LineSeries(
-                        tr('anMovingAvg'),
+                        _tc(tr('anMovingAvg')),
                         const Color(0xFFF59E0B),
                         [for (var i = 0; i < history.length - 1; i++) null, history.last, ...ma],
                         dashed: true,
                       ),
                       LineSeries(
-                        tr('anRegression'),
+                        _tc(tr('anRegression')),
                         const Color(0xFF6366F1),
                         [
                           for (var i = 0; i < history.length; i++) reg.predict(i.toDouble()).clamp(0, double.infinity).toDouble(),
@@ -172,12 +193,12 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             pair(
               _section(
                 icon: Icons.hotel_outlined,
-                title: tr('anOccupancyMonthly'),
-                subtitle: tr('anOccupancyDef'),
+                title: _tc(tr('anOccupancyMonthly')),
+                subtitle: _tc(tr('anOccupancyDef')),
                 child: GroupedBarChart(
                   labels: labels,
                   series: [
-                    ChartSeries(tr('anOccupancy'), AppColors.primary, [for (final m in monthly) m.occupancy * 100]),
+                    ChartSeries(_tc(tr('anOccupancy')), AppColors.primary, [for (final m in monthly) m.occupancy * 100]),
                   ],
                   axisFormat: (v) => '${v.toStringAsFixed(0)}%',
                   valueFormat: (v) => '${v.toStringAsFixed(1)}%',
@@ -185,13 +206,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               ),
               _section(
                 icon: Icons.event_busy_outlined,
-                title: tr('anCancelMonthly'),
-                subtitle: tr('anCancelDef'),
+                title: _tc(tr('anCancelMonthly')),
+                subtitle: _tc(tr('anCancelDef')),
                 child: GroupedBarChart(
                   labels: labels,
                   series: [
-                    ChartSeries(tr('anCancelRate'), const Color(0xFFEF4444), [for (final m in monthly) m.cancellationRate * 100]),
-                    ChartSeries(tr('anNoShowRate'), const Color(0xFF94A3B8), [for (final m in monthly) m.noShowRate * 100]),
+                    ChartSeries(_tc(tr('anCancelRate')), const Color(0xFFEF4444), [for (final m in monthly) m.cancellationRate * 100]),
+                    ChartSeries(_tc(tr('anNoShowRate')), const Color(0xFF94A3B8), [for (final m in monthly) m.noShowRate * 100]),
                   ],
                   axisFormat: (v) => '${v.toStringAsFixed(0)}%',
                   valueFormat: (v) => '${v.toStringAsFixed(1)}%',
@@ -203,7 +224,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             pair(
               _section(
                 icon: Icons.calendar_view_week_rounded,
-                title: tr('anPeakDays'),
+                title: _tc(tr('anPeakDays')),
                 subtitle: weekday.every((c) => c == 0)
                     ? tr('noData')
                     : tr('anPeakDaySub', {'day': tr(dayKeys[peakIndex])}),
@@ -217,16 +238,16 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               ),
               _section(
                 icon: Icons.groups_outlined,
-                title: tr('anClientsTitle'),
-                subtitle: tr('anClientsSub'),
+                title: _tc(tr('anClientsTitle')),
+                subtitle: _tc(tr('anClientsSub')),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     DonutChart(
                       centerLabel: tr('navClients').toLowerCase(),
                       slices: [
-                        DonutSlice(tr('anNewClients'), loyalty.newClients.toDouble(), const Color(0xFF60A5FA)),
-                        DonutSlice(tr('anRepeatClients'), loyalty.repeatClients.toDouble(), const Color(0xFF6366F1)),
+                        DonutSlice(_tc(tr('anNewClients')), loyalty.newClients.toDouble(), const Color(0xFF60A5FA)),
+                        DonutSlice(_tc(tr('anRepeatClients')), loyalty.repeatClients.toDouble(), const Color(0xFF6366F1)),
                       ],
                     ),
                     const SizedBox(height: 18),
@@ -247,8 +268,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
             _section(
               icon: Icons.table_chart_outlined,
-              title: tr('anMonthlyTable'),
-              subtitle: tr('anLast12'),
+              title: _tc(tr('anMonthlyTable')),
+              subtitle: _tc(tr('anLast12')),
               padBody: false,
               child: _monthlyTable(monthly, width),
             ),
@@ -427,7 +448,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        children: [seg(true, tr('anRevenue')), seg(false, tr('bookingsWord'))],
+        children: [seg(true, _tc(tr('anRevenue'))), seg(false, _tc(tr('bookingsWord')))],
       ),
     );
   }
@@ -456,71 +477,101 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
         children: [
           Text(month.toUpperCase(), style: _caps),
           const SizedBox(height: 2),
-          line(const Color(0xFFF59E0B), tr('anMovingAvg'), ma),
-          line(const Color(0xFF6366F1), tr('anRegression'), reg),
-          line(AppColors.primary, tr('anAlreadyBooked'), booked),
+          line(const Color(0xFFF59E0B), _tc(tr('anMovingAvg')), ma),
+          line(const Color(0xFF6366F1), _tc(tr('anRegression')), reg),
+          line(AppColors.primary, _tc(tr('anAlreadyBooked')), booked),
         ],
       ),
     );
   }
 
   Widget _monthlyTable(List<MonthStat> monthly, double width) {
-    const flex = [3, 2, 2, 2, 2, 3, 3];
+    const flex = [3, 2, 3, 3, 3, 4, 4];
     final headers = [
       tr('rpcMonth'),
       tr('rpcBookings'),
       tr('anOccupancy'),
-      tr('anCancelRate'),
-      tr('anNoShowRate'),
+      tr('anColCancelled'),
+      tr('anColNoShow'),
       tr('rpcBooked'),
       tr('rpcCollected'),
     ];
-    Widget row(List<String> cells, {bool header = false}) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          color: header ? AppColors.subtle : null,
+    final rows = monthly.reversed.toList();
+    final totalActive = rows.fold<int>(0, (s, m) => s + m.active);
+    final totalBooked = rows.fold<double>(0, (s, m) => s + m.revenue);
+    final totalCollected = rows.fold<double>(0, (s, m) => s + m.collected);
+    double avg(double Function(MonthStat) f) => rows.isEmpty ? 0 : rows.fold<double>(0, (s, m) => s + f(m)) / rows.length;
+
+    Widget line(List<String> cells, {bool header = false, bool total = false, bool shade = false}) => Container(
+          constraints: const BoxConstraints(minHeight: 46),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          color: header
+              ? AppColors.subtle
+              : total
+                  ? const Color(0xFFF1F5F9)
+                  : shade
+                      ? const Color(0xFFFAFBFC)
+                      : Colors.white,
           child: Row(
             children: [
               for (var i = 0; i < cells.length; i++)
                 Expanded(
                   flex: flex[i],
                   child: Padding(
-                    padding: EdgeInsets.only(right: i == cells.length - 1 ? 0 : 16),
+                    padding: EdgeInsets.only(left: i == 0 ? 0 : 12, right: i == cells.length - 1 ? 0 : 12),
                     child: Text(
                       header ? cells[i].toUpperCase() : cells[i],
                       textAlign: i == 0 ? TextAlign.left : TextAlign.right,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: header
                           ? _caps
-                          : TextStyle(fontSize: 13.5, fontWeight: i == 0 ? FontWeight.w600 : FontWeight.w400),
+                          : TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: total ? FontWeight.w800 : (i == 0 ? FontWeight.w600 : FontWeight.w500),
+                              color: !total && i > 0 && cells[i].startsWith('0') ? AppColors.muted : AppColors.text,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
                     ),
                   ),
                 ),
             ],
           ),
         );
+
     final table = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        row(headers, header: true),
-        for (final m in monthly.reversed) ...[
-          const Divider(height: 1),
-          row([
-            '${monthShort[m.month.month - 1]} ${m.month.year}',
-            '${m.active}',
-            _pct(m.occupancy),
-            _pct(m.cancellationRate),
-            _pct(m.noShowRate),
-            peso(m.revenue),
-            peso(m.collected),
-          ]),
+        line(headers, header: true),
+        const Divider(height: 1),
+        for (var r = 0; r < rows.length; r++) ...[
+          if (r > 0) const Divider(height: 1, color: Color(0xFFEEF2F6)),
+          line([
+            '${monthNames[rows[r].month.month - 1]} ${rows[r].month.year}',
+            '${rows[r].active}',
+            _pct(rows[r].occupancy),
+            _pct(rows[r].cancellationRate),
+            _pct(rows[r].noShowRate),
+            peso(rows[r].revenue),
+            peso(rows[r].collected),
+          ], shade: r.isOdd),
         ],
+        const Divider(height: 1, thickness: 1.5),
+        line([
+          tr('anTotalAvg'),
+          '$totalActive',
+          _pct(avg((m) => m.occupancy)),
+          _pct(avg((m) => m.cancellationRate)),
+          _pct(avg((m) => m.noShowRate)),
+          peso(totalBooked),
+          peso(totalCollected),
+        ], total: true),
       ],
     );
-    if (width >= 900) return table;
+    if (width >= 1000) return table;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: SizedBox(width: 900, child: table),
+      child: SizedBox(width: 1000, child: table),
     );
   }
 }

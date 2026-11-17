@@ -182,7 +182,7 @@ const Map<AppLanguage, Map<String, String>> _strings = {
     'kindBalance': 'Balance',
 
     // Charts
-    'chartTapHint': 'Tap a bar to see the details.',
+    'chartTapHint': 'Point at or tap a bar to see the details.',
 
     // Dashboard
     'greeting': 'Good day, {name}!',
@@ -272,6 +272,10 @@ const Map<AppLanguage, Map<String, String>> _strings = {
     'clStatLast': 'LAST BOOKING',
     'clPersonalInfo': 'Personal info',
     'bkDetailsInfo': 'Booking info',
+    'chartForecast': 'Forecast',
+    'anColCancelled': 'Cancelled',
+    'anColNoShow': 'No-show',
+    'anTotalAvg': 'Total / Avg',
     'anOverview': 'KEY NUMBERS',
     'anKCancelSub': 'Bookings cancelled',
     'anKNoShowSub': 'Guests who did not arrive',
@@ -1081,7 +1085,7 @@ const Map<AppLanguage, Map<String, String>> _strings = {
     'kindBalance': 'Balance',
 
     // Charts
-    'chartTapHint': 'I-tap ang isang bar para makita ang detalye.',
+    'chartTapHint': 'Itapat ang cursor o i-tap ang isang bar para makita ang detalye.',
 
     // Dashboard
     'greeting': 'Magandang araw, {name}!',
@@ -1171,6 +1175,10 @@ const Map<AppLanguage, Map<String, String>> _strings = {
     'clStatLast': 'HULING BOOKING',
     'clPersonalInfo': 'Personal na impormasyon',
     'bkDetailsInfo': 'Impormasyon ng booking',
+    'chartForecast': 'Forecast',
+    'anColCancelled': 'Cancelled',
+    'anColNoShow': 'No-show',
+    'anTotalAvg': 'Kabuuan / Avg',
     'anOverview': 'MAHAHALAGANG BILANG',
     'anKCancelSub': 'Mga na-cancel na booking',
     'anKNoShowSub': 'Mga guest na hindi dumating',
@@ -1965,7 +1973,7 @@ const Map<AppLanguage, Map<String, String>> _strings = {
     'kindBalance': 'Balanse',
 
     // Charts
-    'chartTapHint': 'I-tap ang usa ka bar aron makita ang detalye.',
+    'chartTapHint': 'Itutok ang cursor o i-tap ang usa ka bar aron makita ang detalye.',
 
     // Dashboard
     'greeting': 'Maayong adlaw, {name}!',
@@ -2055,6 +2063,10 @@ const Map<AppLanguage, Map<String, String>> _strings = {
     'clStatLast': 'KATAPUSANG BOOKING',
     'clPersonalInfo': 'Personal nga impormasyon',
     'bkDetailsInfo': 'Impormasyon sa booking',
+    'chartForecast': 'Forecast',
+    'anColCancelled': 'Cancelled',
+    'anColNoShow': 'No-show',
+    'anTotalAvg': 'Kinatibuk-an / Avg',
     'anOverview': 'IMPORTANTENG NUMERO',
     'anKCancelSub': 'Mga gi-cancel nga booking',
     'anKNoShowSub': 'Mga guest nga wala miabot',

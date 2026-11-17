@@ -75,7 +75,13 @@ class _GroupedBarChartState extends State<GroupedBarChart> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final width = constraints.maxWidth;
-              return GestureDetector(
+              return MouseRegion(
+                onHover: (e) {
+                  final i = _hitIndex(e.localPosition.dx, width);
+                  if (i != _selected) setState(() => _selected = i);
+                },
+                onExit: (_) => setState(() => _selected = null),
+                child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTapDown: (details) {
                   final i = _hitIndex(details.localPosition.dx, width);
@@ -94,6 +100,7 @@ class _GroupedBarChartState extends State<GroupedBarChart> {
                     bottom: _bottom,
                     top: _top,
                   ),
+                ),
                 ),
               );
             },
@@ -470,13 +477,14 @@ class LineSeries {
   final bool dashed;
 }
 
-class LineChart extends StatelessWidget {
+class LineChart extends StatefulWidget {
   const LineChart({
     super.key,
     required this.labels,
     required this.series,
     this.height = 260,
     this.axisFormat,
+    this.valueFormat,
     this.highlightFrom,
   });
 
@@ -485,12 +493,35 @@ class LineChart extends StatelessWidget {
   final double height;
   final String Function(double)? axisFormat;
 
+  /// Format ng value sa tooltip (default: kapareho ng axis).
+  final String Function(double)? valueFormat;
+
   /// Index kung saan nagsisimula ang forecast (may shaded na background).
   final int? highlightFrom;
 
   @override
+  State<LineChart> createState() => _LineChartState();
+}
+
+class _LineChartState extends State<LineChart> {
+  int? _hover;
+
+  int? _indexAt(double dx, double width) {
+    final n = widget.labels.length;
+    if (n == 0) return null;
+    const left = _LinePainter.left, right = _LinePainter.right;
+    final plotW = width - left - right;
+    if (n == 1) return 0;
+    final step = plotW / (n - 1);
+    final i = ((dx - left) / step).round();
+    if (i < 0 || i >= n) return null;
+    return i;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fmt = widget.valueFormat ?? widget.axisFormat ?? (double v) => v.toStringAsFixed(0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -498,7 +529,7 @@ class LineChart extends StatelessWidget {
           spacing: 16,
           runSpacing: 4,
           children: [
-            for (final s in series)
+            for (final s in widget.series)
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -511,18 +542,119 @@ class LineChart extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: height,
+          height: widget.height,
           width: double.infinity,
-          child: CustomPaint(
-            painter: _LinePainter(
-              labels: labels,
-              series: series,
-              axisFormat: axisFormat ?? (v) => v.toStringAsFixed(0),
-              gridColor: theme.colorScheme.outlineVariant,
-              textColor: theme.colorScheme.onSurfaceVariant,
-              shadeColor: theme.colorScheme.primaryContainer.withValues(alpha: 0.35),
-              highlightFrom: highlightFrom,
-            ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final h = _hover;
+              final n = widget.labels.length;
+              double xOf(int i) {
+                const left = _LinePainter.left, right = _LinePainter.right;
+                final plotW = width - left - right;
+                return left + (n > 1 ? i * plotW / (n - 1) : plotW / 2);
+              }
+
+              final rows = h == null
+                  ? const <LineSeries>[]
+                  : [for (final s in widget.series) if (h < s.values.length && s.values[h] != null) s];
+              const tipW = 190.0;
+              double tipX = 0;
+              if (h != null) {
+                tipX = xOf(h) + 14;
+                if (tipX + tipW > width) tipX = xOf(h) - tipW - 14;
+                if (tipX < 0) tipX = 0;
+              }
+
+              return MouseRegion(
+                onHover: (e) {
+                  final i = _indexAt(e.localPosition.dx, width);
+                  if (i != _hover) setState(() => _hover = i);
+                },
+                onExit: (_) => setState(() => _hover = null),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (d) {
+                    final i = _indexAt(d.localPosition.dx, width);
+                    setState(() => _hover = i == _hover ? null : i);
+                  },
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _LinePainter(
+                            labels: widget.labels,
+                            series: widget.series,
+                            axisFormat: widget.axisFormat ?? (v) => v.toStringAsFixed(0),
+                            gridColor: theme.colorScheme.outlineVariant,
+                            textColor: theme.colorScheme.onSurfaceVariant,
+                            shadeColor: theme.colorScheme.primaryContainer.withValues(alpha: 0.35),
+                            highlightFrom: widget.highlightFrom,
+                            hover: h,
+                          ),
+                        ),
+                      ),
+                      if (h != null && rows.isNotEmpty)
+                        Positioned(
+                          left: tipX,
+                          top: 8,
+                          width: tipW,
+                          child: IgnorePointer(
+                            child: Container(
+                              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0B1B2B),
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: const [
+                                  BoxShadow(color: Color(0x33000000), blurRadius: 12, offset: Offset(0, 6)),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    widget.labels[h] +
+                                        (widget.highlightFrom != null && h >= widget.highlightFrom!
+                                            ? '  ·  ${tr('chartForecast')}'
+                                            : ''),
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12.5),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  for (final s in rows)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 3),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 8,
+                                            height: 8,
+                                            decoration: BoxDecoration(color: s.color, shape: BoxShape.circle),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(s.name,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(color: Color(0xFFB7C4D1), fontSize: 11.5)),
+                                          ),
+                                          Text(fmt(s.values[h]!),
+                                              style: const TextStyle(
+                                                  color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -539,6 +671,7 @@ class _LinePainter extends CustomPainter {
     required this.textColor,
     required this.shadeColor,
     required this.highlightFrom,
+    this.hover,
   });
 
   final List<String> labels;
@@ -548,6 +681,7 @@ class _LinePainter extends CustomPainter {
   final Color textColor;
   final Color shadeColor;
   final int? highlightFrom;
+  final int? hover;
 
   static const double left = 56, bottom = 26, top = 8, right = 8;
 
@@ -601,6 +735,18 @@ class _LinePainter extends CustomPainter {
       tp.paint(canvas, Offset(xOf(i) - tp.width / 2, top + plotH + 6));
     }
 
+    // Guhit kung nasaan ang cursor
+    final hv = hover;
+    if (hv != null && hv < n) {
+      canvas.drawLine(
+        Offset(xOf(hv), top),
+        Offset(xOf(hv), top + plotH),
+        Paint()
+          ..color = textColor.withValues(alpha: 0.45)
+          ..strokeWidth = 1,
+      );
+    }
+
     // Lines
     for (final s in series) {
       final paint = Paint()
@@ -623,7 +769,12 @@ class _LinePainter extends CustomPainter {
             canvas.drawLine(prev, p, paint);
           }
         }
-        canvas.drawCircle(p, 3, dot);
+        if (i == hv) {
+          canvas.drawCircle(p, 6.5, Paint()..color = Colors.white);
+          canvas.drawCircle(p, 5, dot);
+        } else {
+          canvas.drawCircle(p, 3, dot);
+        }
         prev = p;
       }
     }
