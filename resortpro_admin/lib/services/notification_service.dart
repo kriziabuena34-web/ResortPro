@@ -299,10 +299,32 @@ List<AdminReminder> remindersFor(AdminData data) {
         b['status'] != 'completed';
   }).length;
 
+  // Lumampas na sa oras ng check-out pero naka-check in pa (overnight = kinabukasan ang alis).
+  DateTime? endOf(Map<String, dynamic> b) {
+    final d = bookingDateOf(b);
+    final pkg = data.packageById(b['package_id']);
+    if (d == null || pkg == null) return null;
+    List<int>? hm(dynamic v) {
+      final p = '${v ?? ''}'.split(':');
+      if (p.length < 2) return null;
+      return [int.tryParse(p[0]) ?? 0, int.tryParse(p[1]) ?? 0];
+    }
+
+    final st = hm(pkg['start_time']), en = hm(pkg['end_time']);
+    if (en == null) return null;
+    final overnight = st != null && (en[0] * 60 + en[1]) <= (st[0] * 60 + st[1]);
+    final day = overnight ? d.add(const Duration(days: 1)) : d;
+    return DateTime(day.year, day.month, day.day, en[0], en[1]);
+  }
+
+  final now = DateTime.now();
   final stillCheckedIn = data.bookings
       .where((b) {
+        if (b['status'] != 'checked_in') return false;
+        final end = endOf(b);
+        if (end != null) return now.isAfter(end);
         final d = bookingDateOf(b);
-        return b['status'] == 'checked_in' && d != null && d.isBefore(today);
+        return d != null && d.isBefore(today);
       })
       .length;
 
