@@ -607,7 +607,7 @@ class _BookingsPageState extends State<BookingsPage> {
           child: Icon(Icons.tune_rounded, size: 18, color: AppColors.muted),
         ),
         if (_status != 'all')
-          _FilterPill(
+          FilterPill(
             icon: Icons.flag_outlined,
             label: tr('bkStatusChip', {'s': statusLabel(_status)}),
             active: true,
@@ -622,7 +622,7 @@ class _BookingsPageState extends State<BookingsPage> {
             for (final e in sortOptions.entries)
               CheckedPopupMenuItem<_Sort>(value: e.key, checked: e.key == _sort, child: Text(e.value)),
           ],
-          child: _FilterPill(
+          child: FilterPill(
             icon: Icons.swap_vert_rounded,
             label: sortOptions[_sort] ?? '',
             active: _sort != _Sort.dateNewest,
@@ -630,7 +630,7 @@ class _BookingsPageState extends State<BookingsPage> {
           ),
         ),
         // Petsa
-        _FilterPill(
+        FilterPill(
           icon: Icons.calendar_month_outlined,
           label: rangeLabel,
           active: r != null,
@@ -660,7 +660,7 @@ class _BookingsPageState extends State<BookingsPage> {
                 child: Text('${p['name']}'),
               ),
           ],
-          child: _FilterPill(
+          child: FilterPill(
             icon: Icons.inventory_2_outlined,
             label: packageLabel,
             active: _packageId != null,
@@ -679,7 +679,7 @@ class _BookingsPageState extends State<BookingsPage> {
                 child: Text(s == 'all' ? tr('allSources') : sourceLabel(s)),
               ),
           ],
-          child: _FilterPill(
+          child: FilterPill(
             icon: _source == 'all' ? Icons.hub_outlined : sourceIcon(_source),
             label: _source == 'all' ? tr('allSources') : sourceLabel(_source),
             active: _source != 'all',
@@ -687,14 +687,14 @@ class _BookingsPageState extends State<BookingsPage> {
           ),
         ),
         // Mga toggle
-        _FilterPill(
+        FilterPill(
           icon: Icons.account_balance_wallet_outlined,
           label: tr('filterWithBalance'),
           active: _unpaidOnly,
           toggle: true,
           onTap: () => setState(() => _unpaidOnly = !_unpaidOnly),
         ),
-        _FilterPill(
+        FilterPill(
           icon: Icons.event_busy_outlined,
           label: tr('filterOverdue'),
           active: _overdueOnly,
@@ -1176,78 +1176,6 @@ class _BookingsPageState extends State<BookingsPage> {
     );
   }
 
-}
-
-/// Iisang itsura ng filter button: pill na may icon at label.
-/// Teal ang kulay kapag naka-on; may ⌄ kapag dropdown, may ✓ kapag toggle, may ✕ para alisin.
-class _FilterPill extends StatelessWidget {
-  const _FilterPill({
-    required this.icon,
-    required this.label,
-    this.active = false,
-    this.dropdown = false,
-    this.toggle = false,
-    this.onTap,
-    this.onClear,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final bool dropdown;
-  final bool toggle;
-  final VoidCallback? onTap;
-  final VoidCallback? onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = active ? AppColors.primaryDark : AppColors.text;
-    final pill = AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      height: 38,
-      padding: EdgeInsets.only(left: 12, right: active && onClear != null ? 4 : 12),
-      decoration: BoxDecoration(
-        color: active ? AppColors.primary.withValues(alpha: 0.10) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: active ? AppColors.primary.withValues(alpha: 0.55) : AppColors.border),
-        boxShadow: active ? null : const [BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 1))],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(toggle && active ? Icons.check_circle_rounded : icon, size: 17, color: active ? AppColors.primary : AppColors.muted),
-          const SizedBox(width: 7),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 220),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: fg, fontWeight: active ? FontWeight.w700 : FontWeight.w600, fontSize: 13.5),
-            ),
-          ),
-          if (dropdown) ...[
-            const SizedBox(width: 2),
-            Icon(Icons.expand_more_rounded, size: 18, color: active ? AppColors.primary : AppColors.muted),
-          ],
-          if (active && onClear != null)
-            InkWell(
-              onTap: onClear,
-              customBorder: const CircleBorder(),
-              child: const Padding(
-                padding: EdgeInsets.all(5),
-                child: Icon(Icons.close_rounded, size: 16, color: AppColors.primaryDark),
-              ),
-            ),
-        ],
-      ),
-    );
-    if (onTap == null) return pill;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(20), child: pill),
-    );
-  }
 }
 
 // ---------------------------------------------------------------------------
