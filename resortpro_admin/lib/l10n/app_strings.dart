@@ -267,8 +267,13 @@ const Map<AppLanguage, Map<String, String>> _strings = {
     'noBookingsMatch': 'No bookings match the filter.',
     'paidOf': 'Paid {paid} of {total}',
     'details': 'Details',
-    'clActMessage': 'Message',
-    'clActReview': 'Review ID',
+    'clStatTotal': 'TOTAL BOOKINGS',
+    'clStatCompleted': 'COMPLETED',
+    'clStatLast': 'LAST BOOKING',
+    'clPersonalInfo': 'Personal info',
+    'clFullName': 'Complete name',
+    'clAge': '{n} yrs old',
+    'clMemberSince': 'Member since',
     'recordPayment': 'Record payment',
 
     // Calendar
@@ -1043,8 +1048,13 @@ const Map<AppLanguage, Map<String, String>> _strings = {
     'noBookingsMatch': 'Walang booking na tugma sa filter.',
     'paidOf': 'Nabayaran ang {paid} sa {total}',
     'details': 'Detalye',
-    'clActMessage': 'I-message',
-    'clActReview': 'I-review ang ID',
+    'clStatTotal': 'LAHAT NG BOOKING',
+    'clStatCompleted': 'NATAPOS',
+    'clStatLast': 'HULING BOOKING',
+    'clPersonalInfo': 'Personal na impormasyon',
+    'clFullName': 'Buong pangalan',
+    'clAge': '{n} taong gulang',
+    'clMemberSince': 'Miyembro mula',
     'recordPayment': 'I-record ang bayad',
 
     // Calendar
@@ -1804,8 +1814,13 @@ const Map<AppLanguage, Map<String, String>> _strings = {
     'noBookingsMatch': 'Walay booking nga motakdo sa filter.',
     'paidOf': 'Nabayran ang {paid} sa {total}',
     'details': 'Detalye',
-    'clActMessage': 'I-message',
-    'clActReview': 'I-review ang ID',
+    'clStatTotal': 'TANANG BOOKING',
+    'clStatCompleted': 'NAHUMAN',
+    'clStatLast': 'KATAPUSANG BOOKING',
+    'clPersonalInfo': 'Personal nga impormasyon',
+    'clFullName': 'Kompletong ngalan',
+    'clAge': '{n} anyos',
+    'clMemberSince': 'Miyembro sukad',
     'recordPayment': 'I-record ang bayad',
 
     // Calendar

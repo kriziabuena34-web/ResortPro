@@ -9,15 +9,9 @@ import '../../widgets/list_controls.dart';
 /// Listahan ng lahat ng client: buod, search, mga tab ayon sa verification,
 /// sort, at history ng bookings ng bawat isa.
 class ClientsPage extends StatefulWidget {
-  const ClientsPage({super.key, required this.data, this.onMessage, this.onReview});
+  const ClientsPage({super.key, required this.data});
 
   final AdminData data;
-
-  /// Bubuksan ang usapan ng client sa Messages.
-  final void Function(String clientId)? onMessage;
-
-  /// Pupunta sa Verifications (para sa client na naghihintay ng review).
-  final VoidCallback? onReview;
 
   @override
   State<ClientsPage> createState() => _ClientsPageState();
@@ -340,7 +334,7 @@ class _ClientsPageState extends State<ClientsPage> {
 
   // Lapad ng bawat column (pareho sa header at sa bawat hanay).
   static const _flex = (client: 5, name: 5, birth: 3, contact: 3, last: 3, status: 3);
-  static const _actionWidth = 128.0;
+  static const _actionWidth = 56.0;
   static const _rowPadding = EdgeInsets.fromLTRB(24, 12, 20, 12);
 
   /// Isang cell: may puwang sa kanan para hindi magdikit ang mga column.
@@ -407,70 +401,6 @@ class _ClientsPageState extends State<ClientsPage> {
     );
   }
 
-  /// Maliit na parisukat na button sa ACTION column.
-  Widget _actionBtn({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback? onTap,
-    required Color fg,
-    required Color bg,
-    Color? border,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: bg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: BorderSide(color: border ?? bg),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: SizedBox(width: 36, height: 36, child: Icon(icon, size: 18, color: fg)),
-        ),
-      ),
-    );
-  }
-
-  Widget _actions(_ClientStats c) {
-    final id = '${c.client['id']}';
-    final pending = c.status == 'pending';
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (pending && widget.onReview != null) ...[
-          _actionBtn(
-            icon: Icons.verified_user_outlined,
-            tooltip: tr('clActReview'),
-            onTap: widget.onReview,
-            fg: AppColors.ink,
-            bg: const Color(0xFFFACC15),
-          ),
-          const SizedBox(width: 6),
-        ],
-        if (widget.onMessage != null) ...[
-          _actionBtn(
-            icon: Icons.chat_bubble_outline_rounded,
-            tooltip: tr('clActMessage'),
-            onTap: () => widget.onMessage!(id),
-            fg: AppColors.primary,
-            bg: AppColors.primary.withValues(alpha: 0.10),
-          ),
-          const SizedBox(width: 6),
-        ],
-        _actionBtn(
-          icon: Icons.visibility_outlined,
-          tooltip: tr('details'),
-          onTap: () => _showClient(c),
-          fg: AppColors.text,
-          bg: Colors.white,
-          border: AppColors.border,
-        ),
-      ],
-    );
-  }
-
   Widget _clientRow(_ClientStats c, {required bool wide}) {
     final theme = Theme.of(context);
     final pending = c.status == 'pending';
@@ -505,7 +435,11 @@ class _ClientsPageState extends State<ClientsPage> {
       ],
     );
 
-    final view = _actions(c);
+    final view = IconButton.outlined(
+      tooltip: tr('details'),
+      onPressed: () => _showClient(c),
+      icon: const Icon(Icons.visibility_outlined, size: 18),
+    );
     final decoration = pending
         ? BoxDecoration(color: const Color(0xFFFFFBEB), border: Border.all(color: const Color(0xFFF5C451), width: 1.5))
         : null;
@@ -582,7 +516,6 @@ class _ClientsPageState extends State<ClientsPage> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
                   view,
                 ],
               ),
@@ -628,6 +561,54 @@ class _ClientsPageState extends State<ClientsPage> {
             ),
           ),
         );
+
+    final completed = c.bookings.where((b) => b['status'] == 'completed').length;
+    final lastVisit = c.lastBooking;
+    final birth = c.birthDate;
+    final age = birth == null ? null : _ageOf(birth);
+    final phone = '${c.client['phone'] ?? ''}'.trim();
+    final idType = '${c.client['government_id_type'] ?? ''}'.trim();
+    final google = '${c.client['google_display_name'] ?? ''}'.trim();
+
+    Widget section(String t) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Text(t.toUpperCase(),
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted)),
+        );
+
+    Widget row(IconData icon, String label, String value) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 18, color: AppColors.muted),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 130,
+                child: Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 13.5)),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(value.isEmpty ? tr('notSet') : value,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13.5,
+                      color: value.isEmpty ? AppColors.muted : AppColors.text,
+                    )),
+              ),
+            ],
+          ),
+        );
+
+    final info = [
+      row(Icons.badge_outlined, tr('clFullName'), c.fullName),
+      row(Icons.phone_outlined, tr('fieldPhone'), phone),
+      row(Icons.cake_outlined, tr('birthDate'),
+          birth == null ? '' : '${formatDate(birth)}  ·  ${tr('clAge', {'n': age})}'),
+      row(Icons.credit_card_outlined, tr('idType'), idType),
+      if (google.isNotEmpty) row(Icons.account_circle_outlined, tr('clGoogleName'), google),
+      row(Icons.event_outlined, tr('clMemberSince'), c.joined == null ? '' : formatDate(c.joined)),
+    ];
 
     showDialog(
       context: context,
@@ -678,31 +659,38 @@ class _ClientsPageState extends State<ClientsPage> {
                     children: [
                       Row(
                         children: [
-                          stat(tr('clColBookings'), '${c.bookingCount}'),
+                          stat(tr('clStatTotal'), '${c.bookings.length}'),
                           const SizedBox(width: 10),
-                          stat(tr('clColPaid'), peso(c.totalPaid)),
+                          stat(tr('clStatCompleted'), '$completed', color: completed > 0 ? AppColors.success : null),
                           const SizedBox(width: 10),
-                          stat(tr('clColBalance'), peso(c.balance), color: c.balance > 0 ? AppColors.warning : null),
+                          stat(tr('clStatLast'), lastVisit == null ? '—' : formatDate(lastVisit)),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      InfoRow(tr('clColName'), c.fullName.isEmpty ? tr('notSet') : c.fullName),
-                      InfoRow(tr('fieldPhone'), '${c.client['phone'] ?? tr('notSet')}'),
-                      InfoRow(tr('birthDate'), formatDate(parseDate(c.client['birth_date']))),
-                      InfoRow(tr('idType'), '${c.client['government_id_type'] ?? tr('notSet')}'),
-                      if ('${c.client['google_display_name'] ?? ''}'.trim().isNotEmpty)
-                        InfoRow(tr('clGoogleName'), '${c.client['google_display_name']}'),
-                      const SizedBox(height: 16),
-                      Text(tr('bookingHistory').toUpperCase(),
-                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 22),
+                      section(tr('clPersonalInfo')),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.border),
+                        ),
+                        child: Column(
+                          children: [
+                            for (var i = 0; i < info.length; i++) ...[
+                              if (i > 0) const Divider(height: 1),
+                              info[i],
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      section('${tr('bookingHistory')} (${bookings.length})'),
                       if (bookings.isEmpty)
                         Text(tr('noBookingsYet'), style: const TextStyle(color: AppColors.muted))
                       else
                         for (final b in bookings)
                           Container(
                             margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+                            padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: AppColors.border),
@@ -727,41 +715,18 @@ class _ClientsPageState extends State<ClientsPage> {
                   ),
                 ),
               ),
-              if (widget.onMessage != null || (c.status == 'pending' && widget.onReview != null))
-                Container(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                  decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
-                  child: Wrap(
-                    alignment: WrapAlignment.end,
-                    spacing: 10,
-                    runSpacing: 8,
-                    children: [
-                      if (c.status == 'pending' && widget.onReview != null)
-                        FilledButton.icon(
-                          style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFACC15), foregroundColor: AppColors.ink),
-                          onPressed: () {
-                            Navigator.pop(dialogContext);
-                            widget.onReview!();
-                          },
-                          icon: const Icon(Icons.verified_user_outlined, size: 18),
-                          label: Text(tr('clActReview')),
-                        ),
-                      if (widget.onMessage != null)
-                        FilledButton.icon(
-                          onPressed: () {
-                            Navigator.pop(dialogContext);
-                            widget.onMessage!('${c.client['id']}');
-                          },
-                          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-                          label: Text(tr('clActMessage')),
-                        ),
-                    ],
-                  ),
-                ),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+/// Edad ngayon batay sa birth date.
+int _ageOf(DateTime birth) {
+  final now = DateTime.now();
+  var age = now.year - birth.year;
+  if (now.month < birth.month || (now.month == birth.month && now.day < birth.day)) age--;
+  return age;
 }
