@@ -47,6 +47,8 @@ class _BookingsPageState extends State<BookingsPage> {
   final _searchController = TextEditingController();
   String _query = '';
   String _status = 'all';
+  // Tab ng status: active, completed, closed (cancelled/no-show), all
+  String _group = 'active';
   String? _packageId;
   DateTimeRange? _range;
   bool _unpaidOnly = false;
@@ -66,6 +68,7 @@ class _BookingsPageState extends State<BookingsPage> {
     final today = DateUtils.dateOnly(DateTime.now());
     if (bookingStatuses.contains(f)) {
       _status = f;
+      _group = 'all';
     } else if (f == 'today') {
       _range = DateTimeRange(start: today, end: today);
     } else if (f == 'balance') {
@@ -74,6 +77,7 @@ class _BookingsPageState extends State<BookingsPage> {
     } else if (f == 'overdue') {
       _overdueOnly = true;
     }
+    if (f == 'today' || f == 'balance' || f == 'overdue') _group = 'all';
   }
 
   void _clearFilters() {
@@ -81,6 +85,7 @@ class _BookingsPageState extends State<BookingsPage> {
     setState(() {
       _query = '';
       _status = 'all';
+      _group = 'active';
       _packageId = null;
       _range = null;
       _unpaidOnly = false;
@@ -95,12 +100,22 @@ class _BookingsPageState extends State<BookingsPage> {
     super.dispose();
   }
 
+  static const _activeStatuses = ['reserved', 'confirmed', 'fully_paid', 'checked_in'];
+
+  static bool _inGroup(Map<String, dynamic> b, String group) => switch (group) {
+        'active' => _activeStatuses.contains(b['status']),
+        'completed' => b['status'] == 'completed',
+        'closed' => isInactive(b),
+        _ => true,
+      };
+
   List<Map<String, dynamic>> get _filtered {
     final q = _query.trim().toLowerCase();
     final today = DateUtils.dateOnly(DateTime.now());
 
     final list = widget.data.bookings.where((b) {
       if (_status != 'all' && b['status'] != _status) return false;
+      if (!_inGroup(b, _group)) return false;
       if (_packageId != null && '${b['package_id']}' != _packageId) return false;
       if (_source != 'all' && bookingSourceOf(b) != _source) return false;
       if (!inRange(bookingDateOf(b), _range)) return false;
@@ -478,9 +493,6 @@ class _BookingsPageState extends State<BookingsPage> {
     final bookings = widget.data.bookings;
     final filtered = _filtered;
 
-    int countOf(String status) =>
-        status == 'all' ? bookings.length : bookings.where((b) => b['status'] == status).length;
-
     final sortOptions = {
       _Sort.dateNewest: tr('sortDateNewest'),
       _Sort.dateOldest: tr('sortDateOldest'),
@@ -495,184 +507,379 @@ class _BookingsPageState extends State<BookingsPage> {
         label: tr('nbButton'),
         onPressed: () => openNewBooking(context, widget.data, widget.onChanged),
       ),
-      child: Column(
-      children: [
-        FloatingToolbar(
-          children: [
-            SearchBox(
-              controller: _searchController,
-              hint: tr('searchHint'),
-              onChanged: (v) => setState(() => _query = v),
-            ),
-            const SizedBox(height: 8),
-            ChipRow(
+      child: RefreshIndicator(
+        onRefresh: widget.onChanged,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 900;
+            return ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: pageInsets(context, fab: true),
               children: [
-                for (final s in ['all', ...bookingStatuses])
-                  if (s == 'all' || countOf(s) > 0 || _status == s)
-                    ChoiceChip(
-                      label: Text('${s == 'all' ? tr('filterAll') : statusLabel(s)} (${countOf(s)})'),
-                      selected: _status == s,
-                      onSelected: (_) => setState(() => _status = s),
-                    ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            ChipRow(
-              children: [
-                SortMenu<_Sort>(
-                  value: _sort,
-                  options: sortOptions,
-                  onChanged: (v) => setState(() => _sort = v),
-                ),
-                DateRangeChip(range: _range, onChanged: (r) => setState(() => _range = r)),
-                _PackageFilter(
-                  packages: widget.data.packages,
-                  value: _packageId,
-                  onChanged: (v) => setState(() => _packageId = v),
-                ),
-                FilterChip(
-                  label: Text(tr('filterWithBalance')),
-                  selected: _unpaidOnly,
-                  onSelected: (v) => setState(() => _unpaidOnly = v),
-                ),
-                FilterChip(
-                  label: Text(tr('filterOverdue')),
-                  selected: _overdueOnly,
-                  onSelected: (v) => setState(() => _overdueOnly = v),
-                ),
-                PopupMenuButton<String>(
-                  tooltip: tr('filterSource'),
-                  onSelected: (v) => setState(() => _source = v),
-                  itemBuilder: (context) => [
-                    for (final s in const ['all', 'online', 'walk_in', 'phone'])
-                      CheckedPopupMenuItem(
-                        value: s,
-                        checked: _source == s,
-                        child: Text(s == 'all' ? tr('allSources') : sourceLabel(s)),
-                      ),
-                  ],
-                  child: Chip(
-                    avatar: Icon(_source == 'all' ? Icons.hub_outlined : sourceIcon(_source), size: 18),
-                    label: Text(_source == 'all' ? tr('allSources') : sourceLabel(_source)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        ResultCount(shown: filtered.length, total: bookings.length, onClear: _clearFilters),
-        Expanded(
-          child: filtered.isEmpty
-              ? EmptyState(icon: Icons.event_busy, message: tr('noBookingsMatch'))
-              : RefreshIndicator(
-                  onRefresh: widget.onChanged,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      // Parang table: isang hanay bawat booking.
-                      final wide = constraints.maxWidth >= 900;
-                      return ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: pageInsets(context, fab: true).copyWith(top: 8),
-                        children: [
-                          AppCard(
-                            margin: EdgeInsets.zero,
-                            clipBehavior: Clip.antiAlias,
-                            child: Column(
-                              children: [
-                                if (wide) _tableHeader(),
-                                for (var i = 0; i < filtered.length; i++) ...[
-                                  if (i > 0 || wide) const Divider(height: 1),
-                                  _buildBookingRow(filtered[i], wide: wide),
-                                ],
-                              ],
+                Text(tr('bkSubtitle'), style: const TextStyle(color: AppColors.muted)),
+                const SizedBox(height: 14),
+                _overviewCard(bookings, wide: wide),
+                const SizedBox(height: 18),
+                AppCard(
+                  margin: EdgeInsets.zero,
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Search + mga tab ng status
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+                        child: Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: wide ? 380 : double.infinity,
+                              child: SearchBox(
+                                controller: _searchController,
+                                hint: tr('searchHint'),
+                                onChanged: (v) => setState(() => _query = v),
+                              ),
                             ),
-                          ),
+                            _groupTabs(bookings),
+                          ],
+                        ),
+                      ),
+                      // Iba pang filter
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+                        child: ChipRow(
+                          children: [
+                            if (_status != 'all')
+                              InputChip(
+                                label: Text(tr('bkStatusChip', {'s': statusLabel(_status)})),
+                                onDeleted: () => setState(() => _status = 'all'),
+                              ),
+                            SortMenu<_Sort>(
+                              value: _sort,
+                              options: sortOptions,
+                              onChanged: (v) => setState(() => _sort = v),
+                            ),
+                            DateRangeChip(range: _range, onChanged: (r) => setState(() => _range = r)),
+                            _PackageFilter(
+                              packages: widget.data.packages,
+                              value: _packageId,
+                              onChanged: (v) => setState(() => _packageId = v),
+                            ),
+                            FilterChip(
+                              label: Text(tr('filterWithBalance')),
+                              selected: _unpaidOnly,
+                              onSelected: (v) => setState(() => _unpaidOnly = v),
+                            ),
+                            FilterChip(
+                              label: Text(tr('filterOverdue')),
+                              selected: _overdueOnly,
+                              onSelected: (v) => setState(() => _overdueOnly = v),
+                            ),
+                            PopupMenuButton<String>(
+                              tooltip: tr('filterSource'),
+                              onSelected: (v) => setState(() => _source = v),
+                              itemBuilder: (context) => [
+                                for (final s in const ['all', 'online', 'walk_in', 'phone'])
+                                  CheckedPopupMenuItem(
+                                    value: s,
+                                    checked: _source == s,
+                                    child: Text(s == 'all' ? tr('allSources') : sourceLabel(s)),
+                                  ),
+                              ],
+                              child: Chip(
+                                avatar: Icon(_source == 'all' ? Icons.hub_outlined : sourceIcon(_source), size: 18),
+                                label: Text(_source == 'all' ? tr('allSources') : sourceLabel(_source)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ResultCount(shown: filtered.length, total: bookings.length, onClear: _clearFilters),
+                      if (filtered.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
+                          child: EmptyState(icon: Icons.event_busy, message: tr('noBookingsMatch')),
+                        )
+                      else ...[
+                        if (wide) _tableHeader(),
+                        for (var i = 0; i < filtered.length; i++) ...[
+                          if (i > 0 || !wide) const Divider(height: 1),
+                          _buildBookingRow(filtered[i], wide: wide),
                         ],
-                      );
-                    },
+                      ],
+                    ],
                   ),
                 ),
+              ],
+            );
+          },
         ),
-      ],
       ),
     );
   }
 
+  /// Madilim na buod sa itaas: halaga, natanggap, balanse, at fully paid.
+  Widget _overviewCard(List<Map<String, dynamic>> bookings, {required bool wide}) {
+    final active = bookings.where((b) => !isInactive(b)).toList();
+    final value = active.fold<double>(0, (s, b) => s + totalOf(b));
+    final received = active.fold<double>(0, (s, b) => s + paidOf(b));
+    final outstanding = active.fold<double>(0, (s, b) => s + remainingOf(b));
+    final fullyPaid = active.where((b) => remainingOf(b) <= 0.01).length;
+    final awaitingDown = active
+        .where((b) => b['status'] == 'reserved' && paidOf(b) + 0.01 < (totalOf(b) * 0.5).roundToDouble())
+        .length;
+    String pct(double part) => value <= 0 ? '0' : (part / value * 100).round().toString();
+
+    final tiles = [
+      _overviewTile(tr('bkTotalValue'), tr('bkTotalValueSub', {'n': active.length}), peso(value), Colors.white),
+      _overviewTile(tr('bkReceived'), tr('bkReceivedSub', {'p': pct(received)}), peso(received), const Color(0xFF4ADE80)),
+      _overviewTile(tr('bkOutstanding'), tr('bkOutstandingSub', {'p': pct(outstanding)}), peso(outstanding),
+          const Color(0xFFFBBF24)),
+      _overviewTile(tr('bkFullyPaid'), tr('bkFullyPaidSub', {'n': awaitingDown}), '$fullyPaid',
+          Colors.white, suffix: ' ${tr('bkOf', {'n': active.length})}'),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.ink,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 24, offset: Offset(0, 12))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.bar_chart_rounded, color: AppColors.inkText, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                tr('bkOverview'),
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 0.8, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (wide)
+            Row(
+              children: [
+                for (var i = 0; i < tiles.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  Expanded(child: tiles[i]),
+                ],
+              ],
+            )
+          else
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 1.55,
+              children: tiles,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _overviewTile(String label, String sub, String value, Color valueColor, {String? suffix}) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: AppColors.inkRaised,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.inkLine),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(label, style: const TextStyle(color: AppColors.inkText, fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
+          const SizedBox(height: 2),
+          Text(sub, maxLines: 2, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xFF7F93A6), fontSize: 10.5, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text.rich(
+              TextSpan(children: [
+                TextSpan(text: value, style: TextStyle(color: valueColor, fontSize: 20, fontWeight: FontWeight.w800)),
+                if (suffix != null)
+                  TextSpan(text: suffix, style: const TextStyle(color: AppColors.inkText, fontSize: 13, fontWeight: FontWeight.w600)),
+              ]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Mga tab: Active · Completed · Cancelled/No-show · All, may bilang.
+  Widget _groupTabs(List<Map<String, dynamic>> bookings) {
+    int count(String g) => bookings.where((b) => _inGroup(b, g)).length;
+    final groups = {
+      'active': tr('bkGroupActive'),
+      'completed': tr('bkGroupCompleted'),
+      'closed': tr('bkGroupClosed'),
+      'all': tr('filterAll'),
+    };
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.subtle,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final e in groups.entries)
+              _groupTab(e.value, count(e.key), _group == e.key, () => setState(() => _group = e.key),
+                  highlight: e.key == 'active'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _groupTab(String label, int n, bool selected, VoidCallback onTap, {bool highlight = false}) {
+    return Material(
+      color: selected ? AppColors.ink : Colors.transparent,
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                    color: selected ? Colors.white : AppColors.text,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                  )),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: selected && highlight
+                      ? AppColors.accent
+                      : selected
+                          ? Colors.white24
+                          : const Color(0xFFE6EBF0),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('$n',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: selected && highlight ? AppColors.ink : (selected ? Colors.white : AppColors.muted),
+                    )),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Kailangang asikasuhin? (may proof na ive-verify, o dumating na ang araw pero may balanse)
+  String? _attentionOf(Map<String, dynamic> b) {
+    if (isInactive(b) || b['status'] == 'completed') return null;
+    if (pendingPaidOf(b) > 0) return tr('bkNeedsVerify');
+    final d = bookingDateOf(b);
+    final today = DateUtils.dateOnly(DateTime.now());
+    if (d != null && !d.isAfter(today) && remainingOf(b) > 0.01) return tr('bkNeedsBalance');
+    return null;
+  }
+
   // Lapad ng bawat column (malapad na screen).
-  static const _flex = (guest: 5, package: 4, date: 3, pax: 2, payment: 4, status: 3);
+  static const _flex = (booking: 6, source: 3, date: 3, total: 3, received: 3, balance: 3, status: 3);
 
   Widget _tableHeader() {
     Widget h(String t, int flex, {TextAlign align = TextAlign.left}) => Expanded(
           flex: flex,
           child: Text(
-            t.toUpperCase(),
+            t,
             textAlign: align,
             style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted),
           ),
         );
     return Container(
       color: AppColors.subtle,
-      padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
+      padding: const EdgeInsets.fromLTRB(24, 12, 20, 12),
       child: Row(
         children: [
-          h(tr('fieldClient'), _flex.guest),
-          h(tr('navPackages'), _flex.package),
-          h(tr('fieldDate'), _flex.date),
-          h(tr('fieldGuests'), _flex.pax, align: TextAlign.center),
-          h(tr('fieldPaid'), _flex.payment),
-          h(tr('rpStatus'), _flex.status),
-          const SizedBox(width: 132), // Details + ⋮
+          h(tr('bkColBooking'), _flex.booking),
+          h(tr('bkColSource'), _flex.source),
+          h(tr('bkColDate'), _flex.date),
+          h(tr('bkColTotal'), _flex.total),
+          h(tr('bkColReceived'), _flex.received),
+          h(tr('bkColBalance'), _flex.balance),
+          h(tr('bkColStatus'), _flex.status),
+          SizedBox(width: 96, child: Text(tr('bkColAction'), textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted))),
         ],
       ),
     );
   }
 
-  /// Isang hanay ng booking. Nasa kanan ang Details at ang ⋮ (lahat ng aksyon).
+  /// Isang hanay ng booking (parang table). Mata = Details; ⋮ = lahat ng aksyon.
   Widget _buildBookingRow(Map<String, dynamic> booking, {required bool wide}) {
     final theme = Theme.of(context);
     final total = totalOf(booking);
     final paid = paidOf(booking);
-    final remaining = remainingOf(booking);
+    final remaining = isInactive(booking) ? 0.0 : remainingOf(booking);
     final busy = _busy.contains('${booking['id']}');
     final status = booking['status'] as String?;
     final name = clientNameOf(booking);
     final source = bookingSourceOf(booking);
-    final pending = pendingPaidOf(booking);
-    final progress = total <= 0 ? 0.0 : (paid / total).clamp(0, 1).toDouble();
-    final paidColor = remaining <= 0 ? AppColors.success : AppColors.accent;
+    final attention = _attentionOf(booking);
 
-    final payment = Column(
+    final title = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Text.rich(
-          TextSpan(children: [
-            TextSpan(text: peso(paid), style: const TextStyle(fontWeight: FontWeight.w800)),
-            TextSpan(text: ' / ${peso(total)}', style: theme.textTheme.bodySmall),
-          ]),
+        Text(
+          packageNameOf(booking).toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: AppColors.muted),
         ),
-        const SizedBox(height: 4),
-        SizedBox(
-          width: 120,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 4,
-              color: paidColor,
-              backgroundColor: const Color(0xFFE6EBF0),
-            ),
-          ),
-        ),
-        if (remaining > 0 && !isInactive(booking)) ...[
-          const SizedBox(height: 3),
-          Text(tr('balanceAmount', {'amount': peso(remaining)}),
-              style: TextStyle(color: paidColor, fontWeight: FontWeight.w700, fontSize: 12)),
+        const SizedBox(height: 2),
+        Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+        if (attention != null) ...[
+          const SizedBox(height: 5),
+          _badge(attention),
         ],
-        if (pending > 0)
-          Text(tr('pendingProofAmount', {'amount': peso(pending)}),
-              style: const TextStyle(color: AppColors.warning, fontSize: 12, fontWeight: FontWeight.w600)),
       ],
+    );
+
+    final sourcePill = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(sourceIcon(source), size: 14, color: AppColors.muted),
+          const SizedBox(width: 5),
+          Flexible(child: Text(sourceLabel(source), overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600))),
+        ],
+      ),
     );
 
     final actions = Row(
@@ -680,130 +887,129 @@ class _BookingsPageState extends State<BookingsPage> {
       children: [
         if (busy)
           const Padding(
-            padding: EdgeInsets.only(right: 6),
+            padding: EdgeInsets.only(right: 4),
             child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
           ),
-        OutlinedButton(
+        IconButton.outlined(
+          tooltip: tr('details'),
           onPressed: () => _showDetails(booking),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            minimumSize: const Size(0, 36),
-          ),
-          child: Text(tr('details')),
+          icon: const Icon(Icons.visibility_outlined, size: 18),
         ),
         _actionsMenu(booking, busy: busy),
       ],
     );
 
-    final guest = Row(
-      children: [
-        CircleAvatar(
-          radius: 17,
-          backgroundColor: statusColor(status).withValues(alpha: 0.12),
-          child: Text(
-            name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
-            style: TextStyle(color: statusColor(status), fontWeight: FontWeight.w800, fontSize: 13),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text(
-                [
-                  sourceLabel(source),
-                  if ('${booking['admin_notes'] ?? ''}'.trim().isNotEmpty) tr('hasNotes'),
-                ].join(' · '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    const money = TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5);
+    final decoration = attention == null
+        ? null
+        : BoxDecoration(
+            color: const Color(0xFFFFFBEB),
+            border: Border.all(color: const Color(0xFFF5C451), width: 1.5),
+          );
 
     if (wide) {
-      return InkWell(
-        onTap: () => _showDetails(booking),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
-          child: Row(
-            children: [
-              Expanded(flex: _flex.guest, child: guest),
-              Expanded(
-                flex: _flex.package,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(packageNameOf(booking), maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                    if (booking['event_type'] != null)
-                      Text('${booking['event_type']}', maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall),
-                  ],
+      return Container(
+        decoration: decoration,
+        child: InkWell(
+          onTap: () => _showDetails(booking),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 14, 20, 14),
+            child: Row(
+              children: [
+                Expanded(flex: _flex.booking, child: title),
+                Expanded(flex: _flex.source, child: Align(alignment: Alignment.centerLeft, child: sourcePill)),
+                Expanded(
+                  flex: _flex.date,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(formatDate(bookingDateOf(booking)), style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(tr('paxCount', {'n': guestsOf(booking)}), style: theme.textTheme.bodySmall),
+                    ],
+                  ),
                 ),
-              ),
-              Expanded(flex: _flex.date, child: Text(formatDate(bookingDateOf(booking)))),
-              Expanded(flex: _flex.pax, child: Text('${guestsOf(booking)}', textAlign: TextAlign.center)),
-              Expanded(flex: _flex.payment, child: payment),
-              Expanded(
-                flex: _flex.status,
-                child: Align(alignment: Alignment.centerLeft, child: StatusChip(status: status)),
-              ),
-              SizedBox(width: 132, child: Align(alignment: Alignment.centerRight, child: actions)),
-            ],
+                Expanded(flex: _flex.total, child: Text(peso(total), style: money)),
+                Expanded(flex: _flex.received, child: Text(peso(paid), style: money)),
+                Expanded(
+                  flex: _flex.balance,
+                  child: Text(peso(remaining),
+                      style: money.copyWith(color: remaining > 0.01 ? AppColors.warning : AppColors.text)),
+                ),
+                Expanded(flex: _flex.status, child: Align(alignment: Alignment.centerLeft, child: StatusChip(status: status))),
+                SizedBox(width: 96, child: Align(alignment: Alignment.centerRight, child: actions)),
+              ],
+            ),
           ),
         ),
       );
     }
 
     // Phone: siksik na hanay.
-    return InkWell(
-      onTap: () => _showDetails(booking),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+    Widget amount(String label, double v, {Color? color}) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(child: guest),
-                StatusChip(status: status),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.only(left: 44),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+            Text(label, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.muted, letterSpacing: 0.5)),
+            Text(peso(v), style: money.copyWith(fontSize: 13.5, color: color)),
+          ],
+        );
+    return Container(
+      decoration: decoration,
+      child: InkWell(
+        onTap: () => _showDetails(booking),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Expanded(child: title),
+                  StatusChip(status: status),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  sourcePill,
+                  Text('${formatDate(bookingDateOf(booking))} · ${tr('paxCount', {'n': guestsOf(booking)})}',
+                      style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(child: amount(tr('bkColTotal'), total)),
+                  Expanded(child: amount(tr('bkColReceived'), paid)),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${packageNameOf(booking)} · ${formatDate(bookingDateOf(booking))} · '
-                          '${tr('paxCount', {'n': guestsOf(booking)})}',
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                        ),
-                        const SizedBox(height: 6),
-                        payment,
-                      ],
-                    ),
+                    child: amount(tr('bkColBalance'), remaining,
+                        color: remaining > 0.01 ? AppColors.warning : null),
                   ),
                   actions,
                 ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+
+  Widget _badge(String text) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(color: const Color(0xFFFACC15), borderRadius: BorderRadius.circular(6)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.circle, size: 6, color: AppColors.ink),
+            const SizedBox(width: 5),
+            Text(text, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.ink, letterSpacing: 0.4)),
+          ],
+        ),
+      );
 
   /// ⋮ sa gilid: lahat ng puwedeng gawin sa booking (Confirm, Check in, Record balance, No-show…).
   Widget _actionsMenu(Map<String, dynamic> booking, {required bool busy}) {
@@ -819,7 +1025,7 @@ class _BookingsPageState extends State<BookingsPage> {
         children: [
           Icon(icon, size: 20, color: color),
           const SizedBox(width: 12),
-          Expanded(
+          Flexible(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
