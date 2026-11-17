@@ -599,39 +599,64 @@ class _HomePageState extends State<HomePage> {
 
   // SECTION TITLE (same margin and gap everywhere)
 
-  Widget _sectionTitle(String text, {Key? key, String? subtitle}) {
+  Widget _sectionTitle(String text, {Key? key, String? subtitle, Widget? trailing}) {
     return Padding(
       key: key,
       padding: const EdgeInsets.fromLTRB(_pagePadding, 0, _pagePadding, _titleGap),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Container(
-            width: 4,
-            height: 22,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF14B8A6), AppColors.primary],
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   text,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.3),
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 19,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                    color: AppColors.ink,
+                  ),
                 ),
                 if (subtitle != null)
                   Text(subtitle, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
               ],
             ),
           ),
+          ?trailing,
         ],
+      ),
+    );
+  }
+
+  /// Pill na kapareho ng itsura ng mga tab sa admin.
+  Widget _pill(String label, bool selected, VoidCallback onTap, {IconData? icon}) {
+    return Material(
+      color: selected ? AppColors.ink : Colors.white,
+      shape: StadiumBorder(side: BorderSide(color: selected ? AppColors.ink : AppColors.border)),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 16, color: selected ? Colors.white : AppColors.muted),
+                const SizedBox(width: 6),
+              ],
+              Text(label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    color: selected ? Colors.white : AppColors.text,
+                  )),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -699,116 +724,110 @@ class _HomePageState extends State<HomePage> {
                 },
               ),
 
-            // WELCOME BANNER (katulad ng dashboard ng admin)
+            // WELCOME BANNER
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
               child: Container(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                padding: const EdgeInsets.fromLTRB(20, 20, 16, 18),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [AppColors.ink, Color(0xFF0E4D5A), AppColors.primary],
-                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  color: AppColors.ink,
                   boxShadow: floatShadow,
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Hi, $firstName!',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.4,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _greeting(),
+                                style: const TextStyle(color: AppColors.inkText, fontSize: 12.5, fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '$firstName!',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Image.asset('assets/images/aryana_logo.png', width: 58, height: 58),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      "Ready for your next stay at Aryana's Guests House?",
+                      style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 13.5, height: 1.35),
+                    ),
+                    const SizedBox(height: 16),
+                    // QUICK ACTIONS
+                    Row(
+                      children: [
+                        for (final (i, a) in <(IconData, String, VoidCallback)>[
+                          (Icons.event_available_rounded, 'Book', () => _scrollToPackages()),
+                          (Icons.chat_bubble_outline_rounded, 'Chat', _openChat),
+                          (Icons.map_outlined, 'Map', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ResortMapPage()))),
+                        ].indexed) ...[
+                          if (i > 0) const SizedBox(width: 10),
+                          Expanded(
+                            child: Material(
+                              color: i == 0 ? AppColors.primary : AppColors.inkRaised,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(color: i == 0 ? AppColors.primary : AppColors.inkLine),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: InkWell(
+                                onTap: a.$3,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  child: Column(
+                                    children: [
+                                      a.$2 == 'Chat'
+                                          // Badge: mga sagot ng resort na hindi pa nababasa
+                                          ? ListenableBuilder(
+                                              listenable: _notifications,
+                                              builder: (context, _) => Badge(
+                                                isLabelVisible: _unreadChat > 0,
+                                                label: Text('$_unreadChat'),
+                                                child: Icon(a.$1, color: Colors.white, size: 22),
+                                              ),
+                                            )
+                                          : Icon(a.$1, color: Colors.white, size: 22),
+                                      const SizedBox(height: 6),
+                                      Text(a.$2,
+                                          style: const TextStyle(
+                                              color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            "Ready for your next stay at Aryana's Guests House?",
-                            style: TextStyle(color: Color(0xFFCFE3E6), fontSize: 13.5, height: 1.35),
-                          ),
                         ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                      ),
-                      child: const Icon(Icons.beach_access_rounded, color: Colors.white, size: 28),
+                      ],
                     ),
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 18),
-
-            // QUICK ACTIONS (neumorphic)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
-              child: Row(
-                children: [
-                  for (final (i, a) in <(IconData, String, VoidCallback)>[
-                    (Icons.event_available, 'Book', () => _scrollToPackages()),
-                    (Icons.chat_bubble_outline, 'Chat', _openChat),
-                    (Icons.map_outlined, 'Map', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ResortMapPage()))),
-                  ].indexed) ...[
-                    if (i > 0) const SizedBox(width: 12),
-                    Expanded(
-                      child: NeuCard(
-                        radius: 18,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        onTap: a.$3,
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(13),
-                                gradient: const LinearGradient(colors: [Color(0xFF14B8A6), AppColors.primary]),
-                                boxShadow: const [
-                                  BoxShadow(color: Color(0x400F766E), blurRadius: 10, offset: Offset(0, 4)),
-                                ],
-                              ),
-                              child: a.$2 == 'Chat'
-                                  // Badge: mga sagot ng resort na hindi pa nababasa
-                                  ? ListenableBuilder(
-                                      listenable: _notifications,
-                                      builder: (context, _) => Badge(
-                                        isLabelVisible: _unreadChat > 0,
-                                        label: Text('$_unreadChat'),
-                                        child: Icon(a.$1, color: Colors.white, size: 21),
-                                      ),
-                                    )
-                                  : Icon(a.$1, color: Colors.white, size: 21),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(a.$2, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
               ),
             ),
             const SizedBox(height: _sectionGap),
 
             // GALLERY CAROUSEL (galing sa Gallery ng admin; default photos kung wala pa)
-            _sectionTitle('GALLERY', subtitle: 'A peek at the resort'),
+            _sectionTitle('Gallery', subtitle: 'A peek at the resort'),
             SizedBox(
               height: _carouselHeight,
               // Kapag ini-swipe ng user, i-restart ang auto-slide para hindi biglang lumipat.
@@ -849,8 +868,8 @@ class _HomePageState extends State<HomePage> {
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
                     margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: i == _carouselPage ? 28 : 10,
-                    height: 10,
+                    width: i == _carouselPage ? 22 : 7,
+                    height: 7,
                     decoration: BoxDecoration(
                       color: i == _carouselPage ? AppColors.primary : const Color(0xFFD5DCE3),
                       borderRadius: BorderRadius.circular(6),
@@ -875,59 +894,56 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: _sectionGap),
 
             // PACKAGE OFFERED
-            _sectionTitle('PACKAGE OFFERED', key: _packagesKey, subtitle: 'Tap a package to see inclusions'),
+            _sectionTitle('Our Packages', key: _packagesKey, subtitle: 'Tap a package to see what is included'),
 
-            // Glass toolbar: search + filters
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
-              child: GlassPanel(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SearchField(
-                      controller: _packageSearch,
-                      hint: 'Search packages or inclusions',
-                      onChanged: (v) => setState(() => _packageQuery = v),
-                    ),
-                    const SizedBox(height: 6),
-                    FilterChipsRow(
-                      padding: 0,
-                      children: [
-                        for (final e in const {
-                          'all': 'All',
-                          'packages': 'Packages',
-                          'hall': 'Function Hall',
-                        }.entries)
-                          ChoiceChip(
-                            label: Text(e.value),
-                            selected: _packageFilter == e.key,
-                            onSelected: (_) => setState(() => _packageFilter = e.key),
-                          ),
-                        PopupMenuButton<String>(
-                          initialValue: _packageSort,
-                          onSelected: (v) => setState(() => _packageSort = v),
-                          itemBuilder: (context) => const [
-                            PopupMenuItem(value: 'default', child: Text('Default order')),
-                            PopupMenuItem(value: 'low', child: Text('Price: low to high')),
-                            PopupMenuItem(value: 'high', child: Text('Price: high to low')),
-                          ],
-                          child: Chip(
-                            avatar: const Icon(Icons.sort, size: 18),
-                            label: Text(switch (_packageSort) {
-                              'low' => 'Price: low to high',
-                              'high' => 'Price: high to low',
-                              _ => 'Sort',
-                            }),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              child: SearchField(
+                controller: _packageSearch,
+                hint: 'Search packages or inclusions',
+                onChanged: (v) => setState(() => _packageQuery = v),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: _pagePadding),
+              child: Row(
+                children: [
+                  for (final e in const {
+                    'all': 'All',
+                    'packages': 'Resort',
+                    'hall': 'Function Hall',
+                  }.entries) ...[
+                    _pill(e.value, _packageFilter == e.key, () => setState(() => _packageFilter = e.key)),
+                    const SizedBox(width: 8),
+                  ],
+                  PopupMenuButton<String>(
+                    initialValue: _packageSort,
+                    position: PopupMenuPosition.under,
+                    onSelected: (v) => setState(() => _packageSort = v),
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'default', child: Text('Default Order')),
+                      PopupMenuItem(value: 'low', child: Text('Price: Low to High')),
+                      PopupMenuItem(value: 'high', child: Text('Price: High to Low')),
+                    ],
+                    child: IgnorePointer(
+                      child: _pill(
+                        switch (_packageSort) {
+                          'low' => 'Price: Low to High',
+                          'high' => 'Price: High to Low',
+                          _ => 'Sort',
+                        },
+                        _packageSort != 'default',
+                        () {},
+                        icon: Icons.swap_vert_rounded,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
 
             if (shown.isEmpty)
               const Padding(
@@ -942,7 +958,7 @@ class _HomePageState extends State<HomePage> {
             // OTHER OFFERED
             if (otherPackages.isNotEmpty) ...[
               const SizedBox(height: _sectionGap),
-              _sectionTitle('OTHER OFFERED', subtitle: 'Function hall for catered events'),
+              _sectionTitle('Function Hall', subtitle: 'For catered events and celebrations'),
               ...otherPackages.map((pkg) => _buildPackageCard(pkg)),
             ],
 
@@ -951,16 +967,16 @@ class _HomePageState extends State<HomePage> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(_pagePadding, 8, _pagePadding, 0),
                 child: Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: const Color(0xFFFFF7E8),
-                    border: Border.all(color: const Color(0xFFF5D9A8)),
+                    borderRadius: BorderRadius.circular(14),
+                    color: AppColors.primary.withValues(alpha: 0.06),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                   ),
                   child: const Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.mic_external_on_outlined, size: 18, color: AppColors.warning),
+                      Icon(Icons.mic_external_on_outlined, size: 18, color: AppColors.primary),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -1010,7 +1026,7 @@ class _HomePageState extends State<HomePage> {
   /// Pangalan ng package. Function Hall: "Function Hall" sa itaas at ang oras
   /// (Day Tour / Night Tour / Overnight (22 Hours)) sa ilalim, pare-pareho ang ayos.
   Widget _packageTitle(Package pkg) {
-    const titleStyle = TextStyle(fontSize: 18, fontWeight: FontWeight.bold);
+    const titleStyle = TextStyle(fontFamily: 'Poppins', fontSize: 16.5, fontWeight: FontWeight.w700, color: AppColors.ink);
     final m = RegExp(r'^Function Hall\s*\((.+)\)$').firstMatch(pkg.name.trim());
     if (m == null) return Text(pkg.name, style: titleStyle);
     final variant = m.group(1)!.replaceFirst(RegExp(r'^Overnight\s+22 Hours$'), 'Overnight (22 Hours)');
@@ -1018,126 +1034,129 @@ class _HomePageState extends State<HomePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Function Hall', style: titleStyle),
-        const SizedBox(height: 2),
         Text(
           variant,
-          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
+          style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
         ),
       ],
     );
   }
 
+  /// Kulay at icon ayon sa oras (pareho sa admin).
+  static ({Color color, IconData icon}) _slotOf(Package pkg) {
+    final n = pkg.name.toLowerCase();
+    if (n.contains('overnight') || n.contains('22')) return (color: const Color(0xFF0F766E), icon: Icons.bedtime_rounded);
+    if (n.contains('night')) return (color: const Color(0xFF6366F1), icon: Icons.nights_stay_rounded);
+    return (color: const Color(0xFFF59E0B), icon: Icons.wb_sunny_rounded);
+  }
+
+  Widget _metaChip(IconData icon, String text) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.subtle,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: AppColors.muted),
+            const SizedBox(width: 4),
+            Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text)),
+          ],
+        ),
+      );
+
   Widget _buildPackageCard(Package pkg) {
     final isHall = pkg.name.startsWith('Function Hall');
+    final slot = _slotOf(pkg);
     // Ang "for catering only" ay ipinapakita bilang note (hindi kasama sa Additional).
     final additional = isHall
         ? pkg.additional.where((a) => !RegExp(r'catering\s+only', caseSensitive: false).hasMatch(a)).toList()
         : pkg.additional;
-    return AppCard(
-      margin: const EdgeInsets.symmetric(
-        horizontal: _pagePadding,
-        vertical: _cardGap / 2,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: _pagePadding, vertical: _cardGap / 2),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 12, offset: Offset(0, 4))],
       ),
-      child: ExpansionTile(
-        shape: const Border(),
-        collapsedShape: const Border(),
-        leading: Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(13),
-            gradient: const LinearGradient(colors: [Color(0xFF14B8A6), AppColors.primary]),
-          ),
-          child: Icon(
-            isHall ? Icons.celebration_outlined : Icons.pool_outlined,
-            color: Colors.white,
-          ),
-        ),
-        tilePadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 6,
-        ),
-        title: _packageTitle(pkg),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                pkg.formattedPrice,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text('Duration: ${pkg.formattedDuration}'),
-              const SizedBox(height: 4),
-              Text('Capacity: ${pkg.formattedCapacity}'),
-            ],
-          ),
-        ),
-        childrenPadding: const EdgeInsets.fromLTRB(
-          16,
-          0,
-          16,
-          16,
-        ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
         children: [
-          const Divider(),
-          const SizedBox(height: 10),
-
-          if (isHall) ...[
-            const _HallCateringNote(),
-            const SizedBox(height: 14),
-          ],
-
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'INCLUSIONS',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
+          Container(height: 4, color: slot.color),
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              shape: const Border(),
+              collapsedShape: const Border(),
+              tilePadding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+              leading: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: slot.color.withValues(alpha: 0.12),
+                ),
+                child: Icon(isHall ? Icons.celebration_outlined : slot.icon, color: slot.color, size: 22),
               ),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          ...pkg.inclusions.map((item) => _buildDetailItem(item)),
-
-          const SizedBox(height: 14),
-
-          if (additional.isNotEmpty) ...[
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'ADDITIONAL',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
+              title: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _packageTitle(pkg)),
+                  const SizedBox(width: 8),
+                  Text(
+                    pkg.formattedPrice,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _metaChip(Icons.schedule_rounded, pkg.formattedDuration),
+                    _metaChip(Icons.groups_outlined, pkg.formattedCapacity),
+                  ],
                 ),
               ),
-            ),
-
-            const SizedBox(height: 8),
-
-            ...additional.map((item) => _buildDetailItem(item)),
-
-            const SizedBox(height: 14),
-          ],
-
-          const SizedBox(height: 4),
-
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: FilledButton.icon(
-              onPressed: () => _handleBookNow(pkg),
-              icon: const Icon(Icons.event_available),
-              label: const Text('BOOK NOW'),
+              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              children: [
+                const Divider(height: 1, color: AppColors.border),
+                const SizedBox(height: 14),
+                if (isHall) ...[
+                  const _HallCateringNote(),
+                  const SizedBox(height: 14),
+                ],
+                _detailHeading('Inclusions'),
+                ...pkg.inclusions.map((item) => _buildDetailItem(item)),
+                if (additional.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _detailHeading('Additional'),
+                  ...additional.map((item) => _buildDetailItem(item, extra: true)),
+                ],
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () => _handleBookNow(pkg),
+                    icon: const Icon(Icons.event_available_rounded),
+                    label: const Text('Book Now', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1145,25 +1164,45 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildDetailItem(String text) {
+  Widget _detailHeading(String text) => Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            text.toUpperCase(),
+            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted),
+          ),
+        ),
+      );
+
+  Widget _buildDetailItem(String text, {bool extra = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: _itemGap),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('•  ', style: TextStyle(fontSize: 14, height: 1.4)),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                fontSize: 14,
-                height: 1.4,
-              ),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(
+              extra ? Icons.add_circle_outline_rounded : Icons.check_circle_rounded,
+              size: 16,
+              color: extra ? AppColors.muted : AppColors.primary,
             ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text, style: const TextStyle(fontSize: 14, height: 1.4)),
           ),
         ],
       ),
     );
+  }
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning,';
+    if (h < 18) return 'Good afternoon,';
+    return 'Good evening,';
   }
 
   @override
