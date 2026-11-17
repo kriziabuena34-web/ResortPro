@@ -259,6 +259,87 @@ class _AccountPageState extends State<AccountPage> {
     final spent = _bookings.fold<double>(0, (s, b) => s + verifiedPaid(b['payments'] as List?));
     final memberSince = DateTime.tryParse(user?.createdAt ?? '');
 
+    Widget statTile(String label, String value, String? sub, Color color, IconData icon) => Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          decoration: BoxDecoration(
+            color: AppColors.inkRaised,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.inkLine),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(label.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: AppColors.inkText, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                  ),
+                  Icon(icon, size: 15, color: const Color(0xFF7F93A6)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(value, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w800)),
+              ),
+              Text(sub ?? ' ',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFF7F93A6), fontSize: 10.5, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        );
+
+    Widget sectionTitle(String t) => Padding(
+          padding: const EdgeInsets.fromLTRB(4, 20, 4, 10),
+          child: Text(t,
+              style: const TextStyle(fontFamily: 'Poppins', fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        );
+
+    Widget card(List<Widget> rows) => Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              for (var i = 0; i < rows.length; i++) ...[
+                if (i > 0) const Divider(height: 1, indent: 62, color: AppColors.border),
+                rows[i],
+              ],
+            ],
+          ),
+        );
+
+    final (vColor, vTitle, vMsg, vIcon) = switch (status) {
+      'pending' => (
+          const Color(0xFFB45309),
+          'Verification Under Review',
+          'The resort is checking your ID. You will get a notification once it is done.',
+          Icons.hourglass_top_rounded,
+        ),
+      'rejected' => (
+          AppColors.danger,
+          'Verification Rejected',
+          'Please submit again with clear photos and correct details.',
+          Icons.cancel_outlined,
+        ),
+      _ => (
+          AppColors.primary,
+          'Verify Your Account',
+          'You need a verified account before you can book a package.',
+          Icons.verified_user_outlined,
+        ),
+    };
+
     return AmbientBackground(
       child: RefreshIndicator(
         onRefresh: _fetchProfile,
@@ -273,211 +354,172 @@ class _AccountPageState extends State<AccountPage> {
               ),
             // ---- Profile header ----
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+              padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [AppColors.ink, Color(0xFF0E4D5A), AppColors.primary],
-                ),
+                borderRadius: BorderRadius.circular(24),
+                color: AppColors.ink,
                 boxShadow: floatShadow,
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  GestureDetector(
-                    onTap: _uploadingPhoto ? null : _changePhoto,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(3),
-                          decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.white),
-                          child: CircleAvatar(
-                            radius: 48,
-                            backgroundColor: const Color(0xFFDDF2EF),
-                            backgroundImage: photo.isEmpty ? null : NetworkImage(photo),
-                            // Offline: walang larawan, kulay lang ang ipapakita (hindi magka-crash).
-                            onBackgroundImageError: photo.isEmpty ? null : (_, _) {},
-                            child: photo.isEmpty
-                                ? Text(
-                                    googleName.isEmpty ? '?' : googleName[0].toUpperCase(),
-                                    style: const TextStyle(
-                                      fontSize: 36,
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.primaryDark,
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: _uploadingPhoto ? null : _changePhoto,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.inkLine),
+                              child: CircleAvatar(
+                                radius: 36,
+                                backgroundColor: const Color(0xFFDDF2EF),
+                                backgroundImage: photo.isEmpty ? null : NetworkImage(photo),
+                                // Offline: walang larawan, kulay lang ang ipapakita (hindi magka-crash).
+                                onBackgroundImageError: photo.isEmpty ? null : (_, _) {},
+                                child: photo.isEmpty
+                                    ? Text(
+                                        googleName.isEmpty ? '?' : googleName[0].toUpperCase(),
+                                        style: const TextStyle(
+                                          fontSize: 28,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.primaryDark,
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                            ),
+                            if (_uploadingPhoto)
+                              const Positioned.fill(
+                                child: CircleAvatar(
+                                  backgroundColor: Colors.black45,
+                                  child: CircularProgressIndicator(color: Colors.white),
+                                ),
+                              ),
+                            Positioned(
+                              right: -2,
+                              bottom: -2,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: AppColors.primary,
+                                  border: Border.all(color: AppColors.ink, width: 2),
+                                ),
+                                child: const Icon(Icons.photo_camera_rounded, size: 15, color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: _offlineSavedAt != null ? null : _editUsername,
+                              child: Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      username.isNotEmpty ? username : googleName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontFamily: 'Poppins',
+                                        color: Colors.white,
+                                        fontSize: 19,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
-                                  )
-                                : null,
-                          ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Icon(Icons.edit_rounded, size: 15, color: AppColors.inkText),
+                                ],
+                              ),
+                            ),
+                            Text(email,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: AppColors.inkText, fontSize: 12.5)),
+                            const SizedBox(height: 8),
+                            _StatusPill(status: status),
+                          ],
                         ),
-                        if (_uploadingPhoto)
-                          const Positioned.fill(
-                            child: CircleAvatar(
-                              backgroundColor: Colors.black45,
-                              child: CircularProgressIndicator(color: Colors.white),
-                            ),
-                          ),
-                        Positioned(
-                          right: -2,
-                          bottom: -2,
-                          child: Container(
-                            padding: const EdgeInsets.all(7),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppColors.accent,
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                            child: const Icon(Icons.photo_camera, size: 18, color: AppColors.ink),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  // Pangalan (username) na pwedeng palitan
-                  InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: _offlineSavedAt != null ? null : _editUsername,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              username.isNotEmpty ? username : googleName,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          const Icon(Icons.edit, size: 16, color: Color(0xFFCFE3E6)),
-                        ],
                       ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(email, style: const TextStyle(color: Color(0xFFCFE3E6), fontSize: 13)),
-                  const SizedBox(height: 12),
-                  _StatusPill(status: status),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ---- Booking stats (neumorphic) ----
-            StatGrid(
-              minWidth: 140,
-              children: [
-                _MiniStat(icon: Icons.event_note, label: 'Total bookings', value: '${_bookings.length}', color: AppColors.primary),
-                _MiniStat(
-                  icon: Icons.upcoming,
-                  label: 'Upcoming',
-                  value: '${upcoming.length}',
-                  caption: upcoming.isEmpty ? null : formatDate(parseDate(upcoming.first['booking_date'])),
-                  color: AppColors.info,
-                ),
-                _MiniStat(icon: Icons.task_alt, label: 'Completed stays', value: '$completed', color: AppColors.success),
-                _MiniStat(icon: Icons.payments_outlined, label: 'Total spent', value: peso(spent), color: AppColors.accent),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // ---- Profile details ----
-            AppCard(
-              child: Column(
-                children: [
-                  _InfoTile(
-                    icon: Icons.alternate_email,
-                    label: 'Name on your account',
-                    value: username.isNotEmpty ? username : googleName,
-                    muted: false,
-                    trailing: IconButton(
-                      tooltip: 'Edit name',
-                      onPressed: _editUsername,
-                      icon: const Icon(Icons.edit_outlined, color: AppColors.primary),
-                    ),
-                  ),
-                  const Divider(height: 1, indent: 60),
-                  _InfoTile(
-                    icon: Icons.badge_outlined,
-                    label: 'Real name',
-                    value: realName.isEmpty ? 'Added when you verify your account' : realName,
-                    muted: realName.isEmpty,
-                    trailing: Tooltip(
-                      message: verified
-                          ? 'Your verified real name cannot be edited.'
-                          : 'Your real name comes from your verification.',
-                      child: const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: Icon(Icons.lock_outline, color: AppColors.muted, size: 20),
-                      ),
-                    ),
-                  ),
-                  const Divider(height: 1, indent: 60),
-                  _InfoTile(icon: Icons.mail_outline, label: 'Google account', value: email),
-                  if ('${_profile?['phone'] ?? ''}'.isNotEmpty) ...[
-                    const Divider(height: 1, indent: 60),
-                    _InfoTile(icon: Icons.phone_outlined, label: 'Contact', value: '${_profile?['phone']}'),
-                  ],
-                  if (verified) ...[
-                    const Divider(height: 1, indent: 60),
-                    _InfoTile(
-                      icon: Icons.cake_outlined,
-                      label: 'Birth date',
-                      value: formatDate(parseDate(_profile?['birth_date'])),
-                    ),
-                    const Divider(height: 1, indent: 60),
-                    _InfoTile(
-                      icon: Icons.credit_card_outlined,
-                      label: 'ID type',
-                      value: '${_profile?['government_id_type'] ?? 'N/A'}',
-                    ),
-                  ],
-                  const Divider(height: 1, indent: 60),
-                  _InfoTile(
-                    icon: Icons.calendar_today_outlined,
-                    label: 'Member since',
-                    value: memberSince == null ? '—' : formatDate(memberSince.toLocal()),
+                  const SizedBox(height: 16),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 2.0,
+                    children: [
+                      statTile('Total Bookings', '${_bookings.length}', null, Colors.white, Icons.event_note_outlined),
+                      statTile('Upcoming', '${upcoming.length}',
+                          upcoming.isEmpty ? null : 'Next: ${formatDate(parseDate(upcoming.first['booking_date']))}',
+                          const Color(0xFF60A5FA), Icons.upcoming_outlined),
+                      statTile('Completed Stays', '$completed', null, const Color(0xFF4ADE80), Icons.task_alt_rounded),
+                      statTile('Total Spent', peso(spent), null, const Color(0xFFFBBF24), Icons.payments_outlined),
+                    ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
 
             // ---- Verification ----
-            if (!verified)
-              GlassPanel(
-                padding: const EdgeInsets.all(18),
+            if (!verified) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                decoration: BoxDecoration(
+                  color: vColor.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: vColor.withValues(alpha: 0.3), width: 1.5),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          status == 'pending' ? Icons.hourglass_top : Icons.verified_user_outlined,
-                          color: status == 'rejected' ? AppColors.danger : AppColors.primary,
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: vColor.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(vIcon, color: vColor, size: 21),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            switch (status) {
-                              'pending' => 'Your verification is under review. Please check back later.',
-                              'rejected' => 'Your verification was rejected. Please submit again with correct details.',
-                              _ => 'Verify your account to start booking.',
-                            },
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: status == 'rejected' ? AppColors.danger : AppColors.text,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(vTitle, style: TextStyle(fontWeight: FontWeight.w800, color: vColor, fontSize: 14.5)),
+                              const SizedBox(height: 2),
+                              Text(vMsg, style: const TextStyle(fontSize: 13, height: 1.35)),
+                            ],
                           ),
                         ),
                       ],
                     ),
                     if (status != 'pending') ...[
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
                       FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(46),
+                          backgroundColor: vColor,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
                         onPressed: () async {
                           await Navigator.push(
                             context,
@@ -485,34 +527,106 @@ class _AccountPageState extends State<AccountPage> {
                           );
                           _fetchProfile();
                         },
-                        icon: const Icon(Icons.verified_user_outlined),
+                        icon: const Icon(Icons.verified_user_outlined, size: 19),
                         label: Text(status == 'rejected' ? 'Resubmit Verification' : 'Verify Account'),
                       ),
                     ],
                   ],
                 ),
               ),
-            if (!verified) const SizedBox(height: 16),
+            ],
+
+            // ---- Profile details ----
+            sectionTitle('Profile'),
+            card([
+              _InfoTile(
+                icon: Icons.alternate_email,
+                label: 'Name on Your Account',
+                value: username.isNotEmpty ? username : googleName,
+                trailing: IconButton(
+                  tooltip: 'Edit name',
+                  onPressed: _editUsername,
+                  icon: const Icon(Icons.edit_outlined, color: AppColors.primary, size: 20),
+                ),
+              ),
+              _InfoTile(
+                icon: Icons.badge_outlined,
+                label: 'Real Name',
+                value: realName.isEmpty ? 'Added when you verify your account' : realName,
+                muted: realName.isEmpty,
+                trailing: Tooltip(
+                  message: verified
+                      ? 'Your verified real name cannot be edited.'
+                      : 'Your real name comes from your verification.',
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Icon(Icons.lock_outline_rounded, color: AppColors.muted, size: 18),
+                  ),
+                ),
+              ),
+              _InfoTile(icon: Icons.mail_outline_rounded, label: 'Google Account', value: email),
+              if ('${_profile?['phone'] ?? ''}'.isNotEmpty)
+                _InfoTile(icon: Icons.phone_outlined, label: 'Contact', value: '${_profile?['phone']}'),
+              if (verified)
+                _InfoTile(
+                  icon: Icons.cake_outlined,
+                  label: 'Birth Date',
+                  value: formatDate(parseDate(_profile?['birth_date'])),
+                ),
+              if (verified)
+                _InfoTile(
+                  icon: Icons.credit_card_outlined,
+                  label: 'ID Type',
+                  value: '${_profile?['government_id_type'] ?? 'N/A'}',
+                ),
+              _InfoTile(
+                icon: Icons.calendar_today_outlined,
+                label: 'Member Since',
+                value: memberSince == null ? '—' : formatDate(memberSince.toLocal()),
+              ),
+            ]),
 
             // ---- Danger zone ----
-            AppCard(
-              child: ListTile(
-                leading: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: AppColors.danger.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: const Icon(Icons.delete_forever_outlined, color: AppColors.danger, size: 20),
-                ),
-                title: const Text(
-                  'Delete account',
-                  style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w700),
-                ),
-                subtitle: const Text('Permanently remove your account and personal data'),
-                trailing: const Icon(Icons.chevron_right, color: AppColors.muted),
+            sectionTitle('Account'),
+            Material(
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: BorderSide(color: AppColors.danger.withValues(alpha: 0.25)),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
                 onTap: _deleting ? null : _confirmDeleteAccount,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: AppColors.danger.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.delete_forever_outlined, color: AppColors.danger, size: 19),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Delete Account',
+                                style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w800)),
+                            SizedBox(height: 2),
+                            Text('Permanently remove your account and personal data',
+                                style: TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -771,51 +885,6 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-class _MiniStat extends StatelessWidget {
-  const _MiniStat({required this.icon, required this.label, required this.value, required this.color, this.caption});
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final String? caption;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return NeuCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              gradient: LinearGradient(colors: [color, color.withValues(alpha: 0.72)]),
-              boxShadow: [BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 4))],
-            ),
-            child: Icon(icon, color: Colors.white, size: 20),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.4),
-          ),
-          Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 12, fontWeight: FontWeight.w600)),
-          // Laging may linya para pantay ang taas.
-          Text(
-            caption ?? ' ',
-            style: TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _InfoTile extends StatelessWidget {
   const _InfoTile({required this.icon, required this.label, required this.value, this.trailing, this.muted = false});
 
@@ -828,7 +897,7 @@ class _InfoTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 4, 10),
+      padding: const EdgeInsets.fromLTRB(16, 11, 6, 11),
       child: Row(
         children: [
           Container(
