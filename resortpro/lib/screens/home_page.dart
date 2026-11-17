@@ -424,6 +424,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _onNavigationItemTapped(int index) {
+    // Pindot ulit sa Home habang nasa Home: bumalik sa pinakataas.
+    if (index == 0 && _selectedIndex == 0) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOutCubic,
+        );
+      }
+      return;
+    }
     setState(() {
       _selectedIndex = index;
     });
@@ -1209,7 +1220,12 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_tabTitles[_selectedIndex]),
+        // Lumiliit nang kusa ang heading para hindi maputol ang pangalan.
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(_tabTitles[_selectedIndex], maxLines: 1),
+        ),
         actions: [
           ListenableBuilder(
             listenable: _notifications,
