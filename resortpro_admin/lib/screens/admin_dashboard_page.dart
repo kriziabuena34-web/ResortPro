@@ -385,16 +385,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         _ => 0,
       };
 
-  Widget _moduleIcon(int i, {required bool selected}) {
-    final m = _modules[i];
-    final icon = Icon(selected ? m.selectedIcon : m.icon);
-    final count = _countFor(i);
-    if (count > 0) {
-      return Badge(label: Text('$count'), child: icon);
-    }
-    return icon;
-  }
-
   Widget _bellButton() {
     return ListenableBuilder(
       listenable: _notifications,
@@ -505,65 +495,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             ),
           ),
           body: AmbientBackground(child: _buildBody()),
-          // Bottom navigation (phone): priority modules muna, ang iba ay nasa "More".
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: _priorityModules.contains(_index)
-                ? _priorityModules.indexOf(_index)
-                : _priorityModules.length,
-            onDestinationSelected: (i) {
-              if (i < _priorityModules.length) {
-                _openModule(_priorityModules[i]);
-              } else {
-                _showMoreModules();
-              }
-            },
-            destinations: [
-              for (final m in _priorityModules)
-                NavigationDestination(
-                  icon: _moduleIcon(m, selected: false),
-                  selectedIcon: _moduleIcon(m, selected: true),
-                  label: tr(_modules[m].label),
-                ),
-              NavigationDestination(
-                icon: Badge(
-                  isLabelVisible: !_priorityModules.contains(_index),
-                  smallSize: 8,
-                  child: const Icon(Icons.more_horiz),
-                ),
-                label: tr('navMore'),
-              ),
-            ],
-          ),
         );
       },
-    );
-  }
-
-  /// Mga module na laging nasa bottom bar kapag naka-phone (pinakamadalas gamitin).
-  static const _priorityModules = [0, 1, 11, 5]; // Dashboard, Bookings, Check-in/out, Payments
-
-  void _showMoreModules() {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < _modules.length; i++)
-              if (!_priorityModules.contains(i))
-                ListTile(
-                  leading: _moduleIcon(i, selected: i == _index),
-                  title: Text(tr(_modules[i].label)),
-                  selected: i == _index,
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _openModule(i);
-                  },
-                ),
-          ],
-        ),
-      ),
     );
   }
 

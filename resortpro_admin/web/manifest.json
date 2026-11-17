@@ -1,12 +1,11 @@
 {
-    "name": "resortpro_admin",
-    "short_name": "resortpro_admin",
+    "name": "ResortPro Admin",
+    "short_name": "ResortPro",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#0B1B2B",
+    "theme_color": "#0B1B2B",
+    "description": "Admin panel of Aryana's Guests House",
     "prefer_related_applications": false,
     "icons": [
         {
