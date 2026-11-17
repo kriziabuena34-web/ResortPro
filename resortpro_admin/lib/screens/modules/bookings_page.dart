@@ -568,27 +568,26 @@ class _BookingsPageState extends State<BookingsPage> {
                   onRefresh: widget.onChanged,
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final columns = constraints.maxWidth >= 1100 ? 2 : 1;
-                      if (columns == 1) {
-                        return ListView.builder(
-                          padding: pageInsets(context, fab: true).copyWith(top: 8),
-                          itemCount: filtered.length,
-                          itemBuilder: (context, index) => Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: _buildBookingCard(filtered[index]),
-                          ),
-                        );
-                      }
-                      final insets = pageInsets(context, fab: true).copyWith(top: 8);
-                      return SingleChildScrollView(
+                      // Parang table: isang hanay bawat booking.
+                      final wide = constraints.maxWidth >= 900;
+                      return ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: insets,
-                        child: CardGrid(
-                          columns: columns,
-                          children: [
-                            for (final b in filtered) _buildBookingCard(b),
-                          ],
-                        ),
+                        padding: pageInsets(context, fab: true).copyWith(top: 8),
+                        children: [
+                          AppCard(
+                            margin: EdgeInsets.zero,
+                            clipBehavior: Clip.antiAlias,
+                            child: Column(
+                              children: [
+                                if (wide) _tableHeader(),
+                                for (var i = 0; i < filtered.length; i++) ...[
+                                  if (i > 0 || wide) const Divider(height: 1),
+                                  _buildBookingRow(filtered[i], wide: wide),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),
@@ -599,233 +598,280 @@ class _BookingsPageState extends State<BookingsPage> {
     );
   }
 
-  Widget _buildBookingCard(Map<String, dynamic> booking) {
+  // Lapad ng bawat column (malapad na screen).
+  static const _flex = (guest: 5, package: 4, date: 3, pax: 2, payment: 4, status: 3);
+
+  Widget _tableHeader() {
+    Widget h(String t, int flex, {TextAlign align = TextAlign.left}) => Expanded(
+          flex: flex,
+          child: Text(
+            t.toUpperCase(),
+            textAlign: align,
+            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted),
+          ),
+        );
+    return Container(
+      color: AppColors.subtle,
+      padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
+      child: Row(
+        children: [
+          h(tr('fieldClient'), _flex.guest),
+          h(tr('navPackages'), _flex.package),
+          h(tr('fieldDate'), _flex.date),
+          h(tr('fieldGuests'), _flex.pax, align: TextAlign.center),
+          h(tr('fieldPaid'), _flex.payment),
+          h(tr('rpStatus'), _flex.status),
+          const SizedBox(width: 132), // Details + ⋮
+        ],
+      ),
+    );
+  }
+
+  /// Isang hanay ng booking. Nasa kanan ang Details at ang ⋮ (lahat ng aksyon).
+  Widget _buildBookingRow(Map<String, dynamic> booking, {required bool wide}) {
     final theme = Theme.of(context);
     final total = totalOf(booking);
     final paid = paidOf(booking);
     final remaining = remainingOf(booking);
-    final downVerified = paidOf(booking) + 0.01 >= (totalOf(booking) * 0.5).roundToDouble();
-    final inactive = isInactive(booking);
     final busy = _busy.contains('${booking['id']}');
-    final actions = BookingWorkflow.actionsFor(booking);
-    final primary = actions.where((a) => a.primary).toList();
-    final secondary = actions.where((a) => !a.primary).toList();
     final status = booking['status'] as String?;
-
     final name = clientNameOf(booking);
-    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
+    final source = bookingSourceOf(booking);
+    final pending = pendingPaidOf(booking);
     final progress = total <= 0 ? 0.0 : (paid / total).clamp(0, 1).toDouble();
     final paidColor = remaining <= 0 ? AppColors.success : AppColors.accent;
 
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Header: client + status
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 16, 12),
-            child: Row(
+    final payment = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text.rich(
+          TextSpan(children: [
+            TextSpan(text: peso(paid), style: const TextStyle(fontWeight: FontWeight.w800)),
+            TextSpan(text: ' / ${peso(total)}', style: theme.textTheme.bodySmall),
+          ]),
+        ),
+        const SizedBox(height: 4),
+        SizedBox(
+          width: 120,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 4,
+              color: paidColor,
+              backgroundColor: const Color(0xFFE6EBF0),
+            ),
+          ),
+        ),
+        if (remaining > 0 && !isInactive(booking)) ...[
+          const SizedBox(height: 3),
+          Text(tr('balanceAmount', {'amount': peso(remaining)}),
+              style: TextStyle(color: paidColor, fontWeight: FontWeight.w700, fontSize: 12)),
+        ],
+        if (pending > 0)
+          Text(tr('pendingProofAmount', {'amount': peso(pending)}),
+              style: const TextStyle(color: AppColors.warning, fontSize: 12, fontWeight: FontWeight.w600)),
+      ],
+    );
+
+    final actions = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (busy)
+          const Padding(
+            padding: EdgeInsets.only(right: 6),
+            child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+          ),
+        OutlinedButton(
+          onPressed: () => _showDetails(booking),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            minimumSize: const Size(0, 36),
+          ),
+          child: Text(tr('details')),
+        ),
+        _actionsMenu(booking, busy: busy),
+      ],
+    );
+
+    final guest = Row(
+      children: [
+        CircleAvatar(
+          radius: 17,
+          backgroundColor: statusColor(status).withValues(alpha: 0.12),
+          child: Text(
+            name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase(),
+            style: TextStyle(color: statusColor(status), fontWeight: FontWeight.w800, fontSize: 13),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(
+                [
+                  sourceLabel(source),
+                  if ('${booking['admin_notes'] ?? ''}'.trim().isNotEmpty) tr('hasNotes'),
+                ].join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (wide) {
+      return InkWell(
+        onTap: () => _showDetails(booking),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
+          child: Row(
+            children: [
+              Expanded(flex: _flex.guest, child: guest),
+              Expanded(
+                flex: _flex.package,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(packageNameOf(booking), maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    if (booking['event_type'] != null)
+                      Text('${booking['event_type']}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              Expanded(flex: _flex.date, child: Text(formatDate(bookingDateOf(booking)))),
+              Expanded(flex: _flex.pax, child: Text('${guestsOf(booking)}', textAlign: TextAlign.center)),
+              Expanded(flex: _flex.payment, child: payment),
+              Expanded(
+                flex: _flex.status,
+                child: Align(alignment: Alignment.centerLeft, child: StatusChip(status: status)),
+              ),
+              SizedBox(width: 132, child: Align(alignment: Alignment.centerRight, child: actions)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Phone: siksik na hanay.
+    return InkWell(
+      onTap: () => _showDetails(booking),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
               children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: statusColor(status).withValues(alpha: 0.12),
-                  child: Text(
-                    initial,
-                    style: TextStyle(color: statusColor(status), fontWeight: FontWeight.w800),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        packageNameOf(booking),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5, letterSpacing: -0.2),
-                      ),
-                      const SizedBox(height: 1),
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-                if (busy)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 8),
-                    child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                  ),
+                Expanded(child: guest),
                 StatusChip(status: status),
               ],
             ),
-          ),
-
-          // Detalye
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _metaPill(Icons.calendar_today_outlined, formatDate(bookingDateOf(booking))),
-                _metaPill(Icons.groups_outlined, tr('paxCount', {'n': guestsOf(booking)})),
-                if (bookingSourceOf(booking) != 'online')
-                  _metaPill(sourceIcon(bookingSourceOf(booking)), sourceLabel(bookingSourceOf(booking))),
-                if (booking['event_type'] != null)
-                  _metaPill(Icons.celebration_outlined, '${booking['event_type']}'),
-                if ('${booking['admin_notes'] ?? ''}'.trim().isNotEmpty)
-                  _metaPill(Icons.sticky_note_2_outlined, tr('hasNotes')),
-                if (pendingPaidOf(booking) > 0)
-                  _metaPill(
-                    Icons.hourglass_top,
-                    tr('pendingProofAmount', {'amount': peso(pendingPaidOf(booking))}),
-                    color: AppColors.warning,
-                  ),
-              ],
-            ),
-          ),
-
-          // Bayad
-          Container(
-            margin: const EdgeInsets.fromLTRB(18, 14, 18, 0),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.subtle,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      peso(paid),
-                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 44),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${packageNameOf(booking)} · ${formatDate(bookingDateOf(booking))} · '
+                          '${tr('paxCount', {'n': guestsOf(booking)})}',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                        const SizedBox(height: 6),
+                        payment,
+                      ],
                     ),
-                    Text('  /  ${peso(total)}', style: theme.textTheme.bodySmall),
-                    const Spacer(),
-                    Text(
-                      remaining > 0 ? tr('balanceAmount', {'amount': peso(remaining)}) : '${(progress * 100).round()}%',
-                      style: TextStyle(color: paidColor, fontWeight: FontWeight.w700, fontSize: 12.5),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 6,
-                    color: paidColor,
-                    backgroundColor: const Color(0xFFE6EBF0),
                   ),
-                ),
-              ],
+                  actions,
+                ],
+              ),
             ),
-          ),
-
-          // Actions
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      for (final a in primary)
-                        FilledButton.icon(
-                          onPressed: busy ? null : () => _runAction(booking, a),
-                          icon: Icon(a.icon, size: 18),
-                          label: Text(tr(a.key)),
-                        ),
-                      // Balanse lang ang nire-record dito, at kapag verified na ang 50% downpayment.
-                      if (!inactive && remaining > 0)
-                        Tooltip(
-                          message: downVerified ? tr('recordBalanceTitle') : tr('recordBalanceLocked'),
-                          child: OutlinedButton.icon(
-                            onPressed: busy || !downVerified ? null : () => _showRecordPaymentDialog(booking),
-                            icon: const Icon(Icons.add_card, size: 18),
-                            label: Text(tr('recordBalance', {'amount': peso(remaining)})),
-                          ),
-                        ),
-                      TextButton(
-                        onPressed: () => _showDetails(booking),
-                        child: Text(tr('details')),
-                      ),
-                    ],
-                  ),
-                ),
-                if (secondary.isNotEmpty)
-                  PopupMenuButton<WorkflowAction>(
-                    enabled: !busy,
-                    tooltip: tr('moreActions'),
-                    onSelected: (a) => _runAction(booking, a),
-                    itemBuilder: (context) => [
-                      for (final a in secondary)
-                        PopupMenuItem(
-                          value: a,
-                          child: Row(
-                            children: [
-                              Icon(
-                                a.icon,
-                                size: 20,
-                                color: a.destructive ? theme.colorScheme.error : null,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                tr(a.key),
-                                style: TextStyle(
-                                  color: a.destructive ? theme.colorScheme.error : null,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                    icon: const Icon(Icons.more_vert, color: AppColors.muted),
-                  ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _metaPill(IconData icon, String text, {Color? color}) {
-    final c = color ?? AppColors.muted;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
-        color: color == null ? const Color(0xFFF1F4F7) : c.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+  /// ⋮ sa gilid: lahat ng puwedeng gawin sa booking (Confirm, Check in, Record balance, No-show…).
+  Widget _actionsMenu(Map<String, dynamic> booking, {required bool busy}) {
+    final theme = Theme.of(context);
+    final actions = BookingWorkflow.actionsFor(booking);
+    final remaining = remainingOf(booking);
+    final downVerified = paidOf(booking) + 0.01 >= (totalOf(booking) * 0.5).roundToDouble();
+    final canRecord = !isInactive(booking) && remaining > 0;
+
+    Widget item(IconData icon, String label, {bool danger = false, bool enabled = true, String? hint}) {
+      final color = !enabled ? AppColors.muted : (danger ? theme.colorScheme.error : null);
+      return Row(
         children: [
-          Icon(icon, size: 14, color: c),
-          const SizedBox(width: 5),
-          Text(
-            text,
-            style: TextStyle(
-              color: color ?? AppColors.text,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(label, style: TextStyle(color: color)),
+                if (hint != null) Text(hint, style: theme.textTheme.bodySmall),
+              ],
             ),
           ),
         ],
-      ),
+      );
+    }
+
+    return PopupMenuButton<String>(
+      enabled: !busy,
+      tooltip: tr('moreActions'),
+      icon: const Icon(Icons.more_vert),
+      onSelected: (v) {
+        if (v == 'record') {
+          _showRecordPaymentDialog(booking);
+          return;
+        }
+        final i = int.tryParse(v);
+        if (i != null) _runAction(booking, actions[i]);
+      },
+      itemBuilder: (context) => [
+        // Pangunahing aksyon muna (hal. Confirm, Check in)
+        for (var i = 0; i < actions.length; i++)
+          if (actions[i].primary)
+            PopupMenuItem(value: '$i', child: item(actions[i].icon, tr(actions[i].key))),
+        if (canRecord)
+          PopupMenuItem(
+            value: 'record',
+            enabled: downVerified,
+            child: item(
+              Icons.add_card,
+              tr('recordBalance', {'amount': peso(remaining)}),
+              enabled: downVerified,
+              hint: downVerified ? null : tr('recordBalanceLocked'),
+            ),
+          ),
+        if (actions.any((a) => !a.primary)) const PopupMenuDivider(),
+        for (var i = 0; i < actions.length; i++)
+          if (!actions[i].primary)
+            PopupMenuItem(
+              value: '$i',
+              child: item(actions[i].icon, tr(actions[i].key), danger: actions[i].destructive),
+            ),
+      ],
     );
   }
+
 }
 
 class _PackageFilter extends StatelessWidget {
