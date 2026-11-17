@@ -471,7 +471,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           onOpenCheckin: (id) => _openModule(11, null, id),
         ),
       2 => CalendarPage(data: data),
-      3 => ClientsPage(data: data),
+      3 => ClientsPage(
+          data: data,
+          onMessage: (id) => _openModule(12, 'chat:$id'),
+          onReview: () => _openModule(4),
+        ),
       4 => VerificationsPage(data: data, onChanged: _fetchData),
       5 => PaymentsPage(
           key: ValueKey('payments-${_bookingFilter ?? ''}-${_focusBookingId ?? ''}'),

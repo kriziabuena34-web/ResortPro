@@ -9,9 +9,15 @@ import '../../widgets/list_controls.dart';
 /// Listahan ng lahat ng client: buod, search, mga tab ayon sa verification,
 /// sort, at history ng bookings ng bawat isa.
 class ClientsPage extends StatefulWidget {
-  const ClientsPage({super.key, required this.data});
+  const ClientsPage({super.key, required this.data, this.onMessage, this.onReview});
 
   final AdminData data;
+
+  /// Bubuksan ang usapan ng client sa Messages.
+  final void Function(String clientId)? onMessage;
+
+  /// Pupunta sa Verifications (para sa client na naghihintay ng review).
+  final VoidCallback? onReview;
 
   @override
   State<ClientsPage> createState() => _ClientsPageState();
@@ -334,7 +340,7 @@ class _ClientsPageState extends State<ClientsPage> {
 
   // Lapad ng bawat column (pareho sa header at sa bawat hanay).
   static const _flex = (client: 5, name: 5, birth: 3, contact: 3, last: 3, status: 3);
-  static const _actionWidth = 56.0;
+  static const _actionWidth = 128.0;
   static const _rowPadding = EdgeInsets.fromLTRB(24, 12, 20, 12);
 
   /// Isang cell: may puwang sa kanan para hindi magdikit ang mga column.
@@ -401,6 +407,70 @@ class _ClientsPageState extends State<ClientsPage> {
     );
   }
 
+  /// Maliit na parisukat na button sa ACTION column.
+  Widget _actionBtn({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onTap,
+    required Color fg,
+    required Color bg,
+    Color? border,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: bg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: border ?? bg),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(width: 36, height: 36, child: Icon(icon, size: 18, color: fg)),
+        ),
+      ),
+    );
+  }
+
+  Widget _actions(_ClientStats c) {
+    final id = '${c.client['id']}';
+    final pending = c.status == 'pending';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (pending && widget.onReview != null) ...[
+          _actionBtn(
+            icon: Icons.verified_user_outlined,
+            tooltip: tr('clActReview'),
+            onTap: widget.onReview,
+            fg: AppColors.ink,
+            bg: const Color(0xFFFACC15),
+          ),
+          const SizedBox(width: 6),
+        ],
+        if (widget.onMessage != null) ...[
+          _actionBtn(
+            icon: Icons.chat_bubble_outline_rounded,
+            tooltip: tr('clActMessage'),
+            onTap: () => widget.onMessage!(id),
+            fg: AppColors.primary,
+            bg: AppColors.primary.withValues(alpha: 0.10),
+          ),
+          const SizedBox(width: 6),
+        ],
+        _actionBtn(
+          icon: Icons.visibility_outlined,
+          tooltip: tr('details'),
+          onTap: () => _showClient(c),
+          fg: AppColors.text,
+          bg: Colors.white,
+          border: AppColors.border,
+        ),
+      ],
+    );
+  }
+
   Widget _clientRow(_ClientStats c, {required bool wide}) {
     final theme = Theme.of(context);
     final pending = c.status == 'pending';
@@ -435,11 +505,7 @@ class _ClientsPageState extends State<ClientsPage> {
       ],
     );
 
-    final view = IconButton.outlined(
-      tooltip: tr('details'),
-      onPressed: () => _showClient(c),
-      icon: const Icon(Icons.visibility_outlined, size: 18),
-    );
+    final view = _actions(c);
     final decoration = pending
         ? BoxDecoration(color: const Color(0xFFFFFBEB), border: Border.all(color: const Color(0xFFF5C451), width: 1.5))
         : null;
@@ -516,6 +582,7 @@ class _ClientsPageState extends State<ClientsPage> {
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
                   view,
                 ],
               ),
@@ -660,6 +727,37 @@ class _ClientsPageState extends State<ClientsPage> {
                   ),
                 ),
               ),
+              if (widget.onMessage != null || (c.status == 'pending' && widget.onReview != null))
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                  decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [
+                      if (c.status == 'pending' && widget.onReview != null)
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFACC15), foregroundColor: AppColors.ink),
+                          onPressed: () {
+                            Navigator.pop(dialogContext);
+                            widget.onReview!();
+                          },
+                          icon: const Icon(Icons.verified_user_outlined, size: 18),
+                          label: Text(tr('clActReview')),
+                        ),
+                      if (widget.onMessage != null)
+                        FilledButton.icon(
+                          onPressed: () {
+                            Navigator.pop(dialogContext);
+                            widget.onMessage!('${c.client['id']}');
+                          },
+                          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                          label: Text(tr('clActMessage')),
+                        ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
