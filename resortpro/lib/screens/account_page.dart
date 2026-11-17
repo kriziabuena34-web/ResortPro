@@ -454,22 +454,31 @@ class _AccountPageState extends State<AccountPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: 2.0,
-                    children: [
-                      statTile('Total Bookings', '${_bookings.length}', null, Colors.white, Icons.event_note_outlined),
+                  // Dalawang hanay: kusang sumusunod ang taas sa laman (walang overflow).
+                  for (final (i, pair) in [
+                    [
+                      statTile('Bookings', '${_bookings.length}', null, Colors.white, Icons.event_note_outlined),
                       statTile('Upcoming', '${upcoming.length}',
                           upcoming.isEmpty ? null : 'Next: ${formatDate(parseDate(upcoming.first['booking_date']))}',
                           const Color(0xFF60A5FA), Icons.upcoming_outlined),
-                      statTile('Completed Stays', '$completed', null, const Color(0xFF4ADE80), Icons.task_alt_rounded),
+                    ],
+                    [
+                      statTile('Completed', '$completed', null, const Color(0xFF4ADE80), Icons.task_alt_rounded),
                       statTile('Total Spent', peso(spent), null, const Color(0xFFFBBF24), Icons.payments_outlined),
                     ],
-                  ),
+                  ].indexed) ...[
+                    if (i > 0) const SizedBox(height: 10),
+                    IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(child: pair[0]),
+                          const SizedBox(width: 10),
+                          Expanded(child: pair[1]),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
