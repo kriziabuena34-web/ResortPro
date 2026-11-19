@@ -16,6 +16,8 @@ import 'admin_data.dart';
 ///  • No-show rate      = no-show ÷ lahat ng bookings sa buwan
 ///  • Repeat client     = client na may 2 o higit pang aktibong booking
 ///  • Lead time         = araw mula pag-book (created_at) hanggang stay date
+///  • Net profit        = revenue (aktibong bookings) − expenses (expenses table)
+///  • Profit margin     = net profit ÷ revenue
 ///  • Forecast:
 ///      - 3-month moving average: F(t+1) = (Y(t) + Y(t−1) + Y(t−2)) ÷ 3
 ///      - Simple linear regression: Y = a + bX, kung saan X = month index,
@@ -32,6 +34,12 @@ class MonthStat {
   double collected = 0; // verified payments na natanggap sa buwan
   int bookedPackageDays = 0;
   int availablePackageDays = 0;
+  int guests = 0; // guests ng aktibong bookings
+  double extraCharges = 0; // sobrang guest, extension, late fee, iba pa
+  double discounts = 0;
+  double expenses = 0; // gastos ng resort sa buwan (expenses table)
+
+  double get profit => revenue - expenses;
 
   double get occupancy => availablePackageDays == 0 ? 0 : bookedPackageDays / availablePackageDays;
   double get cancellationRate => bookings == 0 ? 0 : cancelled / bookings;
@@ -100,6 +108,9 @@ class Analytics {
       } else {
         m.active++;
         m.revenue += totalOf(b);
+        m.extraCharges += extraChargesOf(b);
+        m.discounts += asDouble(b['discount']);
+        m.guests += guestsOf(b);
         final key = '${b['package_id']}|${dateKey(d)}';
         if (occupied.add(key)) m.bookedPackageDays++;
       }
@@ -113,10 +124,55 @@ class Analytics {
         statFor(d)?.collected += asDouble(p['amount']);
       }
     }
+    for (final e in data.expenses) {
+      final d = expenseDateOf(e);
+      if (d == null) continue;
+      statFor(d)?.expenses += asDouble(e['amount']);
+    }
     return list;
   }
 
   // ---- Buod ng huling 12 buwan ----
+  double get totalExpenses => monthly.fold(0.0, (s, m) => s + m.expenses);
+  double get totalProfit => totalRevenue - totalExpenses;
+  double get totalExtraCharges => monthly.fold(0.0, (s, m) => s + m.extraCharges);
+  double get totalDiscounts => monthly.fold(0.0, (s, m) => s + m.discounts);
+
+  /// Profit margin = net profit ÷ revenue.
+  double get profitMargin => totalRevenue == 0 ? 0 : totalProfit / totalRevenue;
+
+  /// Aktibong booking sa loob ng 12 buwan (para sa breakdown ng customer).
+  List<Map<String, dynamic>> get _windowBookings {
+    final start = monthly.first.month;
+    return [
+      for (final b in data.activeBookings)
+        if (bookingDateOf(b) != null && !bookingDateOf(b)!.isBefore(start)) b,
+    ];
+  }
+
+  /// Bilang ng aktibong booking ayon sa isang column (hal. customer_location).
+  /// Pinakamarami muna; "Not recorded" kapag walang laman.
+  List<MapEntry<String, int>> countBy(String column) {
+    final m = <String, int>{};
+    for (final b in _windowBookings) {
+      final v = '${b[column] ?? ''}'.trim();
+      final k = v.isEmpty ? '' : v;
+      m[k] = (m[k] ?? 0) + 1;
+    }
+    return m.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+  }
+
+  /// Saan galing ang kita: package, sobrang guest, extension (kasama ang late fee), at iba pa.
+  ({double package, double extraPax, double extension, double other}) get revenueSources {
+    double pkg = 0, pax = 0, ext = 0, other = 0;
+    for (final b in _windowBookings) {
+      pkg += packageRevenueOf(b);
+      pax += asDouble(b['extra_pax_fee']);
+      ext += asDouble(b['extension_fee']) + asDouble(b['late_fee']);
+      other += asDouble(b['other_charges']);
+    }
+    return (package: pkg, extraPax: pax, extension: ext, other: other);
+  }
   int get totalBookings => monthly.fold(0, (s, m) => s + m.bookings);
   int get totalActive => monthly.fold(0, (s, m) => s + m.active);
   double get totalRevenue => monthly.fold(0.0, (s, m) => s + m.revenue);

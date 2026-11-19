@@ -15,8 +15,12 @@ class AdminData {
     this.blockedDates = const [],
     this.pricingRules = const [],
     this.refunds = const [],
+    this.expenses = const [],
     this.unreadChats = 0,
   });
+
+  /// Gastos ng resort (expenses table, analytics_setup.sql), pinakabago muna.
+  final List<Map<String, dynamic>> expenses;
 
   /// Bilang ng mga mensahe ng guest na hindi pa nababasa (Part 16 ng SQL).
   final int unreadChats;
@@ -179,6 +183,13 @@ class AdminData {
       );
     } catch (_) {}
 
+    List<Map<String, dynamic>> expenses = [];
+    try {
+      expenses = List<Map<String, dynamic>>.from(
+        await supabase.from('expenses').select().order('expense_date', ascending: false),
+      );
+    } catch (_) {}
+
     var unreadChats = 0;
     try {
       final threads = await supabase.rpc('chat_threads');
@@ -195,6 +206,7 @@ class AdminData {
       blockedDates: blocked,
       pricingRules: rules,
       refunds: refunds,
+      expenses: expenses,
     );
   }
 }
@@ -278,6 +290,32 @@ List<Map<String, dynamic>> paymentsOf(Map<String, dynamic> booking) {
 
 double totalOf(Map<String, dynamic> booking) =>
     asDouble(booking['total_amount']);
+
+/// Dagdag na singil sa booking: sobrang guest, extension, late fee, at iba pa.
+double extraChargesOf(Map<String, dynamic> booking) =>
+    asDouble(booking['extra_pax_fee']) +
+    asDouble(booking['extension_fee']) +
+    asDouble(booking['late_fee']) +
+    asDouble(booking['other_charges']);
+
+/// Kita mula sa mismong package (total bawas ang mga dagdag na singil).
+double packageRevenueOf(Map<String, dynamic> booking) => totalOf(booking) - extraChargesOf(booking);
+
+/// Petsa ng gastos (expenses table).
+DateTime? expenseDateOf(Map<String, dynamic> e) => parseDate(e['expense_date']);
+
+/// Mga karaniwang uri ng gastos (pwede ring iba).
+const expenseCategories = [
+  'Electricity',
+  'Water',
+  'Chlorine & pool chemicals',
+  'Cleaning supplies',
+  'LPG',
+  'Internet',
+  'Staff salaries',
+  'Repairs & maintenance',
+  'Other',
+];
 
 /// Verified na bayad lang ang binibilang (ang pending/rejected ay hindi).
 bool isVerifiedPayment(Map<String, dynamic> p) =>

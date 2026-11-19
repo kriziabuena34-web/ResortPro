@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../l10n/app_strings.dart';
@@ -1296,6 +1297,55 @@ class _BookingDetailsDialogState extends State<_BookingDetailsDialog> {
         ),
       );
 
+  List<Widget> _chargeRows(Map<String, dynamic> b) {
+    Widget row(String label, String value, {String? sub, Color? color}) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+                    if (sub != null) Text(sub, style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                  ],
+                ),
+              ),
+              Text(value, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: color)),
+            ],
+          ),
+        );
+    final discount = asDouble(b['discount']);
+    final extraPax = asInt(b['extra_pax']);
+    final extHours = asInt(b['extension_hours']);
+    final late = asDouble(b['late_fee']);
+    final other = asDouble(b['other_charges']);
+    return [
+      row(tr('chPackage'), peso(packageRevenueOf(b) + discount), sub: packageNameOf(b)),
+      if (discount > 0) row(tr('chDiscount'), '− ${peso(discount)}', color: AppColors.success),
+      if (extraPax > 0)
+        row(tr('chExtraPax'), peso(asDouble(b['extra_pax_fee'])), sub: tr('chExtraPaxSub', {'n': extraPax})),
+      if (extHours > 0)
+        row(tr('chExtension'), peso(asDouble(b['extension_fee'])), sub: tr('chExtensionSub', {'n': extHours})),
+      if (late > 0) row(tr('chLate'), peso(late), sub: tr('chLateSub', {'n': asInt(b['late_minutes'])})),
+      if (other > 0) row(tr('chOther'), peso(other), sub: '${b['other_charges_note'] ?? ''}'.isEmpty ? null : '${b['other_charges_note']}'),
+      row(tr('fieldTotal'), peso(totalOf(b))),
+    ];
+  }
+
+  Future<void> _addCharge() async {
+    final added = await showDialog<String>(
+      context: context,
+      builder: (_) => _AddChargeDialog(booking: widget.booking),
+    );
+    if (added == null || !mounted) return;
+    Navigator.pop(context);
+    await widget.onNotesSaved();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(added)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final booking = widget.booking;
@@ -1319,6 +1369,12 @@ class _BookingDetailsDialogState extends State<_BookingDetailsDialog> {
       if (booking['event_type'] != null) _infoRow(Icons.celebration_outlined, tr('fieldEventType'), '${booking['event_type']}'),
       _infoRow(Icons.groups_outlined, tr('fieldGuests'), tr('paxCount', {'n': guestsOf(booking)}), sub: guestRows),
       _infoRow(Icons.storefront_outlined, tr('filterSource'), sourceLabel(bookingSourceOf(booking))),
+      if ('${booking['customer_location'] ?? ''}'.isNotEmpty)
+        _infoRow(Icons.place_outlined, tr('chLocation'), '${booking['customer_location']}'),
+      if ('${booking['referral_source'] ?? ''}'.isNotEmpty)
+        _infoRow(Icons.campaign_outlined, tr('chFoundUs'), '${booking['referral_source']}'),
+      if ('${booking['occasion'] ?? ''}'.isNotEmpty)
+        _infoRow(Icons.cake_outlined, tr('chOccasion'), '${booking['occasion']}'),
       if (booking['client_id'] == null && claim.length == 8)
         _infoRow(Icons.key_outlined, tr('rcClaimCode'), '${claim.substring(0, 4)}-${claim.substring(4)}'),
     ];
@@ -1384,6 +1440,23 @@ class _BookingDetailsDialogState extends State<_BookingDetailsDialog> {
                     const SizedBox(height: 22),
                     _section(tr('bkDetailsInfo')),
                     _boxed(info),
+                    const SizedBox(height: 22),
+                    Row(
+                      children: [
+                        Expanded(child: _section(tr('chTitle'))),
+                        if (!isInactive(booking))
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: TextButton.icon(
+                              style: TextButton.styleFrom(foregroundColor: AppColors.ink, visualDensity: VisualDensity.compact),
+                              onPressed: _addCharge,
+                              icon: const Icon(Icons.add_circle_outline, size: 18),
+                              label: Text(tr('chAdd'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                      ],
+                    ),
+                    _boxed(_chargeRows(booking)),
                     const SizedBox(height: 22),
                     _section('${tr('paymentsHeading')} (${payments.length})'),
                     if (payments.isEmpty)
@@ -1510,6 +1583,161 @@ class _BookingDetailsDialogState extends State<_BookingDetailsDialog> {
           ],
         ),
       ),
+    );
+  }
+}
+
+
+/// Dagdag na singil: sobrang guest (₱100 bawat isa), extension (₱500 kada oras), at iba pa.
+class _AddChargeDialog extends StatefulWidget {
+  const _AddChargeDialog({required this.booking});
+  final Map<String, dynamic> booking;
+
+  @override
+  State<_AddChargeDialog> createState() => _AddChargeDialogState();
+}
+
+class _AddChargeDialogState extends State<_AddChargeDialog> {
+  static const extraPaxRate = 100.0;
+  static const extensionRate = 500.0;
+
+  final _pax = TextEditingController();
+  final _hours = TextEditingController();
+  final _other = TextEditingController();
+  final _note = TextEditingController();
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _pax.dispose();
+    _hours.dispose();
+    _other.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  int get _paxN => int.tryParse(_pax.text.trim()) ?? 0;
+  int get _hoursN => int.tryParse(_hours.text.trim()) ?? 0;
+  double get _otherN => double.tryParse(_other.text.replaceAll(',', '').trim()) ?? 0;
+  double get _total => _paxN * extraPaxRate + _hoursN * extensionRate + _otherN;
+
+  Future<void> _save() async {
+    if (_total <= 0) {
+      setState(() => _error = tr('chNothing'));
+      return;
+    }
+    if (_otherN > 0 && _note.text.trim().isEmpty) {
+      setState(() => _error = tr('chNoteNeeded'));
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final b = widget.booking;
+    final notes = [
+      if ('${b['other_charges_note'] ?? ''}'.isNotEmpty) '${b['other_charges_note']}',
+      if (_otherN > 0) _note.text.trim(),
+    ];
+    try {
+      await Supabase.instance.client.from('bookings').update({
+        'extra_pax': asInt(b['extra_pax']) + _paxN,
+        'extra_pax_fee': asDouble(b['extra_pax_fee']) + _paxN * extraPaxRate,
+        'total_pax': asInt(b['total_pax']) + _paxN,
+        'adults': asInt(b['adults']) + _paxN,
+        'extension_hours': asInt(b['extension_hours']) + _hoursN,
+        'extension_fee': asDouble(b['extension_fee']) + _hoursN * extensionRate,
+        'other_charges': asDouble(b['other_charges']) + _otherN,
+        'other_charges_note': notes.isEmpty ? null : notes.join('; '),
+        'total_amount': totalOf(b) + _total,
+      }).eq('id', b['id']);
+      await BookingWorkflow.log(
+        b['id'],
+        'charge_added',
+        note: [
+          if (_paxN > 0) '+$_paxN guests (${peso(_paxN * extraPaxRate)})',
+          if (_hoursN > 0) '+$_hoursN h extension (${peso(_hoursN * extensionRate)})',
+          if (_otherN > 0) '${_note.text.trim()} (${peso(_otherN)})',
+        ].join(' · '),
+      );
+      if (mounted) Navigator.pop(context, tr('chSaved', {'amount': peso(_total)}));
+    } catch (e) {
+      setState(() {
+        _saving = false;
+        _error = '${tr('exFailed')}: $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    InputDecoration deco(String label, {String? helper, String? prefix}) => InputDecoration(
+          labelText: label,
+          helperText: helper,
+          prefixText: prefix,
+          border: const OutlineInputBorder(),
+        );
+    return AlertDialog(
+      title: Text(tr('chAdd')),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _pax,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: deco(tr('chExtraPax'), helper: tr('chExtraPaxHelp', {'rate': peso(extraPaxRate)})),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _hours,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: deco(tr('chExtensionHours'), helper: tr('chExtensionHelp', {'rate': peso(extensionRate)})),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _other,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+              decoration: deco(tr('chOtherAmount'), prefix: '₱ '),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            TextField(controller: _note, decoration: deco(tr('chOtherNote'))),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: AppColors.ink, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: [
+                  Text(tr('chAddedTotal'), style: const TextStyle(color: AppColors.inkText, fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  Text(peso(_total), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                ],
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: _saving ? null : () => Navigator.pop(context), child: Text(tr('cancel'))),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.ink, foregroundColor: Colors.white),
+          onPressed: _saving ? null : _save,
+          child: Text(_saving ? tr('saving') : tr('chAdd')),
+        ),
+      ],
     );
   }
 }

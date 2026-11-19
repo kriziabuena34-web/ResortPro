@@ -60,7 +60,38 @@ class _BookingPageState extends State<BookingPage> {
 
   double get _price => _datePrice ?? widget.package.price;
 
-  double get _downPayment => (_price * downpaymentRate).roundToDouble();
+  /// ₱100 bawat guest (3 taong gulang pataas) na lampas sa kasama sa presyo.
+  static const _extraPaxRate = 100.0;
+
+  int get _countedPax => _totalPax - (int.tryParse(_infantController.text) ?? 0);
+
+  int get _extraPax {
+    final inc = widget.package.includedPax;
+    if (inc == null || inc <= 0) return 0;
+    return (_countedPax - inc).clamp(0, 9999);
+  }
+
+  double get _extraFee => _extraPax * _extraPaxRate;
+
+  double get _total => _price + _extraFee;
+
+  double get _downPayment => (_total * downpaymentRate).roundToDouble();
+
+  // Opsyonal: para sa analytics ng resort
+  String? _location;
+  String? _foundUs;
+  String? _occasion;
+  static const _locations = ['Pagsanjan & nearby towns', 'Other Laguna towns', 'Metro Manila', 'Other provinces'];
+  static const _sources = ['Facebook', 'Referral', 'Returning customer', 'Walk-by / signage'];
+  static const _occasions = [
+    'Birthday / Debut / Christening',
+    'Family outing',
+    'Barkada',
+    'Reunion',
+    'Company outing',
+    'School / Organization',
+    'Other',
+  ];
 
   /// Ipakita ang bahagi ng petsa (at ang pulang abiso) sa screen.
   void _showDateSection() {
@@ -198,9 +229,12 @@ class _BookingPageState extends State<BookingPage> {
             'adults': int.tryParse(_adultController.text) ?? 0,
             'elderly': int.tryParse(_elderlyController.text) ?? 0,
             // Ang server ang magtatakda ng huling presyo ayon sa petsa.
-            'total_amount': _price,
+            'total_amount': _total,
             'status': 'reserved',
             'event_type': _isFunctionHall ? _eventTypeController.text : null,
+            if (_location != null) 'customer_location': _location,
+            if (_foundUs != null) 'referral_source': _foundUs,
+            if (_occasion != null) 'occasion': _occasion,
           })
           .select()
           .single();
@@ -379,6 +413,22 @@ class _BookingPageState extends State<BookingPage> {
         ),
       );
 
+  Widget _choice(String label, IconData icon, String? value, List<String> options, ValueChanged<String?> onChanged) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        filled: true,
+        fillColor: AppColors.subtle,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      items: [for (final o in options) DropdownMenuItem(value: o, child: Text(o))],
+      onChanged: onChanged,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final seasonal = _datePrice != null && _datePrice != widget.package.price;
@@ -430,7 +480,7 @@ class _BookingPageState extends State<BookingPage> {
                               const Text('TOTAL',
                                   style: TextStyle(
                                       color: AppColors.inkText, fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
-                              Text(peso(_price),
+                              Text(peso(_total),
                                   style: const TextStyle(
                                       fontFamily: 'Poppins', color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700)),
                             ],
@@ -455,6 +505,14 @@ class _BookingPageState extends State<BookingPage> {
                         ),
                       ],
                     ),
+                    if (_extraPax > 0) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        '${peso(_price)} package + ${peso(_extraFee)} for $_extraPax extra '
+                        '${_extraPax == 1 ? 'guest' : 'guests'} (${peso(_extraPaxRate)} each above ${widget.package.includedPax} pax)',
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF99F6E4), fontWeight: FontWeight.w600),
+                      ),
+                    ],
                     if (seasonal) ...[
                       const SizedBox(height: 10),
                       Text(
@@ -586,6 +644,15 @@ class _BookingPageState extends State<BookingPage> {
                     if (_totalPax >= _maxGuests)
                       _note(Icons.info_outline_rounded, 'Maximum of $_maxGuests guests reached for this package.',
                           AppColors.danger),
+                    if ((widget.package.includedPax ?? 0) > 0)
+                      _note(
+                        Icons.payments_outlined,
+                        _extraPax > 0
+                            ? '$_extraPax extra ${_extraPax == 1 ? 'guest' : 'guests'} × ${peso(_extraPaxRate)} = ${peso(_extraFee)} added to your total.'
+                            : 'The price includes ${widget.package.includedPax} guests (3 years old and up). '
+                                'Each extra guest is ${peso(_extraPaxRate)}.',
+                        _extraPax > 0 ? AppColors.warning : AppColors.primary,
+                      ),
                   ],
                 ),
               ),
@@ -614,6 +681,26 @@ class _BookingPageState extends State<BookingPage> {
                     },
                   ),
                 ),
+
+              // ---- Opsyonal: tungkol sa iyo (para sa analytics ng resort) ----
+              _step(
+                ++step,
+                'About Your Stay (Optional)',
+                'Helps the resort plan better. You can skip this.',
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _choice('Where are you from?', Icons.place_outlined, _location, _locations,
+                        (v) => setState(() => _location = v)),
+                    const SizedBox(height: 12),
+                    _choice('How did you find us?', Icons.campaign_outlined, _foundUs, _sources,
+                        (v) => setState(() => _foundUs = v)),
+                    const SizedBox(height: 12),
+                    _choice('What is the occasion?', Icons.cake_outlined, _occasion, _occasions,
+                        (v) => setState(() => _occasion = v)),
+                  ],
+                ),
+              ),
 
               // ---- 4. Downpayment ----
               _step(

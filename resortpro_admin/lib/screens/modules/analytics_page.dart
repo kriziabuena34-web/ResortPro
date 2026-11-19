@@ -102,6 +102,13 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               _tile(tr('anLeadTime').toUpperCase(), tr('anLeadCaption'),
                   tr('anDays', {'n': a.averageLeadTimeDays.toStringAsFixed(0)}), const Color(0xFF60A5FA),
                   Icons.schedule_rounded),
+              _tile(tr('anTotalRevenue').toUpperCase(), tr('anTotalRevenueSub', {'n': a.totalActive}),
+                  peso(a.totalRevenue), const Color(0xFF4ADE80), Icons.payments_outlined),
+              _tile(tr('anTotalExpenses').toUpperCase(), tr('anLast12'), peso(a.totalExpenses), const Color(0xFFF87171),
+                  Icons.receipt_long_outlined),
+              _tile(tr('anNetProfit').toUpperCase(), tr('anMarginSub', {'p': _pct(a.profitMargin)}), peso(a.totalProfit),
+                  a.totalProfit >= 0 ? const Color(0xFF4ADE80) : const Color(0xFFF87171),
+                  Icons.account_balance_wallet_outlined),
             ]),
             const SizedBox(height: 18),
 
@@ -187,6 +194,80 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 18),
+
+            // ---- Kita, gastos at net profit ----
+            pair(
+              _section(
+                icon: Icons.account_balance_wallet_outlined,
+                title: _tc(tr('anProfitTitle')),
+                subtitle: _tc(tr('anProfitSub')),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    GroupedBarChart(
+                      labels: labels,
+                      axisFormat: pesoCompact,
+                      valueFormat: peso,
+                      series: [
+                        ChartSeries(_tc(tr('anRevenue')), AppColors.primary, [for (final m in monthly) m.revenue]),
+                        ChartSeries(_tc(tr('navExpenses')), const Color(0xFFF87171), [for (final m in monthly) m.expenses]),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      tr('anProfitNote', {
+                        'profitable': monthly.where((m) => m.profit > 0).length,
+                        'months': monthly.length,
+                      }),
+                      style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+              _section(
+                icon: Icons.donut_large_rounded,
+                title: _tc(tr('anRevenueSources')),
+                subtitle: _tc(tr('anRevenueSourcesSub')),
+                child: Builder(builder: (context) {
+                  final r = a.revenueSources;
+                  return HorizontalBarList(
+                    color: AppColors.primary,
+                    valueFormat: peso,
+                    items: [
+                      BarItem(_tc(tr('chPackage')), r.package),
+                      BarItem(_tc(tr('chExtraPax')), r.extraPax),
+                      BarItem(_tc(tr('chExtension')), r.extension),
+                      BarItem(_tc(tr('chOther')), r.other),
+                    ],
+                  );
+                }),
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            // ---- Mga customer: taga-saan, paano nalaman, okasyon ----
+            pair(
+              _section(
+                icon: Icons.place_outlined,
+                title: _tc(tr('anLocationTitle')),
+                subtitle: _tc(tr('anLocationSub')),
+                child: _countBars(a.countBy('customer_location'), const Color(0xFF60A5FA)),
+              ),
+              _section(
+                icon: Icons.campaign_outlined,
+                title: _tc(tr('anFoundUsTitle')),
+                subtitle: _tc(tr('anFoundUsSub')),
+                child: _countBars(a.countBy('referral_source'), const Color(0xFF6366F1)),
+              ),
+            ),
+            const SizedBox(height: 18),
+            _section(
+              icon: Icons.cake_outlined,
+              title: _tc(tr('anOccasionTitle')),
+              subtitle: _tc(tr('anOccasionSub')),
+              child: _countBars(a.countBy('occasion'), const Color(0xFFF59E0B)),
             ),
             const SizedBox(height: 18),
 
@@ -281,6 +362,23 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   }
 
   static const _caps = TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted);
+
+  /// Pahalang na bars para sa bilang ng booking ayon sa kategorya.
+  Widget _countBars(List<MapEntry<String, int>> entries, Color color) {
+    final total = entries.fold<int>(0, (s, e) => s + e.value);
+    return HorizontalBarList(
+      color: color,
+      emptyText: tr('noData'),
+      items: [
+        for (final e in entries)
+          BarItem(
+            e.key.isEmpty ? tr('anNotRecorded') : e.key,
+            e.value.toDouble(),
+            trailing: '${e.value} · ${total == 0 ? '0' : (e.value * 100 / total).toStringAsFixed(0)}%',
+          ),
+      ],
+    );
+  }
 
   Widget _overviewCard(double width, List<Widget> tiles) {
     final cols = width >= 1000 ? 3 : 2;
@@ -486,7 +584,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   }
 
   Widget _monthlyTable(List<MonthStat> monthly, double width) {
-    const flex = [3, 2, 3, 3, 3, 4, 4];
+    const flex = [3, 2, 3, 3, 3, 4, 4, 4, 4];
     final headers = [
       tr('rpcMonth'),
       tr('rpcBookings'),
@@ -495,11 +593,14 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       tr('anColNoShow'),
       tr('rpcBooked'),
       tr('rpcCollected'),
+      tr('navExpenses'),
+      tr('anNetProfit'),
     ];
     final rows = monthly.reversed.toList();
     final totalActive = rows.fold<int>(0, (s, m) => s + m.active);
     final totalBooked = rows.fold<double>(0, (s, m) => s + m.revenue);
     final totalCollected = rows.fold<double>(0, (s, m) => s + m.collected);
+    final totalExpenses = rows.fold<double>(0, (s, m) => s + m.expenses);
     double avg(double Function(MonthStat) f) => rows.isEmpty ? 0 : rows.fold<double>(0, (s, m) => s + f(m)) / rows.length;
 
     Widget line(List<String> cells, {bool header = false, bool total = false, bool shade = false}) => Container(
@@ -554,6 +655,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             _pct(rows[r].noShowRate),
             peso(rows[r].revenue),
             peso(rows[r].collected),
+            peso(rows[r].expenses),
+            peso(rows[r].profit),
           ], shade: r.isOdd),
         ],
         const Divider(height: 1, thickness: 1.5),
@@ -565,13 +668,15 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           _pct(avg((m) => m.noShowRate)),
           peso(totalBooked),
           peso(totalCollected),
+          peso(totalExpenses),
+          peso(totalBooked - totalExpenses),
         ], total: true),
       ],
     );
-    if (width >= 1000) return table;
+    if (width >= 1200) return table;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: SizedBox(width: 1000, child: table),
+      child: SizedBox(width: 1200, child: table),
     );
   }
 }

@@ -30,6 +30,9 @@ class Package {
   final String? endTime;
   final int? minPax;
   final int? maxPax;
+
+  /// Ilang guest ang kasama sa presyo (null = walang dagdag na singil bawat tao).
+  final int? includedPax;
   final List<String> inclusions;
   final List<String> additional;
 
@@ -41,6 +44,7 @@ class Package {
     this.endTime,
     this.minPax,
     this.maxPax,
+    this.includedPax,
     required this.inclusions,
     required this.additional,
   });
@@ -54,6 +58,7 @@ class Package {
       endTime: json['end_time'] as String?,
       minPax: json['min_pax'] as int?,
       maxPax: json['max_pax'] as int?,
+      includedPax: json['included_pax'] as int?,
       inclusions: List<String>.from(json['inclusions'] ?? []),
       additional: List<String>.from(json['additional'] ?? []),
     );
