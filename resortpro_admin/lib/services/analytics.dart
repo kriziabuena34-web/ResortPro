@@ -7,11 +7,10 @@ import 'admin_data.dart';
 /// Mga kuwenta para sa Analytics module.
 ///
 /// Mga depinisyon (para sa documentation / defense):
-///  • Occupancy rate  = booked package-days ÷ available package-days
-///      - booked package-day: may aktibong booking (hindi cancelled/no-show)
-///        ang isang package sa isang araw
-///      - available package-days: (bilang ng package × araw sa buwan)
-///        bawas ang mga blocked na araw
+///  • Occupancy rate  = booked days ÷ open days
+///      - booked day: araw na may aktibong booking (hindi cancelled/no-show);
+///        isang grupo lang bawat araw ang resort
+///      - open days: araw sa buwan bawas ang araw na sarado ang buong resort
 ///  • Cancellation rate = cancelled ÷ lahat ng bookings sa buwan
 ///  • No-show rate      = no-show ÷ lahat ng bookings sa buwan
 ///  • Repeat client     = client na may 2 o higit pang aktibong booking
@@ -77,20 +76,16 @@ class Analytics {
       return null;
     }
 
-    final pkgCount = data.packages.length;
+    // Isang grupo lang bawat araw ang resort (private), kaya ARAW ang binibilang:
+    // bukas na araw = araw sa buwan bawas ang araw na sarado ang buong resort.
     for (final m in list) {
       final days = DateUtils.getDaysInMonth(m.month.year, m.month.month);
-      var blockedPackageDays = 0;
+      var closed = 0;
       for (var day = 1; day <= days; day++) {
         final date = DateTime(m.month.year, m.month.month, day);
-        final blocks = data.blocksOn(date);
-        if (blocks.any((b) => b['package_id'] == null)) {
-          blockedPackageDays += pkgCount;
-        } else {
-          blockedPackageDays += blocks.map((b) => '${b['package_id']}').toSet().length;
-        }
+        if (data.blocksOn(date).any((b) => b['package_id'] == null)) closed++;
       }
-      m.availablePackageDays = math.max(0, pkgCount * days - blockedPackageDays);
+      m.availablePackageDays = math.max(0, days - closed);
     }
 
     final occupied = <String>{};
@@ -111,8 +106,7 @@ class Analytics {
         m.extraCharges += extraChargesOf(b);
         m.discounts += asDouble(b['discount']);
         m.guests += guestsOf(b);
-        final key = '${b['package_id']}|${dateKey(d)}';
-        if (occupied.add(key)) m.bookedPackageDays++;
+        if (occupied.add(dateKey(d))) m.bookedPackageDays++;
       }
     }
 
