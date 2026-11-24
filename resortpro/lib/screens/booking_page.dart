@@ -73,7 +73,13 @@ class _BookingPageState extends State<BookingPage> {
 
   double get _extraFee => _extraPax * _extraPaxRate;
 
-  double get _total => _price + _extraFee;
+  /// Function Hall lang: mga kuwarto sa second floor (hindi kasama sa package).
+  static const _roomRate = 3500.0;
+  static const _maxRooms = 3;
+  int _rooms = 0;
+  double get _roomsFee => _isFunctionHall ? _rooms * _roomRate : 0;
+
+  double get _total => _price + _extraFee + _roomsFee;
 
   double get _downPayment => (_total * downpaymentRate).roundToDouble();
 
@@ -257,6 +263,7 @@ class _BookingPageState extends State<BookingPage> {
             'total_amount': _total,
             'status': 'reserved',
             'event_type': _isFunctionHall ? _eventTypeController.text : null,
+            if (_isFunctionHall && _rooms > 0) 'extra_rooms': _rooms,
             if (_customerLocation != null) 'customer_location': _customerLocation,
             if (_foundUs != null) 'referral_source': _foundUs,
             if (_occasion != null) 'occasion': _occasion,
@@ -440,6 +447,75 @@ class _BookingPageState extends State<BookingPage> {
         ),
       );
 
+  Widget _roomsPicker() {
+    Widget roundButton(IconData icon, VoidCallback? onTap) => Material(
+          color: onTap == null ? AppColors.subtle : AppColors.primary.withValues(alpha: 0.10),
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(icon, size: 20, color: onTap == null ? AppColors.border : AppColors.primaryDark),
+            ),
+          ),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+          decoration: BoxDecoration(
+            color: AppColors.subtle,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _rooms > 0 ? AppColors.primary.withValues(alpha: 0.45) : AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.bed_outlined, color: AppColors.primaryDark),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Second-floor rooms',
+                        style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink, fontSize: 14.5)),
+                    Text('${peso(_roomRate)} per room · up to $_maxRooms',
+                        style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                  ],
+                ),
+              ),
+              roundButton(Icons.remove_rounded, _rooms > 0 ? () => setState(() => _rooms--) : null),
+              SizedBox(
+                width: 34,
+                child: Text('$_rooms',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 18)),
+              ),
+              roundButton(Icons.add_rounded, _rooms < _maxRooms ? () => setState(() => _rooms++) : null),
+            ],
+          ),
+        ),
+        if (_rooms > 0)
+          _note(
+            Icons.payments_outlined,
+            '$_rooms ${_rooms == 1 ? 'room' : 'rooms'} × ${peso(_roomRate)} = ${peso(_roomsFee)} added to your total.',
+            AppColors.primary,
+          ),
+      ],
+    );
+  }
+
   /// Isang tanong sa "About Your Stay": malinaw na label sa itaas, tapos ang sagot.
   Widget _question(IconData icon, String label, Widget child) {
     return Column(
@@ -578,11 +654,17 @@ class _BookingPageState extends State<BookingPage> {
                         ),
                       ],
                     ),
-                    if (_extraPax > 0) ...[
+                    if (_extraPax > 0 || _roomsFee > 0) ...[
                       const SizedBox(height: 10),
                       Text(
-                        '${peso(_price)} package + ${peso(_extraFee)} for $_extraPax extra '
-                        '${_extraPax == 1 ? 'guest' : 'guests'} (${peso(_extraPaxRate)} each above ${widget.package.includedPax} pax)',
+                        [
+                          '${peso(_price)} package',
+                          if (_extraPax > 0)
+                            '${peso(_extraFee)} for $_extraPax extra ${_extraPax == 1 ? 'guest' : 'guests'} '
+                                '(${peso(_extraPaxRate)} each above ${widget.package.includedPax} pax)',
+                          if (_roomsFee > 0)
+                            '${peso(_roomsFee)} for $_rooms ${_rooms == 1 ? 'room' : 'rooms'}',
+                        ].join(' + '),
                         style: const TextStyle(fontSize: 12, color: Color(0xFF99F6E4), fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -753,6 +835,15 @@ class _BookingPageState extends State<BookingPage> {
                       return null;
                     },
                   ),
+                ),
+
+              // ---- Function Hall: dagdag na kuwarto sa second floor ----
+              if (_isFunctionHall)
+                _step(
+                  ++step,
+                  'Add Rooms (Optional)',
+                  'Second-floor rooms are not included in the Function Hall package',
+                  _roomsPicker(),
                 ),
 
               // ---- Opsyonal: tungkol sa iyo (para sa analytics ng resort) ----

@@ -102,6 +102,10 @@ const _weekdays = {
 const Map<AppLanguage, Map<String, String>> _strings = {
   // ======================== ENGLISH ========================
   AppLanguage.en: {
+    'chRooms': 'Additional rooms',
+    'chRoomsSub': '{n} second-floor room(s)',
+    'chRoomsHelp': '{rate} per room · {left} more available',
+    'chRoomsFull': 'All {max} rooms are already added',
     'notifRefundDetailsTitle': 'Refund account received',
     'notifRefundDetailsBody': '{client} sent their {method} account for the {amount} refund ({package}). You can now send it.',
     'rfBreakdownResort': 'Cancelled by the resort · full refund of {paid}',
@@ -1123,6 +1127,10 @@ const Map<AppLanguage, Map<String, String>> _strings = {
 
   // ======================== FILIPINO ========================
   AppLanguage.fil: {
+    'chRooms': 'Dagdag na kuwarto',
+    'chRoomsSub': '{n} kuwarto sa second floor',
+    'chRoomsHelp': '{rate} bawat kuwarto · {left} pa ang pwede',
+    'chRoomsFull': 'Naidagdag na lahat ng {max} kuwarto',
     'notifRefundDetailsTitle': 'Natanggap ang account para sa refund',
     'notifRefundDetailsBody': 'Ipinadala ni {client} ang {method} account niya para sa {amount} na refund ({package}). Pwede mo na itong ipadala.',
     'rfBreakdownResort': 'Kinansela ng resort · buong refund na {paid}',

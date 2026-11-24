@@ -296,6 +296,7 @@ double extraChargesOf(Map<String, dynamic> booking) =>
     asDouble(booking['extra_pax_fee']) +
     asDouble(booking['extension_fee']) +
     asDouble(booking['late_fee']) +
+    asDouble(booking['extra_rooms_fee']) +
     asDouble(booking['other_charges']);
 
 /// Kita mula sa mismong package (total bawas ang mga dagdag na singil).

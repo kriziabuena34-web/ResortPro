@@ -238,6 +238,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                     items: [
                       BarItem(_tc(tr('chPackage')), r.package),
                       BarItem(_tc(tr('chExtraPax')), r.extraPax),
+                      BarItem(_tc(tr('chRooms')), r.rooms),
                       BarItem(_tc(tr('chExtension')), r.extension),
                       BarItem(_tc(tr('chOther')), r.other),
                     ],

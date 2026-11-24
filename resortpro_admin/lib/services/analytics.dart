@@ -157,15 +157,16 @@ class Analytics {
   }
 
   /// Saan galing ang kita: package, sobrang guest, extension (kasama ang late fee), at iba pa.
-  ({double package, double extraPax, double extension, double other}) get revenueSources {
-    double pkg = 0, pax = 0, ext = 0, other = 0;
+  ({double package, double extraPax, double rooms, double extension, double other}) get revenueSources {
+    double pkg = 0, pax = 0, rooms = 0, ext = 0, other = 0;
     for (final b in _windowBookings) {
       pkg += packageRevenueOf(b);
       pax += asDouble(b['extra_pax_fee']);
+      rooms += asDouble(b['extra_rooms_fee']);
       ext += asDouble(b['extension_fee']) + asDouble(b['late_fee']);
       other += asDouble(b['other_charges']);
     }
-    return (package: pkg, extraPax: pax, extension: ext, other: other);
+    return (package: pkg, extraPax: pax, rooms: rooms, extension: ext, other: other);
   }
   int get totalBookings => monthly.fold(0, (s, m) => s + m.bookings);
   int get totalActive => monthly.fold(0, (s, m) => s + m.active);

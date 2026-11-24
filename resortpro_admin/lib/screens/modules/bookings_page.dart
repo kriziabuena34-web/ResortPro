@@ -1370,11 +1370,14 @@ class _BookingDetailsDialogState extends State<_BookingDetailsDialog> {
     final extHours = asInt(b['extension_hours']);
     final late = asDouble(b['late_fee']);
     final other = asDouble(b['other_charges']);
+    final rooms = asInt(b['extra_rooms']);
     return [
       row(tr('chPackage'), peso(packageRevenueOf(b) + discount), sub: packageNameOf(b)),
       if (discount > 0) row(tr('chDiscount'), '− ${peso(discount)}', color: AppColors.success),
       if (extraPax > 0)
         row(tr('chExtraPax'), peso(asDouble(b['extra_pax_fee'])), sub: tr('chExtraPaxSub', {'n': extraPax})),
+      if (rooms > 0)
+        row(tr('chRooms'), peso(asDouble(b['extra_rooms_fee'])), sub: tr('chRoomsSub', {'n': rooms})),
       if (extHours > 0)
         row(tr('chExtension'), peso(asDouble(b['extension_fee'])), sub: tr('chExtensionSub', {'n': extHours})),
       if (late > 0) row(tr('chLate'), peso(late), sub: tr('chLateSub', {'n': asInt(b['late_minutes'])})),
@@ -1650,6 +1653,13 @@ class _AddChargeDialog extends StatefulWidget {
 class _AddChargeDialogState extends State<_AddChargeDialog> {
   static const extraPaxRate = 100.0;
   static const extensionRate = 500.0;
+  static const roomRate = 3500.0;
+  static const maxRooms = 3;
+
+  /// Function Hall lang ang may dagdag na kuwarto sa second floor.
+  bool get _isFunctionHall => packageNameOf(widget.booking).toLowerCase().startsWith('function hall');
+  int get _roomsLeft => (maxRooms - asInt(widget.booking['extra_rooms'])).clamp(0, maxRooms);
+  int _roomsN = 0;
 
   final _pax = TextEditingController();
   final _hours = TextEditingController();
@@ -1670,7 +1680,7 @@ class _AddChargeDialogState extends State<_AddChargeDialog> {
   int get _paxN => int.tryParse(_pax.text.trim()) ?? 0;
   int get _hoursN => int.tryParse(_hours.text.trim()) ?? 0;
   double get _otherN => double.tryParse(_other.text.replaceAll(',', '').trim()) ?? 0;
-  double get _total => _paxN * extraPaxRate + _hoursN * extensionRate + _otherN;
+  double get _total => _paxN * extraPaxRate + _roomsN * roomRate + _hoursN * extensionRate + _otherN;
 
   Future<void> _save() async {
     if (_total <= 0) {
@@ -1692,6 +1702,8 @@ class _AddChargeDialogState extends State<_AddChargeDialog> {
     ];
     try {
       await Supabase.instance.client.from('bookings').update({
+        if (_roomsN > 0) 'extra_rooms': asInt(b['extra_rooms']) + _roomsN,
+        if (_roomsN > 0) 'extra_rooms_fee': asDouble(b['extra_rooms_fee']) + _roomsN * roomRate,
         'extra_pax': asInt(b['extra_pax']) + _paxN,
         'extra_pax_fee': asDouble(b['extra_pax_fee']) + _paxN * extraPaxRate,
         'total_pax': asInt(b['total_pax']) + _paxN,
@@ -1707,6 +1719,7 @@ class _AddChargeDialogState extends State<_AddChargeDialog> {
         'charge_added',
         note: [
           if (_paxN > 0) '+$_paxN guests (${peso(_paxN * extraPaxRate)})',
+          if (_roomsN > 0) '+$_roomsN room(s) (${peso(_roomsN * roomRate)})',
           if (_hoursN > 0) '+$_hoursN h extension (${peso(_hoursN * extensionRate)})',
           if (_otherN > 0) '${_note.text.trim()} (${peso(_otherN)})',
         ].join(' · '),
@@ -1745,6 +1758,36 @@ class _AddChargeDialogState extends State<_AddChargeDialog> {
               decoration: deco(tr('chExtraPax'), helper: tr('chExtraPaxHelp', {'rate': peso(extraPaxRate)})),
               onChanged: (_) => setState(() {}),
             ),
+            if (_isFunctionHall) ...[
+              const SizedBox(height: 12),
+              InputDecorator(
+                decoration: deco(tr('chRooms'),
+                    helper: _roomsLeft == 0
+                        ? tr('chRoomsFull', {'max': maxRooms})
+                        : tr('chRoomsHelp', {'rate': peso(roomRate), 'left': _roomsLeft})),
+                child: Row(
+                  children: [
+                    const Icon(Icons.bed_outlined, size: 20, color: AppColors.muted),
+                    const Spacer(),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _roomsN > 0 ? () => setState(() => _roomsN--) : null,
+                      icon: const Icon(Icons.remove_circle_outline),
+                    ),
+                    SizedBox(
+                      width: 28,
+                      child: Text('$_roomsN',
+                          textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                    ),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      onPressed: _roomsN < _roomsLeft ? () => setState(() => _roomsN++) : null,
+                      icon: const Icon(Icons.add_circle_outline),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _hours,

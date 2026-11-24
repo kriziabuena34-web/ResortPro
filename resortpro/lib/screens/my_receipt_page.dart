@@ -208,6 +208,9 @@ class _MyReceiptPageState extends State<MyReceiptPage> {
                   _row('Guests', '${b['total_pax']} pax'),
                   if (guests.isNotEmpty) _row('Breakdown', guests, small: true),
                   if (b['event_type'] != null) _row('Event Type', '${b['event_type']}'),
+                  if (((b['extra_rooms'] as num?) ?? 0) > 0)
+                    _row('Added Rooms',
+                        '${b['extra_rooms']} × ${_formatPeso(3500)} = ${_formatPeso(((b['extra_rooms_fee'] as num?) ?? 0).toDouble())}'),
                   _row('Booked On', formatDateTime(parseDate(b['created_at']))),
 
                   const _DashedDivider(),
