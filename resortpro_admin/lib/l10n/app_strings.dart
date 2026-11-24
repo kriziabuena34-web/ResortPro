@@ -102,6 +102,13 @@ const _weekdays = {
 const Map<AppLanguage, Map<String, String>> _strings = {
   // ======================== ENGLISH ========================
   AppLanguage.en: {
+    'anPlainFlat': 'Sales are about the same each month.',
+    'anPlainUp': 'Sales are going up by about {amount} each month.',
+    'anPlainDown': 'Sales are going down by about {amount} each month.',
+    'anReliHigh': 'How sure: High. Monthly sales follow a steady pattern, so this forecast is a good guide.',
+    'anReliMid': 'How sure: Medium. Sales change from month to month, so use this forecast as a general guide.',
+    'anReliLow': 'How sure: Low. Sales go up and down a lot (for example, busy summer months and quiet rainy months), so treat this forecast as a rough guide only.',
+    'anPlainHow': 'The forecast follows the overall direction of past sales. The second estimate is the average of the last 3 months. "Already booked" counts bookings already made for those months.',
     'navPayAccounts': 'Payment Accounts',
     'paIntro': 'The GCash and Maya accounts where guests send their payments. Guests see the number and account name in the app when they pay.',
     'paNotSetUp': 'Payment accounts are not set up in the database yet. Run supabase/payment_accounts_setup.sql in the Supabase SQL Editor, then try again.',
@@ -1140,6 +1147,13 @@ const Map<AppLanguage, Map<String, String>> _strings = {
 
   // ======================== FILIPINO ========================
   AppLanguage.fil: {
+    'anPlainFlat': 'Halos pareho ang benta bawat buwan.',
+    'anPlainUp': 'Tumataas ang benta nang mga {amount} bawat buwan.',
+    'anPlainDown': 'Bumababa ang benta nang mga {amount} bawat buwan.',
+    'anReliHigh': 'Gaano kasigurado: Mataas. Halos pareho ang takbo ng benta bawat buwan, kaya maaasahan ang forecast na ito.',
+    'anReliMid': 'Gaano kasigurado: Katamtaman. Nagbabago ang benta bawat buwan, kaya gamitin ang forecast bilang pangkalahatang gabay.',
+    'anReliLow': 'Gaano kasigurado: Mababa. Malaki ang taas-baba ng benta (hal. maraming guest tuwing summer at kaunti tuwing tag-ulan), kaya tantiya lang ang forecast na ito.',
+    'anPlainHow': 'Sinusundan ng forecast ang pangkalahatang direksyon ng nakaraang benta. Ang pangalawang tantiya ay average ng huling 3 buwan. Ang "Naka-book na" ay ang mga booking na para sa mga buwang iyon.',
     'navPayAccounts': 'Payment Accounts',
     'paIntro': 'Ang GCash at Maya kung saan nagpapadala ng bayad ang mga guest. Makikita nila sa app ang number at pangalan ng account kapag magbabayad.',
     'paNotSetUp': 'Hindi pa naka-set up ang payment accounts sa database. Patakbuhin ang supabase/payment_accounts_setup.sql sa Supabase SQL Editor, saka subukan ulit.',

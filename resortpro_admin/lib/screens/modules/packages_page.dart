@@ -394,20 +394,6 @@ class _PackagesPageState extends State<PackagesPage> {
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        child: Row(
-          children: [
-            Icon(icon, size: 17, color: AppColors.muted),
-            const SizedBox(width: 9),
-            SizedBox(width: 80, child: Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 13))),
-            Expanded(
-              child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            ),
-          ],
-        ),
-      );
-
   Widget _buildPackageCard(
     Map<String, dynamic> pkg,
     List<Map<String, dynamic>> bookings,
@@ -427,38 +413,44 @@ class _PackagesPageState extends State<PackagesPage> {
             : tr('capNoLimit');
     final share = maxCount == 0 ? 0.0 : bookings.length / maxCount;
 
+    // Isang hanay ng numero; walang sariling border (linya lang sa pagitan).
     Widget stat(String value, String label) => Expanded(
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            decoration: BoxDecoration(
-              color: AppColors.subtle,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.muted, letterSpacing: 0.5)),
-                const SizedBox(height: 2),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                ),
-              ],
-            ),
+          child: Column(
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(value,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: AppColors.ink)),
+              ),
+              const SizedBox(height: 2),
+              Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.muted, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        );
+    Widget statDivider() => Container(width: 1, height: 30, color: AppColors.border);
+
+    Widget meta(IconData icon, String text) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(color: AppColors.subtle, borderRadius: BorderRadius.circular(20)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 15, color: AppColors.muted),
+              const SizedBox(width: 6),
+              Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
+            ],
           ),
         );
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
-        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],
+        boxShadow: const [BoxShadow(color: Color(0x0F0B1B2B), blurRadius: 18, offset: Offset(0, 6))],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -468,30 +460,46 @@ class _PackagesPageState extends State<PackagesPage> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Container(height: 5, color: slot.color),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+              // ---- Header na may kulay ng oras (day / night / hall) ----
+              Container(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [slot.color.withValues(alpha: 0.12), slot.color.withValues(alpha: 0.03)],
+                  ),
+                ),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Container(
-                      width: 44,
-                      height: 44,
+                      width: 46,
+                      height: 46,
                       decoration: BoxDecoration(
-                        color: slot.color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(13),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [BoxShadow(color: slot.color.withValues(alpha: 0.18), blurRadius: 10, offset: const Offset(0, 3))],
                       ),
-                      child: Icon(slot.icon, color: slot.color, size: 22),
+                      child: Icon(slot.icon, color: slot.color, size: 23),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${pkg['name']}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
-                          const SizedBox(height: 2),
-                          Text(tr(slot.key),
-                              style: TextStyle(color: slot.color, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                          Text('${pkg['name']}',
+                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5, color: AppColors.ink)),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: slot.color.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(tr(slot.key),
+                                style: TextStyle(color: slot.color, fontWeight: FontWeight.w700, fontSize: 11.5)),
+                          ),
                         ],
                       ),
                     ),
@@ -501,37 +509,34 @@ class _PackagesPageState extends State<PackagesPage> {
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  child: Column(
-                    children: [
-                      _infoRow(Icons.schedule_rounded, tr('fieldTime'),
-                          start.isEmpty ? '—' : (end.isEmpty ? start : '$start – $end')),
-                      const Divider(height: 1),
-                      _infoRow(Icons.groups_outlined, tr('fieldCapacity'), capacity),
-                    ],
-                  ),
-                ),
-              ),
+              // ---- Oras at kapasidad ----
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    meta(Icons.schedule_rounded, start.isEmpty ? '—' : (end.isEmpty ? start : '$start – $end')),
+                    meta(Icons.groups_outlined, capacity),
+                  ],
+                ),
+              ),
+              // ---- Mga numero ----
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
                 child: Row(
                   children: [
                     stat('${bookings.length}', tr('bookingsWord')),
-                    const SizedBox(width: 8),
+                    statDivider(),
                     stat('$upcoming', tr('statUpcoming')),
-                    const SizedBox(width: 8),
+                    statDivider(),
                     stat(pesoCompact(revenue), tr('statBookedValue')),
                   ],
                 ),
               ),
+              // ---- Kasikatan ----
               Padding(
-                padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -549,7 +554,7 @@ class _PackagesPageState extends State<PackagesPage> {
                       child: LinearProgressIndicator(
                         value: share,
                         minHeight: 7,
-                        backgroundColor: const Color(0xFFE6EBF0),
+                        backgroundColor: const Color(0xFFEEF2F6),
                         valueColor: AlwaysStoppedAnimation(slot.color),
                       ),
                     ),
@@ -558,18 +563,20 @@ class _PackagesPageState extends State<PackagesPage> {
               ),
             ],
           ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(18, 10, 14, 12),
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
-            child: Row(
-              children: [
-                const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: () => _editPackage(pkg),
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  label: Text(tr('pkEditBtn')),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            child: SizedBox(
+              height: 42,
+              child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  backgroundColor: AppColors.subtle,
+                  foregroundColor: AppColors.ink,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-              ],
+                onPressed: () => _editPackage(pkg),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: Text(tr('pkEditBtn'), style: const TextStyle(fontWeight: FontWeight.w700)),
+              ),
             ),
           ),
         ],

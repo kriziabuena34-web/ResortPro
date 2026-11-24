@@ -178,15 +178,42 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                         Icon(reg.slope >= 0 ? Icons.trending_up_rounded : Icons.trending_down_rounded,
                             size: 18, color: AppColors.primary),
                         const SizedBox(width: 10),
+                        // Simpleng paliwanag para sa may-ari; nasa tooltip ang formula.
                         Expanded(
-                          child: Text(
-                            tr('anModelNote', {
-                              'a': fmtFull(reg.intercept),
-                              'b': fmtFull(reg.slope),
-                              'r2': reg.r2.toStringAsFixed(2),
-                              'trend': reg.slope >= 0 ? tr('anTrendUp') : tr('anTrendDown'),
-                            }),
-                            style: const TextStyle(fontSize: 12.5, height: 1.4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                reg.slope.abs() < 1
+                                    ? tr('anPlainFlat')
+                                    : tr(reg.slope > 0 ? 'anPlainUp' : 'anPlainDown', {'amount': fmtFull(reg.slope.abs())}),
+                                style: const TextStyle(fontSize: 13, height: 1.4, fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                tr(reg.r2 >= 0.7
+                                    ? 'anReliHigh'
+                                    : reg.r2 >= 0.4
+                                        ? 'anReliMid'
+                                        : 'anReliLow'),
+                                style: const TextStyle(fontSize: 12.5, height: 1.4),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(tr('anPlainHow'),
+                                  style: const TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.muted)),
+                            ],
+                          ),
+                        ),
+                        Tooltip(
+                          message: tr('anModelNote', {
+                            'a': fmtFull(reg.intercept),
+                            'b': fmtFull(reg.slope),
+                            'r2': reg.r2.toStringAsFixed(2),
+                            'trend': reg.slope >= 0 ? tr('anTrendUp') : tr('anTrendDown'),
+                          }),
+                          child: const Padding(
+                            padding: EdgeInsets.only(left: 8),
+                            child: Icon(Icons.info_outline_rounded, size: 18, color: AppColors.muted),
                           ),
                         ),
                       ],
