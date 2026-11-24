@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../l10n/app_strings.dart';
@@ -182,6 +183,107 @@ class _PaymentsPageState extends State<PaymentsPage> {
       });
       if (!mounted) return;
       showToast(context, reject ? tr('rfRejected') : tr('rfSent'));
+      await widget.onChanged();
+    } catch (e) {
+      if (!mounted) return;
+      showToast(context, tr('failed', {'e': e}));
+    } finally {
+      if (mounted) setState(() => _busy.remove(key));
+    }
+  }
+
+  /// Ilagay o palitan ng admin ang account na papadalhan ng refund (hal. walk-in
+  /// na walang app, o ibinigay ng guest sa chat/tawag).
+  Future<void> _enterRefundAccount(Map<String, dynamic> r) async {
+    var method = '${r['payout_method'] ?? 'gcash'}';
+    if (!['gcash', 'maya', 'cash'].contains(method)) method = 'gcash';
+    final number = TextEditingController(text: '${r['payout_number'] ?? ''}');
+    final name = TextEditingController(text: '${r['payout_name'] ?? ''}');
+    String? error;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setLocal) => AlertDialog(
+          title: Text(tr('rfAccountTitle')),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(tr('rfAccountHelp'), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+                const SizedBox(height: 14),
+                SegmentedButton<String>(
+                  segments: [
+                    ButtonSegment(value: 'gcash', label: Text(methodLabel('gcash'))),
+                    ButtonSegment(value: 'maya', label: Text(methodLabel('maya'))),
+                    ButtonSegment(value: 'cash', label: Text(methodLabel('cash'))),
+                  ],
+                  selected: {method},
+                  onSelectionChanged: (v) => setLocal(() => method = v.first),
+                ),
+                const SizedBox(height: 12),
+                if (method != 'cash') ...[
+                  TextField(
+                    controller: number,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 11,
+                    buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: InputDecoration(labelText: tr('rfAccountNumber'), hintText: '09XX XXX XXXX'),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                TextField(
+                  controller: name,
+                  maxLength: 60,
+                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(labelText: tr('rfAccountName')),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(error!, style: const TextStyle(color: AppColors.danger, fontSize: 13)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(tr('cancel'))),
+            FilledButton(
+              onPressed: () {
+                final n = number.text.trim();
+                if (method != 'cash' && !RegExp(r'^09\d{9}$').hasMatch(n)) {
+                  setLocal(() => error = tr('rfAccountNumberInvalid'));
+                  return;
+                }
+                if (name.text.trim().length < 2) {
+                  setLocal(() => error = tr('rfAccountNameRequired'));
+                  return;
+                }
+                Navigator.pop(dialogContext, true);
+              },
+              child: Text(tr('save')),
+            ),
+          ],
+        ),
+      ),
+    );
+    final n = number.text.trim();
+    final nm = name.text.trim();
+    number.dispose();
+    name.dispose();
+    if (ok != true || !mounted) return;
+    final key = 'refund-${r['id']}';
+    setState(() => _busy.add(key));
+    try {
+      await supabase.from('refund_requests').update({
+        'payout_method': method,
+        'payout_number': method == 'cash' ? null : n,
+        'payout_name': nm,
+      }).eq('id', r['id']);
+      if (!mounted) return;
+      showToast(context, tr('rfAccountSaved'));
       await widget.onChanged();
     } catch (e) {
       if (!mounted) return;
@@ -811,6 +913,11 @@ class _PaymentsPageState extends State<PaymentsPage> {
     final status = '${r['status']}';
     final busy = _busy.contains('refund-${r['id']}');
     final method = '${r['payout_method'] ?? ''}';
+    // Resort ang nag-cancel: hinihintay pa ang GCash/Maya ng guest.
+    final missing = status == 'pending' &&
+        (method.isEmpty || (method != 'cash' && '${r['payout_number'] ?? ''}'.trim().isEmpty));
+    final byResort = '${r['reason'] ?? ''}'.startsWith('Declined by resort');
+    final noAppAccount = booking != null && booking['client_id'] == null;
     final color = switch (status) {
       'refunded' => AppColors.success,
       'rejected' => AppColors.danger,
@@ -819,8 +926,14 @@ class _PaymentsPageState extends State<PaymentsPage> {
     final rows = [
       if (booking != null) _infoRow(Icons.inventory_2_outlined, tr('navPackages'), packageNameOf(booking)),
       if (booking != null) _infoRow(Icons.event_outlined, tr('fieldDate'), formatDate(bookingDateOf(booking))),
-      _infoRow(Icons.send_to_mobile_outlined, tr('rfSendTo'), '${methodLabel(method)} · ${r['payout_number'] ?? ''}'),
-      _infoRow(Icons.badge_outlined, tr('rfAccountName'), '${r['payout_name'] ?? ''}'),
+      if (missing)
+        _infoRow(Icons.hourglass_top_rounded, tr('rfSendTo'),
+            noAppAccount ? tr('rfWaitingNoApp') : tr('rfWaitingGuest'))
+      else ...[
+        _infoRow(Icons.send_to_mobile_outlined, tr('rfSendTo'),
+            method == 'cash' ? methodLabel(method) : '${methodLabel(method)} · ${r['payout_number'] ?? ''}'),
+        _infoRow(Icons.badge_outlined, tr('rfAccountName'), '${r['payout_name'] ?? ''}'),
+      ],
       if ('${r['reason'] ?? ''}'.isNotEmpty) _infoRow(Icons.chat_bubble_outline_rounded, tr('rfReason'), '${r['reason']}'),
       if ('${r['refund_reference'] ?? ''}'.isNotEmpty) _infoRow(Icons.tag_rounded, tr('rcReference'), '${r['refund_reference']}'),
       if ('${r['admin_note'] ?? ''}'.isNotEmpty) _infoRow(Icons.sticky_note_2_outlined, tr('adminNotes'), '${r['admin_note']}'),
@@ -839,11 +952,13 @@ class _PaymentsPageState extends State<PaymentsPage> {
                     maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5)),
                 Text(
-                  tr('rfBreakdown', {
-                    'days': asInt(r['days_before']),
-                    'paid': peso(asDouble(r['paid'])),
-                    'fee': peso(asDouble(r['reservation_fee'])),
-                  }),
+                  byResort
+                      ? tr('rfBreakdownResort', {'paid': peso(asDouble(r['paid']))})
+                      : tr('rfBreakdown', {
+                          'days': asInt(r['days_before']),
+                          'paid': peso(asDouble(r['paid'])),
+                          'fee': peso(asDouble(r['reservation_fee'])),
+                        }),
                   style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
                 ),
               ],
@@ -856,7 +971,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
               Text(peso(asDouble(r['amount'])),
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary)),
               const SizedBox(height: 4),
-              _pill(tr('rfStatus_$status'), color),
+              _pill(missing ? tr('rfStatus_waiting') : tr('rfStatus_$status'), color),
             ],
           ),
         ],
@@ -864,10 +979,18 @@ class _PaymentsPageState extends State<PaymentsPage> {
       body: _boxed(rows),
       actions: status != 'pending'
           ? null
-          : Row(
+          : Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 10,
+              runSpacing: 8,
               children: [
                 if (busy) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                const Spacer(),
+                TextButton.icon(
+                  onPressed: busy ? null : () => _enterRefundAccount(r),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: Text(missing ? tr('rfEnterAccount') : tr('rfEditAccount')),
+                ),
                 OutlinedButton.icon(
                   onPressed: busy ? null : () => _rejectRefund(r),
                   style: OutlinedButton.styleFrom(
@@ -877,9 +1000,8 @@ class _PaymentsPageState extends State<PaymentsPage> {
                   icon: const Icon(Icons.close_rounded, size: 18),
                   label: Text(tr('rfRejectInvalid')),
                 ),
-                const SizedBox(width: 10),
                 FilledButton.icon(
-                  onPressed: busy ? null : () => _completeRefund(r),
+                  onPressed: busy || missing ? null : () => _completeRefund(r),
                   icon: const Icon(Icons.send_rounded, size: 18),
                   label: Text(tr('rfApprove')),
                 ),

@@ -199,7 +199,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     final current = (staffNameOf(supabase.auth.currentUser?.id) ?? '').split(' ');
     final first = TextEditingController(text: current.length > 1 ? current.sublist(0, current.length - 1).join(' ') : current.first);
     final last = TextEditingController(text: current.length > 1 ? current.last : '');
-    final title = TextEditingController(text: currentStaffTitle() ?? '');
+    // Posisyon: pinipili na lang (hindi na tina-type).
+    const positions = ['Owner', 'Assistant / Caretaker', 'Staff'];
+    final savedTitle = (currentStaffTitle() ?? '').trim();
+    String? position = savedTitle.isEmpty ? null : savedTitle;
     String? error;
     final saved = await showDialog<bool>(
       context: context,
@@ -230,12 +233,15 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   decoration: InputDecoration(labelText: tr('lastName')),
                 ),
                 const SizedBox(height: 10),
-                TextField(
-                  controller: title,
-                  maxLength: 60,
-                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: InputDecoration(labelText: tr('staffTitle')),
+                DropdownButtonFormField<String>(
+                  initialValue: position,
+                  isExpanded: true,
+                  decoration: InputDecoration(labelText: tr('staffPosition')),
+                  items: [
+                    for (final p in [...positions, if (position != null && !positions.contains(position)) position!])
+                      DropdownMenuItem(value: p, child: Text(p)),
+                  ],
+                  onChanged: (v) => setLocal(() => position = v),
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 10),
@@ -252,8 +258,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   setLocal(() => error = tr('nameRequired'));
                   return;
                 }
+                if (position == null) {
+                  setLocal(() => error = tr('positionRequired'));
+                  return;
+                }
                 try {
-                  await saveMyStaffName(first.text, last.text, title: title.text);
+                  await saveMyStaffName(first.text, last.text, title: position);
                   if (dialogContext.mounted) Navigator.pop(dialogContext, true);
                 } catch (e) {
                   setLocal(() => error = tr('failed', {'e': e}));
@@ -267,7 +277,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     );
     first.dispose();
     last.dispose();
-    title.dispose();
     if (saved == true && mounted) {
       showToast(context, tr('nameSaved'));
       setState(() {});

@@ -102,9 +102,25 @@ const _weekdays = {
 const Map<AppLanguage, Map<String, String>> _strings = {
   // ======================== ENGLISH ========================
   AppLanguage.en: {
+    'notifRefundDetailsTitle': 'Refund account received',
+    'notifRefundDetailsBody': '{client} sent their {method} account for the {amount} refund ({package}). You can now send it.',
+    'rfBreakdownResort': 'Cancelled by the resort · full refund of {paid}',
+    'rfStatus_waiting': 'Waiting for account',
+    'rfWaitingGuest': 'Waiting for the guest to send their GCash or Maya account in the app.',
+    'rfWaitingNoApp': 'This guest has no app account. Ask for their GCash or Maya number, then enter it here.',
+    'rfEnterAccount': 'Enter account details',
+    'rfEditAccount': 'Edit account',
+    'rfAccountTitle': 'Refund account',
+    'rfAccountHelp': 'Enter only an account the guest confirmed is theirs (e.g. through chat or a call).',
+    'rfAccountNumber': 'Account number',
+    'rfAccountNumberInvalid': 'Enter an 11-digit number that starts with 09.',
+    'rfAccountNameRequired': 'Enter the account name.',
+    'rfAccountSaved': 'Refund account saved.',
+    'staffPosition': 'Position',
+    'positionRequired': 'Please choose your position.',
     'declinePendingTitle': 'Review the payment first',
     'declinePendingMsg': 'This booking has a payment proof of {amount} waiting for review. In Payments, verify it if the money arrived or reject it if it did not, then come back to decline or cancel.',
-    'declineRefundWarning': 'This booking has {amount} in verified payments. Because the resort is cancelling it, the full {amount} will be refunded. A refund will be added to Payments → Refunds for you to send.',
+    'declineRefundWarning': 'This booking has {amount} in verified payments. Because the resort is cancelling it, the full {amount} will be refunded. A refund will be added to Payments → Refunds. The guest will send their own GCash or Maya account in the app before you send it.',
     'declineRefundCreated': 'Booking cancelled. A {amount} refund was added to Payments → Refunds.',
     'anOthers': 'Others',
     'navTerms': 'Pool Agreement',
@@ -1107,9 +1123,25 @@ const Map<AppLanguage, Map<String, String>> _strings = {
 
   // ======================== FILIPINO ========================
   AppLanguage.fil: {
+    'notifRefundDetailsTitle': 'Natanggap ang account para sa refund',
+    'notifRefundDetailsBody': 'Ipinadala ni {client} ang {method} account niya para sa {amount} na refund ({package}). Pwede mo na itong ipadala.',
+    'rfBreakdownResort': 'Kinansela ng resort · buong refund na {paid}',
+    'rfStatus_waiting': 'Hinihintay ang account',
+    'rfWaitingGuest': 'Hinihintay pa na ilagay ng guest sa app ang kanyang GCash o Maya account.',
+    'rfWaitingNoApp': 'Walang app account ang guest na ito. Tanungin ang GCash o Maya number niya, saka ilagay dito.',
+    'rfEnterAccount': 'Ilagay ang account',
+    'rfEditAccount': 'Baguhin ang account',
+    'rfAccountTitle': 'Account para sa refund',
+    'rfAccountHelp': 'Ilagay lang ang account na kinumpirma ng guest na kanya (hal. sa chat o tawag).',
+    'rfAccountNumber': 'Account number',
+    'rfAccountNumberInvalid': 'Maglagay ng 11-digit na number na nagsisimula sa 09.',
+    'rfAccountNameRequired': 'Ilagay ang pangalan sa account.',
+    'rfAccountSaved': 'Na-save ang account para sa refund.',
+    'staffPosition': 'Posisyon',
+    'positionRequired': 'Pumili ng iyong posisyon.',
     'declinePendingTitle': 'I-review muna ang bayad',
     'declinePendingMsg': 'May payment proof na {amount} ang booking na ito na hindi pa nare-review. Sa Payments, i-verify ito kung dumating ang pera o i-reject kung hindi, saka bumalik para i-decline o i-cancel.',
-    'declineRefundWarning': 'May {amount} na verified na bayad ang booking na ito. Dahil ang resort ang magka-cancel, ibabalik nang buo ang {amount}. Madadagdag ito sa Payments → Refunds para maipadala mo.',
+    'declineRefundWarning': 'May {amount} na verified na bayad ang booking na ito. Dahil ang resort ang magka-cancel, ibabalik nang buo ang {amount}. Madadagdag ito sa Payments → Refunds. Ilalagay ng guest sa app ang sarili niyang GCash o Maya account bago mo ito ipadala.',
     'declineRefundCreated': 'Na-cancel ang booking. Nadagdag ang {amount} na refund sa Payments → Refunds.',
     'anOthers': 'Iba pa',
     'navTerms': 'Pool Agreement',
@@ -2091,6 +2123,8 @@ const Map<AppLanguage, Map<String, String>> _strings = {
 
   // ======================== CEBUANO ========================
   AppLanguage.ceb: {
+    'staffPosition': 'Posisyon',
+    'positionRequired': 'Palihug pili sa imong posisyon.',
     'anOthers': 'Uban pa',
     // Common
     'language': 'Pinulongan',

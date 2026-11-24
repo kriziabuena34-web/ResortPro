@@ -133,6 +133,8 @@ String notificationTitle(Map<String, dynamic> n) {
       return tr('notifVerificationTitle');
     case 'refund_request':
       return tr('notifRefundTitle');
+    case 'refund_details':
+      return tr('notifRefundDetailsTitle');
     case 'chat_message':
       return tr('notifChatTitle');
     default:
@@ -158,6 +160,13 @@ String notificationBody(Map<String, dynamic> n) {
       });
     case 'verification_request':
       return tr('notifVerificationBody', {'client': '${d['client'] ?? ''}'.toUpperCase()});
+    case 'refund_details':
+      return tr('notifRefundDetailsBody', {
+        'client': '${d['client'] ?? ''}'.toUpperCase(),
+        'package': d['package'] ?? '',
+        'amount': peso(asDouble(d['amount'])),
+        'method': methodLabel('${d['method'] ?? ''}'),
+      });
     case 'refund_request':
       return tr('notifRefundBody', {
         'client': '${d['client'] ?? ''}'.toUpperCase(),
@@ -184,6 +193,7 @@ IconData notificationIcon(String? type) {
     case 'verification_request':
       return Icons.badge_outlined;
     case 'refund_request':
+    case 'refund_details':
       return Icons.currency_exchange;
     case 'chat_message':
       return Icons.forum_outlined;
@@ -209,7 +219,7 @@ Color notificationColor(String? type) {
 
 /// Filter na ipapasa sa module (hal. Payments → pending tab).
 String? notificationFilter(String? type) =>
-    type == 'client_payment' ? 'pending' : (type == 'refund_request' ? 'refunds' : null);
+    type == 'client_payment' ? 'pending' : (type == 'refund_request' || type == 'refund_details' ? 'refunds' : null);
 
 /// Filter na ipapasa kapag binuksan ang notification (chat: aling usapan).
 String? notificationOpenFilter(Map<String, dynamic> n) {
@@ -225,6 +235,7 @@ int notificationModule(String? type) {
       return 12; // Messages
     case 'client_payment':
     case 'refund_request':
+    case 'refund_details':
       return 5; // Payments
     case 'verification_request':
       return 4; // Verifications

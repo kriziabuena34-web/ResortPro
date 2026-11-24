@@ -526,3 +526,206 @@ class _CancelSheetState extends State<_CancelSheet> {
         ),
       );
 }
+
+// ===========================================================================
+// "Claim your refund" — kapag ang RESORT ang nag-cancel at may bayad na,
+// ang guest ang maglalagay kung saan ipapadala ang refund (sariling account).
+// ===========================================================================
+
+/// True kapag hinihintay pa ang GCash/Maya ng guest para sa refund na ito.
+bool refundNeedsAccount(Map<String, dynamic> r) =>
+    r['status'] == 'pending' && '${r['payout_method'] ?? ''}'.isEmpty;
+
+/// Ibinabalik ang true kapag na-save ang account.
+Future<bool> showClaimRefundSheet(BuildContext context, Map<String, dynamic> refund) async {
+  final ok = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (_) => _ClaimRefundSheet(refund: refund),
+  );
+  return ok ?? false;
+}
+
+class _ClaimRefundSheet extends StatefulWidget {
+  const _ClaimRefundSheet({required this.refund});
+  final Map<String, dynamic> refund;
+
+  @override
+  State<_ClaimRefundSheet> createState() => _ClaimRefundSheetState();
+}
+
+class _ClaimRefundSheetState extends State<_ClaimRefundSheet> {
+  String _method = 'gcash';
+  final _number = TextEditingController();
+  final _name = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _number.dispose();
+    _name.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final digits = _number.text.replaceAll(RegExp(r'\D'), '');
+    final label = _method == 'gcash' ? 'GCash' : 'Maya';
+    if (digits.length != 11 || !digits.startsWith('09')) {
+      setState(() => _error = 'Enter your 11-digit $label number (starts with 09).');
+      return;
+    }
+    if (_name.text.trim().length < 2) {
+      setState(() => _error = 'Enter the name on your $label account.');
+      return;
+    }
+    if (!await hasInternet()) {
+      if (mounted) setState(() => _error = 'No internet connection. Please connect and try again.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await Supabase.instance.client.rpc('submit_refund_details', params: {
+        'p_booking_id': '${widget.refund['booking_id']}',
+        'p_method': _method,
+        'p_number': digits,
+        'p_name': _name.text.trim(),
+      });
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = '$e'.contains('ALREADY_DONE')
+            ? 'This refund was already processed by the resort.'
+            : friendlyError(e, action: 'save your refund account');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = peso(asDouble(widget.refund['amount']));
+    final label = _method == 'gcash' ? 'GCash' : 'Maya';
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.currency_exchange_rounded, color: AppColors.primaryDark),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Claim Your Refund',
+                          style: TextStyle(
+                              fontFamily: 'Poppins', fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                      Text('$amount · full refund', style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              decoration: BoxDecoration(
+                color: AppColors.info.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 17, color: AppColors.info),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'The resort cancelled your booking, so your full payment will be returned. '
+                      'Use an account under your own name. The resort will send the refund only to this account.',
+                      style: TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.text),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text('Where should we send your refund?',
+                style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.ink)),
+            const SizedBox(height: 10),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(value: 'gcash', label: Text('GCash')),
+                ButtonSegment(value: 'maya', label: Text('Maya')),
+              ],
+              selected: {_method},
+              onSelectionChanged: _busy ? null : (s) => setState(() => _method = s.first),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _number,
+              keyboardType: TextInputType.phone,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(11)],
+              decoration: InputDecoration(
+                labelText: '$label number',
+                hintText: '09XX XXX XXXX',
+                prefixIcon: const Icon(Icons.phone_iphone_rounded),
+                filled: true,
+                fillColor: AppColors.subtle,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _name,
+              maxLength: 60,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                labelText: 'Account name',
+                hintText: 'Name on your $label account',
+                counterText: '',
+                prefixIcon: const Icon(Icons.person_outline_rounded),
+                filled: true,
+                fillColor: AppColors.subtle,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!, style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600, fontSize: 13)),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 50,
+              child: FilledButton.icon(
+                onPressed: _busy ? null : _submit,
+                icon: _busy
+                    ? const SizedBox(
+                        width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.send_rounded),
+                label: const Text('Send to the resort'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

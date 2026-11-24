@@ -234,6 +234,51 @@ class _MyBookingPageState extends State<MyBookingPage> {
   Widget _refundInfo(Map<String, dynamic> r) {
     final status = '${r['status']}';
     final amount = peso(asDouble(r['amount']));
+    // Resort ang nag-cancel: hinihintay ang account ng guest.
+    if (refundNeedsAccount(r)) {
+      return Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.30)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.currency_exchange_rounded, size: 18, color: AppColors.primaryDark),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'The resort cancelled this booking. Tell us where to send your $amount refund.',
+                    style: const TextStyle(color: AppColors.primaryDark, fontWeight: FontWeight.w600, height: 1.35),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: _offlineSavedAt != null
+                  ? null
+                  : () async {
+                      if (await showClaimRefundSheet(context, r) && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Thank you! The resort will send your refund to that account.')),
+                        );
+                        await _fetchData();
+                      }
+                    },
+              icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+              label: const Text('Claim your refund'),
+            ),
+          ],
+        ),
+      );
+    }
     final (Color color, String text) = switch (status) {
       'refunded' => (
           Colors.green.shade700,
