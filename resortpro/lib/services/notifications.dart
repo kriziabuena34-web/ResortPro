@@ -175,7 +175,9 @@ String notificationBody(Map<String, dynamic> n) {
     case 'booking_confirmed':
       return 'Your $pkg on $date is confirmed. See you!';
     case 'booking_cancelled':
-      return 'Your $pkg on $date was cancelled.${note.isEmpty ? '' : ' Reason: $note'}';
+      final refund = asDouble(d['refund']);
+      return 'Your $pkg on $date was cancelled by the resort.${note.isEmpty ? '' : ' Reason: $note.'}'
+          '${refund > 0 ? ' Your full payment of ${peso(refund)} will be refunded to you.' : ''}';
     case 'booking_checked_in':
       return 'Enjoy your $pkg. Contact the front desk if you need anything.';
     case 'booking_completed':

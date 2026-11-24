@@ -287,12 +287,43 @@ class _BookingsPageState extends State<BookingsPage> {
     }
 
     final hasPendingProof = paymentsOf(booking).any((p) => p['status'] == 'pending');
+    final byResort = action.toStatus == 'cancelled';
+
+    // Decline / Cancel ng resort: i-review muna ang pending na payment proof
+    // (verify kung dumating ang pera, reject kung hindi) bago ituloy.
+    if (byResort && hasPendingProof) {
+      await showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(Icons.hourglass_top_rounded, color: AppColors.warning, size: 36),
+          title: Text(tr('declinePendingTitle')),
+          content: Text(tr('declinePendingMsg', {'amount': peso(pendingPaidOf(booking))}), textAlign: TextAlign.center),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(tr('rcClose'))),
+            if (widget.onOpenPayments != null)
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  widget.onOpenPayments!('${booking['id']}');
+                },
+                icon: const Icon(Icons.fact_check_outlined, size: 18),
+                label: Text(tr('goToPayments')),
+              ),
+          ],
+        ),
+      );
+      return;
+    }
+    final refundDue = byResort ? paidOf(booking) : 0.0;
+
     final needsConfirmWarning = action.toStatus == 'confirmed' && hasPendingProof;
 
     if (action.destructive ||
         action.toStatus == 'reserved' ||
         needsConfirmWarning) {
-      final warning = needsConfirmWarning
+      final warning = refundDue > 0.01
+          ? tr('declineRefundWarning', {'amount': peso(refundDue)})
+          : needsConfirmWarning
               ? (hasPendingProof ? tr('confirmPendingProofWarning') : tr('confirmNoPaymentWarning'))
               : null;
 
@@ -315,9 +346,20 @@ class _BookingsPageState extends State<BookingsPage> {
 
     await _runBusy(booking, () async {
       try {
-        await BookingWorkflow.changeStatus(booking, action.toStatus, note: note);
-        if (!mounted) return;
-        showToast(context, tr('statusChanged', {'status': statusLabel(action.toStatus)}));
+        if (byResort) {
+          final refund = await BookingWorkflow.cancelByResort(booking, note: note);
+          if (!mounted) return;
+          showToast(
+            context,
+            refund > 0.01
+                ? tr('declineRefundCreated', {'amount': peso(refund)})
+                : tr('statusChanged', {'status': statusLabel(action.toStatus)}),
+          );
+        } else {
+          await BookingWorkflow.changeStatus(booking, action.toStatus, note: note);
+          if (!mounted) return;
+          showToast(context, tr('statusChanged', {'status': statusLabel(action.toStatus)}));
+        }
         await widget.onChanged();
       } catch (e) {
         if (!mounted) return;
@@ -325,7 +367,9 @@ class _BookingsPageState extends State<BookingsPage> {
           context,
           '$e'.contains('DOWNPAYMENT_REQUIRED')
               ? tr('confirmNeedsDownNone', {'amount': peso((totalOf(booking) * 0.5).roundToDouble())})
-              : tr('statusChangeFailed', {'e': e}),
+              : '$e'.contains('PENDING_PAYMENTS')
+                  ? tr('declinePendingMsg', {'amount': peso(pendingPaidOf(booking))})
+                  : tr('statusChangeFailed', {'e': e}),
         );
       }
     });
@@ -986,8 +1030,9 @@ class _BookingsPageState extends State<BookingsPage> {
     if (wide) {
       return Container(
         decoration: decoration,
-        child: InkWell(
-          onTap: () => _showDetails(booking),
+        child: Material(
+          // Ang eye icon lang ang nagbubukas ng detalye (hindi ang buong row).
+          type: MaterialType.transparency,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(24, 14, 20, 14),
             child: Row(
@@ -1030,8 +1075,9 @@ class _BookingsPageState extends State<BookingsPage> {
         );
     return Container(
       decoration: decoration,
-      child: InkWell(
-        onTap: () => _showDetails(booking),
+      child: Material(
+        // Ang eye icon lang ang nagbubukas ng detalye (hindi ang buong row).
+        type: MaterialType.transparency,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
           child: Column(

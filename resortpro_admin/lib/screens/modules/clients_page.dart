@@ -448,8 +448,9 @@ class _ClientsPageState extends State<ClientsPage> {
     if (wide) {
       return Container(
         decoration: decoration,
-        child: InkWell(
-          onTap: () => _showClient(c),
+        child: Material(
+          // Ang eye icon lang ang nagbubukas ng detalye (hindi ang buong row).
+          type: MaterialType.transparency,
           child: Padding(
             padding: _rowPadding,
             child: Row(
@@ -488,8 +489,9 @@ class _ClientsPageState extends State<ClientsPage> {
 
     return Container(
       decoration: decoration,
-      child: InkWell(
-        onTap: () => _showClient(c),
+      child: Material(
+        // Ang eye icon lang ang nagbubukas ng detalye (hindi ang buong row).
+        type: MaterialType.transparency,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
           child: Column(

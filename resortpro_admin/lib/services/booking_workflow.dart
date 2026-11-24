@@ -117,6 +117,37 @@ class BookingWorkflow {
     );
   }
 
+  /// Ang RESORT ang nag-decline o nag-cancel (hindi ang guest). Sa database:
+  /// bawal kapag may pending na payment proof, at kapag may verified na bayad,
+  /// gagawa ng FULL refund sa Payments → Refunds. Ibinabalik ang halaga ng refund.
+  static Future<double> cancelByResort(Map<String, dynamic> booking, {String? note}) async {
+    final Object? r;
+    try {
+      r = await _db.rpc('admin_cancel_booking', params: {
+        'p_booking_id': '${booking['id']}',
+        'p_note': (note ?? '').trim().isEmpty ? null : note!.trim(),
+      });
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST202' || e.message.contains('admin_cancel_booking')) {
+        throw Exception('Run supabase/decline_refund_setup.sql in the Supabase SQL Editor first.');
+      }
+      rethrow;
+    }
+    final refund = r is Map ? asDouble(r['refund']) : 0.0;
+    await NotificationService.notifyClient(
+      booking['client_id']?.toString(),
+      'booking_cancelled',
+      {
+        'package': packageNameOf(booking),
+        'date': booking['booking_date'],
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+        if (refund > 0) 'refund': refund,
+      },
+      refId: '${booking['id']}',
+    );
+    return refund;
+  }
+
   /// Tawagin pagkatapos mag-record ng payment.
   /// Kapag bayad na lahat at hindi pa naka-check in, gagawing fully_paid.
   static Future<bool> afterPayment(

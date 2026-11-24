@@ -102,6 +102,10 @@ const _weekdays = {
 const Map<AppLanguage, Map<String, String>> _strings = {
   // ======================== ENGLISH ========================
   AppLanguage.en: {
+    'declinePendingTitle': 'Review the payment first',
+    'declinePendingMsg': 'This booking has a payment proof of {amount} waiting for review. In Payments, verify it if the money arrived or reject it if it did not, then come back to decline or cancel.',
+    'declineRefundWarning': 'This booking has {amount} in verified payments. Because the resort is cancelling it, the full {amount} will be refunded. A refund will be added to Payments → Refunds for you to send.',
+    'declineRefundCreated': 'Booking cancelled. A {amount} refund was added to Payments → Refunds.',
     'anOthers': 'Others',
     'navTerms': 'Pool Agreement',
     'tmTitle': 'Pool Agreement (Terms & Conditions)',
@@ -1103,6 +1107,10 @@ const Map<AppLanguage, Map<String, String>> _strings = {
 
   // ======================== FILIPINO ========================
   AppLanguage.fil: {
+    'declinePendingTitle': 'I-review muna ang bayad',
+    'declinePendingMsg': 'May payment proof na {amount} ang booking na ito na hindi pa nare-review. Sa Payments, i-verify ito kung dumating ang pera o i-reject kung hindi, saka bumalik para i-decline o i-cancel.',
+    'declineRefundWarning': 'May {amount} na verified na bayad ang booking na ito. Dahil ang resort ang magka-cancel, ibabalik nang buo ang {amount}. Madadagdag ito sa Payments → Refunds para maipadala mo.',
+    'declineRefundCreated': 'Na-cancel ang booking. Nadagdag ang {amount} na refund sa Payments → Refunds.',
     'anOthers': 'Iba pa',
     'navTerms': 'Pool Agreement',
     'tmTitle': 'Pool Agreement (Terms & Conditions)',
