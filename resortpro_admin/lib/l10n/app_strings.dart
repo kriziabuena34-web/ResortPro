@@ -102,6 +102,13 @@ const _weekdays = {
 const Map<AppLanguage, Map<String, String>> _strings = {
   // ======================== ENGLISH ========================
   AppLanguage.en: {
+    'msgDeletedAccount': 'Deleted account',
+    'msgDeletedSub': 'This guest deleted their account',
+    'msgDeletedNoReply': 'This guest deleted their account, so they can no longer see or reply to this chat.',
+    'msgDeleteChat': 'Delete chat',
+    'msgDeleteQ': 'Delete this chat?',
+    'msgDeleteMsg': 'All messages with this deleted account will be removed permanently. Their bookings and payments stay in the records.',
+    'msgDeleted': 'Chat deleted.',
     'anPlainFlat': 'Sales are about the same each month.',
     'anPlainUp': 'Sales are going up by about {amount} each month.',
     'anPlainDown': 'Sales are going down by about {amount} each month.',
@@ -1147,6 +1154,13 @@ const Map<AppLanguage, Map<String, String>> _strings = {
 
   // ======================== FILIPINO ========================
   AppLanguage.fil: {
+    'msgDeletedAccount': 'Binurang account',
+    'msgDeletedSub': 'Binura na ng guest ang kanyang account',
+    'msgDeletedNoReply': 'Binura na ng guest ang kanyang account, kaya hindi na niya makikita o masasagot ang chat na ito.',
+    'msgDeleteChat': 'Burahin ang chat',
+    'msgDeleteQ': 'Burahin ang chat na ito?',
+    'msgDeleteMsg': 'Permanenteng mabubura ang lahat ng mensahe sa binurang account na ito. Mananatili sa records ang kanyang mga booking at bayad.',
+    'msgDeleted': 'Nabura ang chat.',
     'anPlainFlat': 'Halos pareho ang benta bawat buwan.',
     'anPlainUp': 'Tumataas ang benta nang mga {amount} bawat buwan.',
     'anPlainDown': 'Bumababa ang benta nang mga {amount} bawat buwan.',

@@ -90,6 +90,46 @@ class _MessagesPageState extends State<MessagesPage> {
   }
 
   static int _unreadOf(Map<String, dynamic> t) => (t['unread'] as num?)?.toInt() ?? 0;
+
+  /// Binura na ng guest ang account niya (wala nang profile, kaya walang pangalan).
+  static bool _deleted(Map<String, dynamic>? t) => t != null && t['client_name'] == null;
+  static String _nameOf(Map<String, dynamic>? t) =>
+      _deleted(t) ? tr('msgDeletedAccount') : '${t?['client_name'] ?? tr('unknownClient')}';
+
+  /// Burahin ang buong usapan ng guest na nag-delete ng account.
+  Future<bool> _deleteThread(String clientId) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.delete_forever_outlined, color: AppColors.danger, size: 34),
+        title: Text(tr('msgDeleteQ')),
+        content: Text(tr('msgDeleteMsg'), textAlign: TextAlign.center),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(tr('cancel'))),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(tr('delete')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return false;
+    try {
+      await _db.from('chat_messages').delete().eq('client_id', clientId);
+      if (!mounted) return false;
+      setState(() {
+        _threads.removeWhere((t) => '${t['client_id']}' == clientId);
+        if (_selected == clientId) _selected = null;
+      });
+      showToast(context, tr('msgDeleted'));
+      widget.onUnreadChanged?.call();
+      return true;
+    } catch (e) {
+      if (mounted) showToast(context, tr('failed', {'e': e}));
+      return false;
+    }
+  }
   static bool _waiting(Map<String, dynamic> t) => t['last_sender'] == 'client';
 
   void _open(String clientId, {required bool wide}) {
@@ -109,13 +149,25 @@ class _MessagesPageState extends State<MessagesPage> {
                 _Avatar(name: '${t['client_name'] ?? ''}', url: t['avatar_url'] as String?, radius: 18),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('${t['client_name'] ?? tr('unknownClient')}',
+                  child: Text(_nameOf(t),
                       maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
                 ),
               ],
             ),
+            actions: [
+              if (_deleted(t))
+                Builder(
+                  builder: (routeContext) => IconButton(
+                    tooltip: tr('msgDeleteChat'),
+                    icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+                    onPressed: () async {
+                      if (await _deleteThread(clientId) && routeContext.mounted) Navigator.pop(routeContext);
+                    },
+                  ),
+                ),
+            ],
           ),
-          body: _ThreadView(clientId: clientId, tick: _tick, onRead: _afterRead),
+          body: _ThreadView(clientId: clientId, tick: _tick, onRead: _afterRead, readOnly: _deleted(t)),
         ),
       ),
     );
@@ -217,13 +269,15 @@ class _MessagesPageState extends State<MessagesPage> {
               ],
             )
           else
-            GridView.count(
-              crossAxisCount: 2,
+            GridView(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 1.45,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                mainAxisExtent: 132,
+              ),
               children: tiles,
             ),
         ],
@@ -382,7 +436,7 @@ class _MessagesPageState extends State<MessagesPage> {
                       children: [
                         Expanded(
                           child: Text(
-                            '${t['client_name'] ?? tr('unknownClient')}',
+                            _nameOf(t),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(fontWeight: unread > 0 ? FontWeight.w800 : FontWeight.w700, fontSize: 14),
@@ -489,13 +543,23 @@ class _MessagesPageState extends State<MessagesPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${t?['client_name'] ?? tr('unknownClient')}',
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                    Text(tr('msgGuest'), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+                    Text(_nameOf(t), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                    Text(_deleted(t) ? tr('msgDeletedSub') : tr('msgGuest'),
+                        style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
                   ],
                 ),
               ),
-              if (waiting)
+              if (_deleted(t))
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.danger,
+                    side: BorderSide(color: AppColors.danger.withValues(alpha: 0.5)),
+                  ),
+                  onPressed: () => _deleteThread(_selected!),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: Text(tr('msgDeleteChat')),
+                )
+              else if (waiting)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -522,6 +586,7 @@ class _MessagesPageState extends State<MessagesPage> {
             clientId: _selected!,
             tick: _tick,
             onRead: _afterRead,
+            readOnly: _deleted(t),
           ),
         ),
       ],
@@ -534,9 +599,18 @@ String _hm(DateTime t) =>
 
 /// Isang usapan: mga mensahe at sagot ng admin.
 class _ThreadView extends StatefulWidget {
-  const _ThreadView({super.key, required this.clientId, required this.tick, required this.onRead});
+  const _ThreadView({
+    super.key,
+    required this.clientId,
+    required this.tick,
+    required this.onRead,
+    this.readOnly = false,
+  });
 
   final String clientId;
+
+  /// Walang mapapadalhan (binura na ng guest ang account): walang composer.
+  final bool readOnly;
   final ValueNotifier<int> tick;
   final VoidCallback onRead;
 
@@ -711,7 +785,22 @@ class _ThreadViewState extends State<_ThreadView> {
                       ),
           ),
         ),
-        // Composer
+        // Composer (wala kapag binura na ng guest ang account)
+        if (widget.readOnly)
+          SafeArea(
+            top: false,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              decoration: const BoxDecoration(
+                color: AppColors.subtle,
+                border: Border(top: BorderSide(color: AppColors.border)),
+              ),
+              child: Text(tr('msgDeletedNoReply'),
+                  textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted, fontSize: 13)),
+            ),
+          )
+        else
         SafeArea(
           top: false,
           child: Container(
