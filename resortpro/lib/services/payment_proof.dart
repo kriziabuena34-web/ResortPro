@@ -342,26 +342,40 @@ class _PaymentProofFormState extends State<PaymentProofForm> {
                   child: Image.memory(_image!, width: 72, height: 96, fit: BoxFit.cover),
                 ),
                 const SizedBox(width: 14),
-                const Expanded(
+                // Nasa ilalim na ang "Change" para hindi maipit ang text sa maliit na screen.
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
+                      const Row(
                         children: [
                           Icon(Icons.check_circle, size: 18, color: AppColors.success),
                           SizedBox(width: 6),
-                          Text('Screenshot Added', style: TextStyle(fontWeight: FontWeight.w700)),
+                          Flexible(
+                            child: Text('Screenshot Added',
+                                overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.w700)),
+                          ),
                         ],
                       ),
-                      SizedBox(height: 4),
-                      Text(
+                      const SizedBox(height: 4),
+                      const Text(
                         'The resort will check this against your reference number.',
                         style: TextStyle(fontSize: 12, color: AppColors.muted, height: 1.35),
+                      ),
+                      const SizedBox(height: 2),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: _pickImage,
+                        icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                        label: const Text('Change screenshot'),
                       ),
                     ],
                   ),
                 ),
-                TextButton(onPressed: _pickImage, child: const Text('Change')),
               ],
             ),
           ),
