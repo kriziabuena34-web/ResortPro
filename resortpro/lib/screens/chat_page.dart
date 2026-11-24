@@ -182,11 +182,7 @@ class _ChatPageState extends State<ChatPage> {
         titleSpacing: 0,
         title: const Row(
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: AppColors.primary,
-              child: Icon(Icons.pool, color: Colors.white, size: 20),
-            ),
+            ResortAvatar(size: 38),
             SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -261,7 +257,21 @@ class _ChatPageState extends State<ChatPage> {
                   child: Text(formatDate(at), style: const TextStyle(color: AppColors.muted, fontSize: 12)),
                 ),
               ),
-            _Bubble(text: '${m['body'] ?? ''}', time: at, mine: mine),
+            if (mine)
+              _Bubble(text: '${m['body'] ?? ''}', time: at, mine: true)
+            else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // Logo lang sa huling sunod-sunod na mensahe ng resort (parang Messenger).
+                  if (i == _messages.length - 1 || _messages[i + 1]['sender'] == 'client')
+                    const ResortAvatar(size: 28)
+                  else
+                    const SizedBox(width: 28),
+                  const SizedBox(width: 6),
+                  Flexible(child: _Bubble(text: '${m['body'] ?? ''}', time: at, mine: false)),
+                ],
+              ),
             if (mine && i == lastMine && m['read_at'] != null)
               const Padding(
                 padding: EdgeInsets.only(top: 2, right: 6),
@@ -310,6 +320,30 @@ class _ChatPageState extends State<ChatPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Logo ng resort na nakabilog (chat head ng resort).
+class ResortAvatar extends StatelessWidget {
+  const ResortAvatar({super.key, this.size = 36});
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(size * 0.08),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 4, offset: Offset(0, 1))],
+      ),
+      child: ClipOval(
+        child: Image.asset('assets/images/aryana_logo.png', fit: BoxFit.contain),
       ),
     );
   }

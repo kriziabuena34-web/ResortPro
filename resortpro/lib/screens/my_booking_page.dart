@@ -608,17 +608,19 @@ class _MyBookingPageState extends State<MyBookingPage> {
                 ],
               ),
             ),
-            title: Row(
+            // Pangalan sa itaas, status sa ilalim: hindi na naiipit ang pangalan ng
+            // package kapag mahaba ang status (hal. "Waiting for confirmation").
+            title: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    '$packageName',
-                    style: const TextStyle(
-                        fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15.5, color: AppColors.ink),
-                  ),
+                Text(
+                  '$packageName',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15.5, color: AppColors.ink),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(height: 4),
                 StatusChip(status: status),
               ],
             ),

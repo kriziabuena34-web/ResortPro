@@ -183,6 +183,7 @@ class _HomePageState extends State<HomePage> {
       _openNotifications();
     }
     await _notifications.start();
+    if (mounted) await BatterySaver.askOnce(context);
   }
 
   /// I-restart ang auto-slide (pagkatapos mag-swipe ang user).

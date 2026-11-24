@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -403,7 +404,15 @@ class BackgroundCheck {
     await Workmanager().registerPeriodicTask(
       _backgroundTaskId,
       _backgroundTaskName,
+      // 15 minuto ang pinakamaikling pinapayagan ng Android.
       frequency: const Duration(minutes: 15),
+      initialDelay: const Duration(minutes: 1),
+      // Tatakbo lang kapag may internet; kapag wala, uulitin agad pagbalik ng signal.
+      constraints: Constraints(networkType: NetworkType.connected),
+      // Panatilihin ang dating schedule (huwag i-reset tuwing bubuksan ang app).
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+      backoffPolicy: BackoffPolicy.linear,
+      backoffPolicyDelay: const Duration(minutes: 1),
     );
   }
 
@@ -490,5 +499,61 @@ class BackgroundCheck {
       );
       await prefs.setBool(_remindedKey(b['id']), true);
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Battery optimization — maraming phone (Xiaomi, Oppo, Vivo, realme, Infinix)
+// ang pumapatay sa background check kapag sinwipe ang app. Hinihiling sa user
+// na payagang tumakbo ang ResortPro sa background.
+// ---------------------------------------------------------------------------
+
+class BatterySaver {
+  BatterySaver._();
+
+  static const _channel = MethodChannel('resortpro/battery');
+  static const _askedKey = 'battery_optimization_asked';
+
+  /// True kapag hindi na pinapatay ng battery saver ang app (o hindi Android).
+  static Future<bool> isAllowed() async {
+    if (!_isAndroid) return true;
+    try {
+      return await _channel.invokeMethod<bool>('isIgnoring') ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Bubuksan ang prompt ng Android na "Allow app to run in background?".
+  static Future<void> request() async {
+    if (!_isAndroid) return;
+    try {
+      await _channel.invokeMethod('request');
+    } catch (_) {}
+  }
+
+  /// Isang beses lang ipapakita: paliwanag, tapos ang prompt ng Android.
+  static Future<void> askOnce(BuildContext context) async {
+    if (!_isAndroid || await isAllowed()) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_askedKey) == true) return;
+    await prefs.setBool(_askedKey, true);
+    if (!context.mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.notifications_active_outlined),
+        title: const Text('Get updates even when the app is closed'),
+        content: const Text(
+          'Some phones stop apps in the background to save battery. Allow ResortPro to run in the '
+          'background so you still get booking and payment updates after you close the app.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Not now')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Allow')),
+        ],
+      ),
+    );
+    if (ok == true) await request();
   }
 }

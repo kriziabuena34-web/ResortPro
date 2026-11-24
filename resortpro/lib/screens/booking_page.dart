@@ -81,7 +81,32 @@ class _BookingPageState extends State<BookingPage> {
   String? _location;
   String? _foundUs;
   String? _occasion;
-  static const _locations = ['Pagsanjan & nearby towns', 'Other Laguna towns', 'Metro Manila', 'Other provinces'];
+  final _provinceController = TextEditingController();
+  final _townController = TextEditingController();
+
+  /// Lahat ng 30 bayan at lungsod ng Laguna (A–Z). Ang "Outside Laguna" ay
+  /// may sariling text box para sa probinsya at bayan/lungsod.
+  static const _outsideLaguna = 'Outside Laguna (other province)';
+  static const _lagunaTowns = [
+    'Alaminos', 'Bay', 'Biñan City', 'Cabuyao City', 'Calamba City', 'Calauan', 'Cavinti', 'Famy',
+    'Kalayaan', 'Liliw', 'Los Baños', 'Luisiana', 'Lumban', 'Mabitac', 'Magdalena', 'Majayjay',
+    'Nagcarlan', 'Paete', 'Pagsanjan', 'Pakil', 'Pangil', 'Pila', 'Rizal', 'San Pablo City',
+    'San Pedro City', 'Santa Cruz', 'Santa Maria', 'Santa Rosa City', 'Siniloan', 'Victoria',
+  ];
+
+  /// Ang ise-save sa customer_location, hal. "Pagsanjan, Laguna" o
+  /// "Lucena City, Quezon". Null kapag walang pinili.
+  String? get _customerLocation {
+    final loc = _location;
+    if (loc == null) return null;
+    if (loc != _outsideLaguna) return '$loc, Laguna';
+    final town = _tidy(_townController.text);
+    final province = _tidy(_provinceController.text);
+    if (town.isEmpty && province.isEmpty) return 'Outside Laguna';
+    return [town, province].where((t) => t.isNotEmpty).join(', ');
+  }
+
+  static String _tidy(String t) => t.trim().replaceAll(RegExp(r'\s+'), ' ');
   static const _sources = ['Facebook', 'Referral', 'Returning customer', 'Walk-by / signage'];
   static const _occasions = [
     'Birthday / Debut / Christening',
@@ -232,7 +257,7 @@ class _BookingPageState extends State<BookingPage> {
             'total_amount': _total,
             'status': 'reserved',
             'event_type': _isFunctionHall ? _eventTypeController.text : null,
-            if (_location != null) 'customer_location': _location,
+            if (_customerLocation != null) 'customer_location': _customerLocation,
             if (_foundUs != null) 'referral_source': _foundUs,
             if (_occasion != null) 'occasion': _occasion,
           })
@@ -299,6 +324,8 @@ class _BookingPageState extends State<BookingPage> {
     _adultController.dispose();
     _elderlyController.dispose();
     _eventTypeController.dispose();
+    _provinceController.dispose();
+    _townController.dispose();
     super.dispose();
   }
 
@@ -413,18 +440,64 @@ class _BookingPageState extends State<BookingPage> {
         ),
       );
 
-  Widget _choice(String label, IconData icon, String? value, List<String> options, ValueChanged<String?> onChanged) {
+  /// Isang tanong sa "About Your Stay": malinaw na label sa itaas, tapos ang sagot.
+  Widget _question(IconData icon, String label, Widget child) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 16, color: AppColors.primaryDark),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(label,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.ink)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+
+  InputDecoration _answerDecoration(String hint) => InputDecoration(
+        hintText: hint,
+        isDense: true,
+        filled: true,
+        fillColor: AppColors.subtle,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.border),
+        ),
+      );
+
+  Widget _choice(String? value, List<String> options, ValueChanged<String?> onChanged) {
     return DropdownButtonFormField<String>(
       initialValue: value,
       isExpanded: true,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        filled: true,
-        fillColor: AppColors.subtle,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-      items: [for (final o in options) DropdownMenuItem(value: o, child: Text(o))],
+      menuMaxHeight: 380,
+      borderRadius: BorderRadius.circular(14),
+      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+      decoration: _answerDecoration('Select one'),
+      items: [
+        for (final o in options)
+          DropdownMenuItem(value: o, child: Text(o, overflow: TextOverflow.ellipsis)),
+      ],
       onChanged: onChanged,
     );
   }
@@ -690,14 +763,41 @@ class _BookingPageState extends State<BookingPage> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _choice('Where are you from?', Icons.place_outlined, _location, _locations,
-                        (v) => setState(() => _location = v)),
-                    const SizedBox(height: 12),
-                    _choice('How did you find us?', Icons.campaign_outlined, _foundUs, _sources,
-                        (v) => setState(() => _foundUs = v)),
-                    const SizedBox(height: 12),
-                    _choice('What is the occasion?', Icons.cake_outlined, _occasion, _occasions,
-                        (v) => setState(() => _occasion = v)),
+                    _question(
+                      Icons.place_outlined,
+                      'Where are you from?',
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _choice(_location, [..._lagunaTowns, _outsideLaguna],
+                              (v) => setState(() => _location = v)),
+                          if (_location == _outsideLaguna) ...[
+                            const SizedBox(height: 10),
+                            TextFormField(
+                              controller: _provinceController,
+                              maxLength: 60,
+                              textCapitalization: TextCapitalization.words,
+                              decoration: _answerDecoration('Province (e.g. Quezon, Batangas, Metro Manila)')
+                                  .copyWith(counterText: ''),
+                            ),
+                            const SizedBox(height: 10),
+                            TextFormField(
+                              controller: _townController,
+                              maxLength: 60,
+                              textCapitalization: TextCapitalization.words,
+                              decoration: _answerDecoration('Town or city (e.g. Lucena City)')
+                                  .copyWith(counterText: ''),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 28, color: AppColors.border),
+                    _question(Icons.campaign_outlined, 'How did you find us?',
+                        _choice(_foundUs, _sources, (v) => setState(() => _foundUs = v))),
+                    const Divider(height: 28, color: AppColors.border),
+                    _question(Icons.cake_outlined, 'What is the occasion?',
+                        _choice(_occasion, _occasions, (v) => setState(() => _occasion = v))),
                   ],
                 ),
               ),

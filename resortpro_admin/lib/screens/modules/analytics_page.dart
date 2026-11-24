@@ -253,7 +253,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                 icon: Icons.place_outlined,
                 title: _tc(tr('anLocationTitle')),
                 subtitle: _tc(tr('anLocationSub')),
-                child: _countBars(a.countBy('customer_location'), const Color(0xFF60A5FA)),
+                child: _countBars(_top(a.countBy('customer_location'), 8), const Color(0xFF60A5FA)),
               ),
               _section(
                 icon: Icons.campaign_outlined,
@@ -364,6 +364,14 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
   static const _caps = TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.muted);
 
   /// Pahalang na bars para sa bilang ng booking ayon sa kategorya.
+  /// Pinakamaraming [n] lang; pinagsasama ang iba sa "Others" para hindi humaba
+  /// ang chart (hal. dami ng bayan sa "Where are you from?").
+  List<MapEntry<String, int>> _top(List<MapEntry<String, int>> entries, int n) {
+    if (entries.length <= n + 1) return entries;
+    final rest = entries.skip(n).fold<int>(0, (s, e) => s + e.value);
+    return [...entries.take(n), MapEntry(tr('anOthers'), rest)];
+  }
+
   Widget _countBars(List<MapEntry<String, int>> entries, Color color) {
     final total = entries.fold<int>(0, (s, e) => s + e.value);
     return HorizontalBarList(

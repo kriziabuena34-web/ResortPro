@@ -209,6 +209,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                   ],
                 ),
               ),
+              const _BackgroundNotice(),
               const SizedBox(height: 14),
               SearchField(
                 controller: _search,
@@ -334,6 +335,70 @@ class _NotificationsPageState extends State<NotificationsPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Paalala kapag pinapatay ng battery saver ang app: baka hindi dumating ang
+/// notifications kapag sarado ang app. May button para payagan.
+class _BackgroundNotice extends StatefulWidget {
+  const _BackgroundNotice();
+
+  @override
+  State<_BackgroundNotice> createState() => _BackgroundNoticeState();
+}
+
+class _BackgroundNoticeState extends State<_BackgroundNotice> with WidgetsBindingObserver {
+  bool _allowed = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _check();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Pagbalik galing sa settings ng Android, i-check ulit.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _check();
+  }
+
+  Future<void> _check() async {
+    final ok = await BatterySaver.isAllowed();
+    if (mounted && ok != _allowed) setState(() => _allowed = ok);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_allowed) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.battery_alert_rounded, color: AppColors.warning),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Your phone may stop updates when ResortPro is closed. Allow it to run in the background.',
+              style: TextStyle(fontSize: 12.5, height: 1.35, color: AppColors.text),
+            ),
+          ),
+          TextButton(onPressed: BatterySaver.request, child: const Text('Allow')),
+        ],
       ),
     );
   }

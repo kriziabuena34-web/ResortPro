@@ -152,6 +152,7 @@ class _CancelSheetState extends State<_CancelSheet> {
     final q = _quote;
     final days = q == null ? 0 : (q['days_before'] as num).toInt();
     final half = q?['eligible_half'] == true;
+    final wantsRefund = _refund > 0 && _wantRefund;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).viewInsets.bottom + 20),
@@ -160,158 +161,266 @@ class _CancelSheetState extends State<_CancelSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Cancel booking', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-            Text(
-              '${pkg?['name'] ?? ''} · ${formatDate(parseDate(widget.booking['booking_date']))}',
-              style: const TextStyle(color: AppColors.muted),
+            // ---- Header ----
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.danger.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.event_busy_rounded, color: AppColors.danger),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Cancel Booking',
+                          style: TextStyle(
+                              fontFamily: 'Poppins', fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                      Text(
+                        '${pkg?['name'] ?? ''} · ${formatDate(parseDate(widget.booking['booking_date']))}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: AppColors.muted, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             if (q == null && _loadError == null)
               const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
             else if (_loadError != null)
               Text(_loadError!, style: const TextStyle(color: AppColors.danger))
             else ...[
-              // Buod ng refund ayon sa policy
+              // ---- Buod ng refund ----
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 decoration: BoxDecoration(
-                  color: (half ? AppColors.info : AppColors.warning).withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: (half ? AppColors.info : AppColors.warning).withValues(alpha: 0.25)),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.border),
+                  boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 10, offset: Offset(0, 3))],
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      days == 0 ? 'Your booking is today.' : 'Your booking is $days day${days == 1 ? '' : 's'} away.',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    Row(
+                      children: [
+                        const Text('Refund summary',
+                            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink, fontSize: 14.5)),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: (days == 0 ? AppColors.warning : AppColors.info).withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            days == 0 ? 'Booking is today' : '$days day${days == 1 ? '' : 's'} away',
+                            style: TextStyle(
+                              color: days == 0 ? AppColors.warning : AppColors.info,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'All bookings are non-refundable unless you have a valid reason.',
-                      style: TextStyle(fontSize: 13, height: 1.4, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      half
-                          ? 'If the resort accepts your reason, you get back half of the 50% reservation fee '
-                              'because you are cancelling before your booking date.'
-                          : 'Cancellations on the booking date itself get no refund, even with a valid reason.',
-                      style: const TextStyle(fontSize: 13, height: 1.4),
-                    ),
-                    const Divider(height: 20),
+                    const SizedBox(height: 10),
                     _row('Verified payments', peso(asDouble(q?['paid']))),
                     _row('Reservation fee (50%)', peso(asDouble(q?['reservation_fee']))),
-                    _row('Refund if approved', peso(_refund), bold: true),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              if (_refund > 0)
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: _wantRefund,
-                  onChanged: _busy ? null : (v) => setState(() => _wantRefund = v),
-                  title: Text('Request a ${peso(_refund)} refund', style: const TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: const Text('Only for a valid reason. The resort will review it first.',
-                      style: TextStyle(fontSize: 12)),
-                ),
-              if (_refund > 0 && _wantRefund) ...[
-                const SizedBox(height: 4),
-                const Text('Where should we send your refund?', style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'gcash', label: Text('GCash')),
-                    ButtonSegment(value: 'maya', label: Text('Maya')),
-                  ],
-                  selected: {_method},
-                  onSelectionChanged: _busy ? null : (s) => setState(() => _method = s.first),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _number,
-                  keyboardType: TextInputType.phone,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(11)],
-                  decoration: InputDecoration(
-                    labelText: '${_method == 'gcash' ? 'GCash' : 'Maya'} number',
-                    hintText: '09XX XXX XXXX',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _name,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(labelText: 'Account name'),
-                ),
-                const SizedBox(height: 10),
-              ],
-              const Text('Reason for cancelling', style: TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final r in cancelReasons)
-                    ChoiceChip(
-                      label: Text(r),
-                      selected: _preset == r,
-                      onSelected: _busy
-                          ? null
-                          : (_) => setState(() {
-                                _preset = r;
-                                _error = null;
-                              }),
+                    const Divider(height: 18, color: AppColors.border),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text('Refund if approved',
+                              style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.ink)),
+                        ),
+                        Text(
+                          peso(_refund),
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                            color: _refund > 0 ? AppColors.primaryDark : AppColors.muted,
+                          ),
+                        ),
+                      ],
                     ),
-                ],
+                  ],
+                ),
               ),
-              if (_preset == 'Other') ...[
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _reason,
-                  maxLines: 2,
-                  maxLength: 300,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    labelText: 'Type your reason',
-                    hintText: 'Tell the resort why you are cancelling',
+              const SizedBox(height: 10),
+              _infoNote(
+                half
+                    ? 'Bookings are non-refundable unless your reason is accepted. If it is, you get back half '
+                        'of the 50% reservation fee because you are cancelling before your booking date.'
+                    : 'Bookings are non-refundable unless your reason is accepted. Cancelling on the booking '
+                        'date itself gets no refund, even with a valid reason.',
+              ),
+              const SizedBox(height: 20),
+
+              // ---- Dahilan ----
+              _sectionTitle('Why are you cancelling?'),
+              const SizedBox(height: 10),
+              for (final r in cancelReasons) _reasonTile(r),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 180),
+                child: _preset == 'Other'
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: TextField(
+                          controller: _reason,
+                          maxLines: 3,
+                          minLines: 2,
+                          maxLength: 300,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: _fieldDecoration('Type your reason', 'Tell the resort why you are cancelling'),
+                        ),
+                      )
+                    : const SizedBox(width: double.infinity),
+              ),
+
+              // ---- Refund ----
+              if (_refund > 0) ...[
+                const SizedBox(height: 14),
+                Container(
+                  decoration: BoxDecoration(
+                    color: _wantRefund ? AppColors.primary.withValues(alpha: 0.06) : AppColors.subtle,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                        color: _wantRefund ? AppColors.primary.withValues(alpha: 0.35) : AppColors.border),
                   ),
+                  padding: const EdgeInsets.fromLTRB(14, 4, 8, 4),
+                  child: SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _wantRefund,
+                    onChanged: _busy ? null : (v) => setState(() => _wantRefund = v),
+                    title: Text('Request a ${peso(_refund)} refund',
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+                    subtitle: const Text('The resort will review your reason first.', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 180),
+                  child: wantsRefund
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 16),
+                            _sectionTitle('Where should we send your refund?'),
+                            const SizedBox(height: 10),
+                            SegmentedButton<String>(
+                              segments: const [
+                                ButtonSegment(value: 'gcash', label: Text('GCash')),
+                                ButtonSegment(value: 'maya', label: Text('Maya')),
+                              ],
+                              selected: {_method},
+                              onSelectionChanged: _busy ? null : (s) => setState(() => _method = s.first),
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _number,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(11),
+                              ],
+                              decoration: _fieldDecoration(
+                                  '${_method == 'gcash' ? 'GCash' : 'Maya'} number', '09XX XXX XXXX',
+                                  icon: Icons.phone_iphone_rounded),
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: _name,
+                              maxLength: 60,
+                              textCapitalization: TextCapitalization.words,
+                              decoration: _fieldDecoration('Account name', 'Name on the account',
+                                      icon: Icons.person_outline_rounded)
+                                  .copyWith(counterText: ''),
+                            ),
+                          ],
+                        )
+                      : const SizedBox(width: double.infinity),
                 ),
               ],
-              if (_refund > 0 && _wantRefund)
-                const Padding(
-                  padding: EdgeInsets.only(top: 6),
-                  child: Text(
-                    'The resort reviews every refund request. Valid reasons such as a death in the family, '
-                    'illness or a typhoon may be accepted.',
-                    style: TextStyle(fontSize: 12, color: AppColors.muted, height: 1.35),
+              const SizedBox(height: 14),
+
+              // ---- Pagsang-ayon ----
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: _busy ? null : () => setState(() => _agree = !_agree),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(4, 6, 12, 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.subtle,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border),
                   ),
-                ),
-              const SizedBox(height: 8),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _agree,
-                onChanged: _busy ? null : (v) => setState(() => _agree = v ?? false),
-                controlAffinity: ListTileControlAffinity.leading,
-                title: const Text(
-                  'I understand that cancelling cannot be undone and follows the resort\'s refund policy.',
-                  style: TextStyle(fontSize: 13),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: _agree,
+                        onChanged: _busy ? null : (v) => setState(() => _agree = v ?? false),
+                      ),
+                      const Expanded(
+                        child: Text(
+                          'I understand that cancelling cannot be undone and follows the resort\'s refund policy.',
+                          style: TextStyle(fontSize: 13, height: 1.35),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               if (_error != null) ...[
-                const SizedBox(height: 6),
-                Text(_error!, style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600)),
-              ],
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 48,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-                  onPressed: _busy || !_agree ? null : _submit,
-                  child: _busy
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(_refund > 0 && _wantRefund ? 'Cancel and request refund' : 'Cancel booking'),
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.error_outline_rounded, size: 18, color: AppColors.danger),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(_error!,
+                          style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600, fontSize: 13)),
+                    ),
+                  ],
                 ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: OutlinedButton(
+                        onPressed: _busy ? null : () => Navigator.pop(context, false),
+                        child: const Text('Keep booking'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 3,
+                    child: SizedBox(
+                      height: 50,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+                        onPressed: _busy || !_agree ? null : _submit,
+                        child: _busy
+                            ? const SizedBox(
+                                width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : FittedBox(child: Text(wantsRefund ? 'Cancel & request refund' : 'Cancel booking')),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],
@@ -319,6 +428,93 @@ class _CancelSheetState extends State<_CancelSheet> {
       ),
     );
   }
+
+  static const _reasonIcons = <String, IconData>{
+    'Death in the family': Icons.local_florist_outlined,
+    'Illness or hospitalization': Icons.local_hospital_outlined,
+    'Typhoon or severe weather': Icons.thunderstorm_outlined,
+    'Family or personal emergency': Icons.emergency_outlined,
+    'Change of plans': Icons.event_repeat_outlined,
+    'Other': Icons.edit_note_rounded,
+  };
+
+  Widget _reasonTile(String r) {
+    final selected = _preset == r;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: selected ? AppColors.primary.withValues(alpha: 0.07) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: _busy
+              ? null
+              : () => setState(() {
+                    _preset = r;
+                    _error = null;
+                  }),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected ? AppColors.primary : AppColors.border,
+                width: selected ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(_reasonIcons[r] ?? Icons.help_outline, size: 20,
+                    color: selected ? AppColors.primaryDark : AppColors.muted),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(r,
+                      style: TextStyle(
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                        color: AppColors.ink,
+                        fontSize: 14,
+                      )),
+                ),
+                Icon(
+                  selected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+                  size: 20,
+                  color: selected ? AppColors.primary : AppColors.border,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String text) => Text(text,
+      style: const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.ink));
+
+  Widget _infoNote(String text) => Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: AppColors.warning.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.info_outline_rounded, size: 17, color: AppColors.warning),
+            const SizedBox(width: 8),
+            Expanded(child: Text(text, style: const TextStyle(fontSize: 12.5, height: 1.4, color: AppColors.text))),
+          ],
+        ),
+      );
+
+  InputDecoration _fieldDecoration(String label, String hint, {IconData? icon}) => InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: icon == null ? null : Icon(icon),
+        filled: true,
+        fillColor: AppColors.subtle,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      );
 
   Widget _row(String label, String value, {bool bold = false}) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),

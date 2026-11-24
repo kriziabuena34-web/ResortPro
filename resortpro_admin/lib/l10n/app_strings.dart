@@ -102,6 +102,7 @@ const _weekdays = {
 const Map<AppLanguage, Map<String, String>> _strings = {
   // ======================== ENGLISH ========================
   AppLanguage.en: {
+    'anOthers': 'Others',
     'navTerms': 'Pool Agreement',
     'tmTitle': 'Pool Agreement (Terms & Conditions)',
     'tmIntro': 'These rules appear in the guest app under Terms & Conditions and must be agreed to before booking. Save to publish changes.',
@@ -1102,6 +1103,7 @@ const Map<AppLanguage, Map<String, String>> _strings = {
 
   // ======================== FILIPINO ========================
   AppLanguage.fil: {
+    'anOthers': 'Iba pa',
     'navTerms': 'Pool Agreement',
     'tmTitle': 'Pool Agreement (Terms & Conditions)',
     'tmIntro': 'Makikita ng guest ang mga patakarang ito sa app (Terms & Conditions) at kailangan nila itong sang-ayunan bago mag-book. I-save para mailathala ang pagbabago.',
@@ -2081,6 +2083,7 @@ const Map<AppLanguage, Map<String, String>> _strings = {
 
   // ======================== CEBUANO ========================
   AppLanguage.ceb: {
+    'anOthers': 'Uban pa',
     // Common
     'language': 'Pinulongan',
     'cancel': 'Kanselahon',
