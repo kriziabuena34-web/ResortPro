@@ -11,7 +11,7 @@ import 'package:latlong2/latlong.dart' hide Path;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const _userAgent = 'com.aryana.resortpro (ResortPro capstone app)';
+const _userAgent = 'com.aryana.resortpro (ResortPro resort booking app)';
 
 // ===========================================================================
 // 1) OFFLINE NA MAPA

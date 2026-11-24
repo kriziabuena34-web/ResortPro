@@ -2,7 +2,6 @@ package com.example.resortpro
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -11,8 +10,9 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    // Para gumana ang notification check kahit sarado ang app: hinihiling na
-    // huwag "i-optimize" (patayin) ng battery saver ang ResortPro.
+    // Para gumana ang notification check kahit sarado ang app. Walang espesyal
+    // na permission: binubuksan lang ang Battery optimization settings ng phone
+    // at ang guest mismo ang pipili sa ResortPro (ligtas sa Google Play policy).
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "resortpro/battery")
@@ -21,13 +21,11 @@ class MainActivity : FlutterActivity() {
                     "isIgnoring" -> result.success(isIgnoringBatteryOptimizations())
                     "request" -> {
                         try {
-                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                            intent.data = Uri.parse("package:$packageName")
-                            startActivity(intent)
+                            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
                             result.success(true)
                         } catch (e: Exception) {
                             try {
-                                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                                startActivity(Intent(Settings.ACTION_SETTINGS))
                                 result.success(true)
                             } catch (e2: Exception) {
                                 result.success(false)

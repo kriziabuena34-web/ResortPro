@@ -393,11 +393,12 @@ class _BackgroundNoticeState extends State<_BackgroundNotice> with WidgetsBindin
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              'Your phone may stop updates when ResortPro is closed. Allow it to run in the background.',
+              'Your phone may stop updates when ResortPro is closed. In Battery settings, set ResortPro to '
+              '"Don\'t optimize".',
               style: TextStyle(fontSize: 12.5, height: 1.35, color: AppColors.text),
             ),
           ),
-          TextButton(onPressed: BatterySaver.request, child: const Text('Allow')),
+          TextButton(onPressed: BatterySaver.request, child: const Text('Settings')),
         ],
       ),
     );

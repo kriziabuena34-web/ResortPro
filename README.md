@@ -1,6 +1,6 @@
 # ResortPro — Aryana's Guests House
 
-Capstone project (BS IT – Business Analytics).
+Final project for Application Development (BS IT – Business Analytics), in collaboration with Fundamentals of Analytics Modeling.
 A resort booking and management system built with **Flutter** and **Supabase**.
 
 | Folder | What it is | Runs on |

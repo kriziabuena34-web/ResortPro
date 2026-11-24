@@ -2,8 +2,6 @@
     <!-- Notifications (Android 13+) at background check kahit sarado ang app -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <!-- Para hindi patayin ng battery saver ang notification check kapag sarado ang app -->
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Resort Map: live na lokasyon mo -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>

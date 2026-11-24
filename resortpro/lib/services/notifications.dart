@@ -526,7 +526,8 @@ class BatterySaver {
     }
   }
 
-  /// Bubuksan ang prompt ng Android na "Allow app to run in background?".
+  /// Bubuksan ang Battery optimization settings ng phone (walang espesyal na
+  /// permission; ang guest mismo ang pipili sa ResortPro — ligtas sa Play policy).
   static Future<void> request() async {
     if (!_isAndroid) return;
     try {
@@ -547,12 +548,13 @@ class BatterySaver {
         icon: const Icon(Icons.notifications_active_outlined),
         title: const Text('Get updates even when the app is closed'),
         content: const Text(
-          'Some phones stop apps in the background to save battery. Allow ResortPro to run in the '
-          'background so you still get booking and payment updates after you close the app.',
+          'Some phones stop apps in the background to save battery. To keep getting booking and payment '
+          'updates after you close the app, open Battery settings, find ResortPro, and choose '
+          '"Don\'t optimize" (or "Allow background activity").',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Not now')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Allow')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Open settings')),
         ],
       ),
     );
