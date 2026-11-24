@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config.dart';
 import '../screens/info_pages.dart';
 import 'offline_cache.dart';
+import 'payment_accounts.dart';
 import '../utils/format.dart';
 import '../utils/reference_format.dart';
 import '../theme/app_theme.dart';
@@ -67,9 +68,33 @@ class _PaymentProofFormState extends State<PaymentProofForm> {
   Uint8List? _image;
 
   @override
+  void initState() {
+    super.initState();
+    PaymentAccounts.current.addListener(_onAccounts);
+    PaymentAccounts.refresh();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onAccounts());
+  }
+
+  @override
   void dispose() {
+    PaymentAccounts.current.removeListener(_onAccounts);
     _reference.dispose();
     super.dispose();
+  }
+
+  /// Kapag pinatay ng admin ang napiling paraan, lumipat sa isa pa.
+  void _onAccounts() {
+    if (!mounted) return;
+    final a = PaymentAccounts.current.value;
+    if (a[_method]?.enabled == false) {
+      final other = _method == 'gcash' ? 'maya' : 'gcash';
+      if (a[other]?.enabled != false) {
+        _method = other;
+        _reference.text = RefFormat.of(_method).format(_reference.text);
+        _emit();
+      }
+    }
+    setState(() {});
   }
 
   void _emit() {
@@ -155,8 +180,13 @@ class _PaymentProofFormState extends State<PaymentProofForm> {
 
   @override
   Widget build(BuildContext context) {
-    final number = _method == 'gcash' ? gcashNumber : mayaNumber;
+    final accounts = PaymentAccounts.current.value;
+    final account = accounts[_method]!;
+    final number = account.number;
+    final accountName = account.name.isEmpty ? paymentAccountName : account.name;
     final methodName = _method == 'gcash' ? 'GCash' : 'Maya';
+    final gcashOn = accounts['gcash']?.enabled != false;
+    final mayaOn = accounts['maya']?.enabled != false;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -165,9 +195,9 @@ class _PaymentProofFormState extends State<PaymentProofForm> {
         _label('PAYMENT METHOD'),
         Row(
           children: [
-            Expanded(child: _methodTile('gcash', 'GCash', Icons.phone_android)),
-            const SizedBox(width: 10),
-            Expanded(child: _methodTile('maya', 'Maya', Icons.account_balance_wallet_outlined)),
+            if (gcashOn) Expanded(child: _methodTile('gcash', 'GCash', Icons.phone_android)),
+            if (gcashOn && mayaOn) const SizedBox(width: 10),
+            if (mayaOn) Expanded(child: _methodTile('maya', 'Maya', Icons.account_balance_wallet_outlined)),
           ],
         ),
         const SizedBox(height: 18),
@@ -206,7 +236,7 @@ class _PaymentProofFormState extends State<PaymentProofForm> {
                           ),
                         ),
                         Text(
-                          paymentAccountName,
+                          'Account name: $accountName',
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text),
                         ),
                       ],

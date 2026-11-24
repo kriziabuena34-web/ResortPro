@@ -102,6 +102,19 @@ const _weekdays = {
 const Map<AppLanguage, Map<String, String>> _strings = {
   // ======================== ENGLISH ========================
   AppLanguage.en: {
+    'navPayAccounts': 'Payment Accounts',
+    'paIntro': 'The GCash and Maya accounts where guests send their payments. Guests see the number and account name in the app when they pay.',
+    'paNotSetUp': 'Payment accounts are not set up in the database yet. Run supabase/payment_accounts_setup.sql in the Supabase SQL Editor, then try again.',
+    'paShown': 'Shown to guests',
+    'paHidden': 'Hidden from guests',
+    'paNumber': '{method} number',
+    'paName': 'Account name',
+    'paNameHelp': 'Exactly as it appears in {method}, so guests know they are paying the right person.',
+    'paPreview': 'WHAT GUESTS SEE',
+    'paNeedOne': 'Keep at least one payment method turned on.',
+    'paNumberInvalid': 'Enter an 11-digit {method} number that starts with 09.',
+    'paNameRequired': 'Enter the {method} account name.',
+    'paSaved': 'Payment accounts saved. Guests will see the new details in the app.',
     'chRooms': 'Additional rooms',
     'chRoomsSub': '{n} second-floor room(s)',
     'chRoomsHelp': '{rate} per room · {left} more available',
@@ -1127,6 +1140,19 @@ const Map<AppLanguage, Map<String, String>> _strings = {
 
   // ======================== FILIPINO ========================
   AppLanguage.fil: {
+    'navPayAccounts': 'Payment Accounts',
+    'paIntro': 'Ang GCash at Maya kung saan nagpapadala ng bayad ang mga guest. Makikita nila sa app ang number at pangalan ng account kapag magbabayad.',
+    'paNotSetUp': 'Hindi pa naka-set up ang payment accounts sa database. Patakbuhin ang supabase/payment_accounts_setup.sql sa Supabase SQL Editor, saka subukan ulit.',
+    'paShown': 'Nakikita ng mga guest',
+    'paHidden': 'Nakatago sa mga guest',
+    'paNumber': '{method} number',
+    'paName': 'Pangalan sa account',
+    'paNameHelp': 'Eksakto kung paano ito lumalabas sa {method}, para alam ng guest na tama ang pinapadalhan niya.',
+    'paPreview': 'ANG MAKIKITA NG GUEST',
+    'paNeedOne': 'Kailangang may kahit isang paraan ng bayad na naka-on.',
+    'paNumberInvalid': 'Maglagay ng 11-digit na {method} number na nagsisimula sa 09.',
+    'paNameRequired': 'Ilagay ang pangalan sa {method} account.',
+    'paSaved': 'Na-save ang payment accounts. Makikita na ito ng mga guest sa app.',
     'chRooms': 'Dagdag na kuwarto',
     'chRoomsSub': '{n} kuwarto sa second floor',
     'chRoomsHelp': '{rate} bawat kuwarto · {left} pa ang pwede',

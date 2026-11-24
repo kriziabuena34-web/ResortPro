@@ -10,6 +10,7 @@ import '../services/app_router.dart';
 import 'modules/analytics_page.dart';
 import 'modules/expenses_page.dart';
 import 'modules/terms_page.dart';
+import 'modules/payment_accounts_page.dart';
 import 'modules/availability_page.dart';
 import 'modules/bookings_page.dart';
 import 'modules/calendar_page.dart';
@@ -65,12 +66,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     (icon: Icons.forum_outlined, selectedIcon: Icons.forum, label: 'navMessages'),
     (icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long, label: 'navExpenses'),
     (icon: Icons.gavel_outlined, selectedIcon: Icons.gavel, label: 'navTerms'),
+    (icon: Icons.account_balance_wallet_outlined, selectedIcon: Icons.account_balance_wallet, label: 'navPayAccounts'),
   ];
 
   /// Bahagi ng URL ng bawat module (kapareho ang pagkakasunod ng [_modules]).
   static const _slugs = [
     'dashboard', 'bookings', 'calendar', 'clients', 'verifications', 'payments', 'packages',
-    'gallery', 'availability', 'reports', 'analytics', 'checkin', 'messages', 'expenses', 'terms',
+    'gallery', 'availability', 'reports', 'analytics', 'checkin', 'messages', 'expenses', 'terms', 'payment-accounts',
   ];
 
   static int _indexOfPath(String path) {
@@ -582,6 +584,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         ),
       13 => ExpensesPage(data: data, onChanged: _fetchData),
       14 => const TermsPage(),
+      15 => const PaymentAccountsPage(),
       _ => AnalyticsPage(data: data),
     };
 
@@ -631,7 +634,7 @@ class _Sidebar extends StatelessWidget {
   static const _groups = [
     ('navGroupMain', [0, 1, 11, 2]),
     ('navGroupGuests', [3, 12, 4, 5]),
-    ('navGroupResort', [6, 7, 8, 14]),
+    ('navGroupResort', [6, 7, 8, 14, 15]),
     ('navGroupInsights', [9, 10, 13]),
   ];
 
