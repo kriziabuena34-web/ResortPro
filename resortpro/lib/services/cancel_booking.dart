@@ -36,7 +36,18 @@ class _CancelSheet extends StatefulWidget {
   State<_CancelSheet> createState() => _CancelSheetState();
 }
 
+/// Mga karaniwang dahilan ng pagkansela. Ang "Other" ay may sariling text box.
+const cancelReasons = <String>[
+  'Death in the family',
+  'Illness or hospitalization',
+  'Typhoon or severe weather',
+  'Family or personal emergency',
+  'Change of plans',
+  'Other',
+];
+
 class _CancelSheetState extends State<_CancelSheet> {
+  String? _preset;
   Map<String, dynamic>? _quote;
   String? _loadError;
   String _method = 'gcash';
@@ -78,10 +89,20 @@ class _CancelSheetState extends State<_CancelSheet> {
 
   double get _refund => asDouble(_quote?['refund']);
 
+  /// Ang ipapadalang dahilan: ang napiling preset, o "Other: (tinype)".
+  String get _fullReason {
+    final typed = _reason.text.trim().replaceAll(RegExp(r'\s+'), ' ');
+    return _preset == 'Other' ? 'Other: $typed' : (_preset ?? typed);
+  }
+
   Future<void> _submit() async {
     final needsPayout = _refund > 0 && _wantRefund;
-    if (needsPayout && _reason.text.trim().length < 5) {
-      setState(() => _error = 'Please tell us your reason. A refund is only given for a valid reason.');
+    if (_preset == null) {
+      setState(() => _error = 'Please choose your reason for cancelling.');
+      return;
+    }
+    if (_preset == 'Other' && _reason.text.trim().length < 5) {
+      setState(() => _error = 'Please type your reason (at least 5 characters).');
       return;
     }
     final digits = _number.text.replaceAll(RegExp(r'\D'), '');
@@ -107,7 +128,7 @@ class _CancelSheetState extends State<_CancelSheet> {
         'p_method': needsPayout ? _method : null,
         'p_number': needsPayout ? digits : null,
         'p_name': needsPayout ? _name.text.trim() : null,
-        'p_reason': _reason.text.trim(),
+        'p_reason': _fullReason,
         'p_request_refund': needsPayout,
       });
       if (!mounted) return;
@@ -225,14 +246,47 @@ class _CancelSheetState extends State<_CancelSheet> {
                 ),
                 const SizedBox(height: 10),
               ],
-              TextField(
-                controller: _reason,
-                maxLines: 2,
-                decoration: InputDecoration(
-                  labelText: _refund > 0 && _wantRefund ? 'Reason for cancelling (required)' : 'Reason (optional)',
-                  hintText: _refund > 0 && _wantRefund ? 'e.g. medical emergency, family emergency, typhoon' : null,
-                ),
+              const Text('Reason for cancelling', style: TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final r in cancelReasons)
+                    ChoiceChip(
+                      label: Text(r),
+                      selected: _preset == r,
+                      onSelected: _busy
+                          ? null
+                          : (_) => setState(() {
+                                _preset = r;
+                                _error = null;
+                              }),
+                    ),
+                ],
               ),
+              if (_preset == 'Other') ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _reason,
+                  maxLines: 2,
+                  maxLength: 300,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Type your reason',
+                    hintText: 'Tell the resort why you are cancelling',
+                  ),
+                ),
+              ],
+              if (_refund > 0 && _wantRefund)
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: Text(
+                    'The resort reviews every refund request. Valid reasons such as a death in the family, '
+                    'illness or a typhoon may be accepted.',
+                    style: TextStyle(fontSize: 12, color: AppColors.muted, height: 1.35),
+                  ),
+                ),
               const SizedBox(height: 8),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,

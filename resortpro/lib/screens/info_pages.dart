@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config.dart';
+import '../services/offline_cache.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ui_kit.dart';
-import 'data_privacy_page.dart';
 import 'resort_map_page.dart';
 
 // ===========================================================================
@@ -38,17 +39,75 @@ const resortTerms = <String>[
   'The videoke and speaker are strictly until 10 PM. Exceeding the time limit will result in a ₱1,500 penalty.',
 ];
 
+/// Ang kasalukuyang Pool Agreement. Nagsisimula sa [resortTerms], tapos
+/// pinapalitan ng bersyong na-edit ng admin (resort_settings.pool_terms).
+final poolTerms = ValueNotifier<List<String>>(resortTerms);
+
+const _poolTermsCacheKey = 'pool_terms';
+bool _poolTermsCacheLoaded = false;
+
+/// Kinukuha ang pinakabagong Pool Agreement mula sa database. Kapag offline,
+/// ginagamit ang huling naka-save na kopya; kapag wala pa, ang [resortTerms].
+Future<void> refreshPoolTerms() async {
+  if (!_poolTermsCacheLoaded) {
+    _poolTermsCacheLoaded = true;
+    final cached = await OfflineCache.load(_poolTermsCacheKey, perUser: false);
+    final list = _termsFrom(cached?.data);
+    if (list != null) poolTerms.value = list;
+  }
+  try {
+    final row = await Supabase.instance.client
+        .from('resort_settings')
+        .select('pool_terms')
+        .eq('id', 1)
+        .maybeSingle()
+        .timeout(const Duration(seconds: 8));
+    final list = _termsFrom(row?['pool_terms']);
+    if (list != null) {
+      poolTerms.value = list;
+      await OfflineCache.save(_poolTermsCacheKey, list, perUser: false);
+    }
+  } catch (_) {
+    // Offline o wala pa ang column: mananatili ang naka-save / default na terms.
+  }
+}
+
+List<String>? _termsFrom(dynamic v) {
+  if (v is! List) return null;
+  final list = [for (final t in v) '$t'.trim()]..removeWhere((t) => t.isEmpty);
+  return list.isEmpty ? null : list;
+}
+
 /// Ang numbered na listahan ng terms (ginagamit sa Terms page at sa payment).
-class TermsList extends StatelessWidget {
+class TermsList extends StatefulWidget {
   const TermsList({super.key, this.fontSize = 14});
   final double fontSize;
 
   @override
+  State<TermsList> createState() => _TermsListState();
+}
+
+class _TermsListState extends State<TermsList> {
+  @override
+  void initState() {
+    super.initState();
+    refreshPoolTerms();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder<List<String>>(
+      valueListenable: poolTerms,
+      builder: (context, terms, _) => _list(terms),
+    );
+  }
+
+  Widget _list(List<String> terms) {
+    final fontSize = widget.fontSize;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < resortTerms.length; i++)
+        for (var i = 0; i < terms.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Row(
@@ -73,7 +132,7 @@ class TermsList extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(resortTerms[i], style: TextStyle(fontSize: fontSize, height: 1.45)),
+                  child: Text(terms[i], style: TextStyle(fontSize: fontSize, height: 1.45)),
                 ),
               ],
             ),
@@ -315,64 +374,30 @@ class _Section extends StatelessWidget {
 class TermsPage extends StatelessWidget {
   const TermsPage({super.key, this.initialTab = 0});
 
-  /// 0 = Pool Agreement, 1 = Data Privacy
+  /// Hindi na ginagamit (Pool Agreement na lang ang laman ng page; ang Data
+  /// Privacy ay nasa sign-in page). Iniwan para hindi masira ang dating tawag.
   final int initialTab;
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      initialIndex: initialTab,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Terms & Conditions'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(icon: Icon(Icons.pool_outlined, size: 20), text: 'Pool Agreement'),
-              Tab(icon: Icon(Icons.privacy_tip_outlined, size: 20), text: 'Data Privacy'),
-            ],
-          ),
-        ),
-        body: const AmbientBackground(
-          child: TabBarView(
-            children: [
-              _TermsTab(
+    return Scaffold(
+      appBar: AppBar(title: const Text('Terms & Conditions')),
+      body: AmbientBackground(
+        child: RefreshIndicator(
+          onRefresh: refreshPoolTerms,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            children: const [
+              _Section(
                 title: "$resortName · Pool Agreement",
                 icon: Icons.pool_outlined,
                 child: TermsList(),
               ),
-              _PrivacyTab(),
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-class _TermsTab extends StatelessWidget {
-  const _TermsTab({required this.title, required this.icon, required this.child});
-  final String title;
-  final IconData icon;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      children: [_Section(title: title, icon: icon, child: child)],
-    );
-  }
-}
-
-class _PrivacyTab extends StatelessWidget {
-  const _PrivacyTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      children: const [DataPrivacyContent()],
     );
   }
 }

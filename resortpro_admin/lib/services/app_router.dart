@@ -29,16 +29,34 @@ class AdminRouterDelegate extends RouterDelegate<String>
     with ChangeNotifier, PopNavigatorRouterDelegateMixin<String> {
   AdminRouterDelegate() {
     adminPath.addListener(notifyListeners);
+    adminSignedIn.addListener(notifyListeners);
   }
+
+  static const loginPath = '/login';
 
   @override
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+  /// Kapag hindi naka-login, laging "/login" ang nasa URL (hindi lumalabas
+  /// ang mga module tulad ng "/bookings").
   @override
-  String get currentConfiguration => adminPath.value;
+  String get currentConfiguration => adminSignedIn.value == true ? adminPath.value : loginPath;
 
   @override
   Future<void> setNewRoutePath(String configuration) async {
+    // Hindi pa naka-login: hindi pinapansin ang back/forward papunta sa module;
+    // ibinabalik ang URL sa "/login".
+    if (adminSignedIn.value != true) {
+      if (configuration != loginPath && configuration != '/') {
+        if (adminPath.value != configuration) adminPath.value = configuration;
+        notifyListeners();
+      }
+      return;
+    }
+    if (configuration == loginPath) {
+      notifyListeners();
+      return;
+    }
     if (adminPath.value != configuration) adminPath.value = configuration;
   }
 

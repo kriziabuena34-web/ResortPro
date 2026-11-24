@@ -58,6 +58,8 @@ class _PackagesPageState extends State<PackagesPage> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: priceController,
+                  maxLength: 8,
+                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     labelText: tr('price'),
@@ -71,6 +73,8 @@ class _PackagesPageState extends State<PackagesPage> {
                     Expanded(
                       child: TextField(
                         controller: minController,
+                        maxLength: 3,
+                        buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           labelText: tr('minPax'),
@@ -82,6 +86,8 @@ class _PackagesPageState extends State<PackagesPage> {
                     Expanded(
                       child: TextField(
                         controller: maxController,
+                        maxLength: 3,
+                        buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           labelText: tr('maxPax'),

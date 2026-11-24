@@ -315,6 +315,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       ),
                       const SizedBox(height: 3),
                       Text(notificationBody(n),
+                          maxLines: 5,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.35)),
                       const SizedBox(height: 6),
                       Row(

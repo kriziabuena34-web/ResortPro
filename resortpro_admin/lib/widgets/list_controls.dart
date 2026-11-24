@@ -24,6 +24,8 @@ class SearchBox extends StatelessWidget {
       valueListenable: controller,
       builder: (context, value, _) => TextField(
         controller: controller,
+        maxLength: 60,
+        buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
         onChanged: onChanged,
         decoration: InputDecoration(
           hintText: hint,

@@ -465,6 +465,8 @@ class _ExpenseDialogState extends State<_ExpenseDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _amount,
+              maxLength: 10,
+              buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
               decoration: InputDecoration(
@@ -476,6 +478,7 @@ class _ExpenseDialogState extends State<_ExpenseDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _note,
+              maxLength: 300,
               maxLines: 2,
               decoration: InputDecoration(labelText: tr('exNoteOptional'), border: const OutlineInputBorder()),
             ),

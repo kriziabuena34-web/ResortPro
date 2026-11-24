@@ -419,6 +419,7 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                     Expanded(
                       child: TextField(
                         controller: _guestName,
+                        maxLength: 100,
                         decoration: InputDecoration(labelText: tr('nbGuestName')),
                       ),
                     ),
@@ -426,6 +427,8 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                     Expanded(
                       child: TextField(
                         controller: _guestPhone,
+                        maxLength: 20,
+                        buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                         keyboardType: TextInputType.phone,
                         decoration: InputDecoration(labelText: tr('fieldPhone')),
                       ),
@@ -568,6 +571,7 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
               const SizedBox(height: 12),
               TextField(
                 controller: _eventType,
+                maxLength: 100,
                 decoration: InputDecoration(labelText: '${tr('fieldEventType')} (${tr('optional')})'),
               ),
               const SizedBox(height: 16),
@@ -579,6 +583,8 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                   Expanded(
                     child: TextField(
                       controller: _total,
+                      maxLength: 10,
+                      buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
                       decoration: InputDecoration(labelText: tr('fieldTotal'), prefixText: '₱ '),
@@ -589,6 +595,8 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
                   Expanded(
                     child: TextField(
                       controller: _payment,
+                      maxLength: 10,
+                      buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
                       decoration: InputDecoration(labelText: tr('nbPaidNow'), prefixText: '₱ '),
@@ -631,6 +639,7 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
               const SizedBox(height: 12),
               TextField(
                 controller: _notes,
+                maxLength: 1000,
                 maxLines: 2,
                 decoration: InputDecoration(labelText: '${tr('adminNotes')} (${tr('optional')})'),
               ),
@@ -736,6 +745,8 @@ class _NewBookingDialogState extends State<_NewBookingDialog> {
       children: [
         TextField(
           controller: _clientSearch,
+          maxLength: 60,
+          buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.search),
             hintText: tr('nbSearchClient'),
@@ -841,6 +852,8 @@ class _PaxFieldState extends State<_PaxField> {
   Widget build(BuildContext context) {
     return TextField(
       controller: widget.controller,
+      maxLength: 3,
+      buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
       focusNode: _focus,
       textAlign: TextAlign.center,
       keyboardType: TextInputType.number,

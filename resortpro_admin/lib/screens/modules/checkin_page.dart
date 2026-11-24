@@ -174,6 +174,7 @@ class _CheckinPageState extends State<CheckinPage> {
             const SizedBox(height: 12),
             TextField(
               controller: reason,
+              maxLength: 300,
               decoration: InputDecoration(labelText: '${tr('svSkipReason')} (${tr('optional')})'),
             ),
           ],
@@ -514,6 +515,8 @@ class _CheckinPageState extends State<CheckinPage> {
                 Expanded(
                   child: TextField(
                     controller: _code,
+                    maxLength: 11,
+                    buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                     textCapitalization: TextCapitalization.characters,
                     style: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 2, fontSize: 16),
                     decoration: InputDecoration(

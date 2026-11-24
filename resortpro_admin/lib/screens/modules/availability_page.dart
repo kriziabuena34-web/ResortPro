@@ -102,6 +102,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: reason,
+                    maxLength: 100,
                     decoration: InputDecoration(labelText: tr('avReason')),
                   ),
                   if (conflicts.isNotEmpty) ...[
@@ -247,7 +248,7 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  TextField(controller: name, decoration: InputDecoration(labelText: tr('avRuleName'))),
+                  TextField(controller: name, maxLength: 60, decoration: InputDecoration(labelText: tr('avRuleName'))),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String?>(
                     initialValue: packageId,
@@ -281,6 +282,8 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                         width: 130,
                         child: TextField(
                           controller: value,
+                          maxLength: 7,
+                          buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                           keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
                           decoration: InputDecoration(
                             labelText: tr('avValue'),
@@ -350,6 +353,8 @@ class _AvailabilityPageState extends State<AvailabilityPage> {
                     width: 160,
                     child: TextField(
                       controller: priority,
+                      maxLength: 3,
+                      buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(labelText: tr('avPriority')),
                     ),

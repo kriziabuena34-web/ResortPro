@@ -155,12 +155,20 @@ String notificationTitle(Map<String, dynamic> n) {
   }
 }
 
+/// Pinaiikli ang mahabang dahilan o note mula sa admin para hindi humaba
+/// nang sobra ang notification (hal. 200 letra lang, may "…" sa dulo).
+String _clip(String text, [int max = 200]) {
+  final t = text.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (t.length <= max) return t;
+  return '${t.substring(0, max).trimRight()}…';
+}
+
 String notificationBody(Map<String, dynamic> n) {
   final d = notificationData(n);
   final pkg = d['package'] ?? 'your booking';
   final date = formatDate(parseDate(d['date']));
-  final note = '${d['note'] ?? ''}'.trim();
-  final reason = '${d['reason'] ?? ''}'.trim();
+  final note = _clip('${d['note'] ?? ''}');
+  final reason = _clip('${d['reason'] ?? ''}');
 
   switch (n['type']) {
     case 'booking_confirmed':

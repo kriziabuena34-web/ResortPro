@@ -136,6 +136,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
               const SizedBox(height: 12),
               TextField(
                 controller: controller,
+                maxLength: 300,
                 maxLines: 2,
                 decoration: InputDecoration(labelText: tr('reasonForClient')),
               ),
@@ -214,6 +215,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: controller,
+                  maxLength: 60,
                   inputFormatters: [f.formatter],
                   keyboardType: f.digitsOnly ? TextInputType.number : TextInputType.visiblePassword,
                   textCapitalization: TextCapitalization.characters,
@@ -248,6 +250,7 @@ class _PaymentsPageState extends State<PaymentsPage> {
         title: Text(tr('rfRejectQ')),
         content: TextField(
           controller: controller,
+          maxLength: 300,
           maxLines: 2,
           decoration: InputDecoration(labelText: tr('rfRejectReason')),
         ),

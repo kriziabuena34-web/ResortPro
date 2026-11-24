@@ -102,6 +102,19 @@ const _weekdays = {
 const Map<AppLanguage, Map<String, String>> _strings = {
   // ======================== ENGLISH ========================
   AppLanguage.en: {
+    'navTerms': 'Pool Agreement',
+    'tmTitle': 'Pool Agreement (Terms & Conditions)',
+    'tmIntro': 'These rules appear in the guest app under Terms & Conditions and must be agreed to before booking. Save to publish changes.',
+    'tmCount': '{n} rules',
+    'tmUpdated': 'updated {date}',
+    'tmAdd': 'Add Rule',
+    'tmEdit': 'Edit Rule',
+    'tmRule': 'Rule',
+    'tmDeleteQ': 'Delete this rule?',
+    'tmSaved': 'Pool Agreement saved. Guests will see it in the app.',
+    'tmUnsaved': 'You have unsaved changes.',
+    'tmEmpty': 'No rules yet. Add at least one.',
+    'tmNotSetUp': 'The Pool Agreement is not set up in the database yet. Run supabase/terms_setup.sql in the Supabase SQL Editor, then try again.',
     // Common
     'language': 'Language',
     'cancel': 'Cancel',
@@ -1089,6 +1102,19 @@ const Map<AppLanguage, Map<String, String>> _strings = {
 
   // ======================== FILIPINO ========================
   AppLanguage.fil: {
+    'navTerms': 'Pool Agreement',
+    'tmTitle': 'Pool Agreement (Terms & Conditions)',
+    'tmIntro': 'Makikita ng guest ang mga patakarang ito sa app (Terms & Conditions) at kailangan nila itong sang-ayunan bago mag-book. I-save para mailathala ang pagbabago.',
+    'tmCount': '{n} patakaran',
+    'tmUpdated': 'na-update {date}',
+    'tmAdd': 'Magdagdag',
+    'tmEdit': 'I-edit ang Patakaran',
+    'tmRule': 'Patakaran',
+    'tmDeleteQ': 'Burahin ang patakarang ito?',
+    'tmSaved': 'Na-save ang Pool Agreement. Makikita na ito ng mga guest sa app.',
+    'tmUnsaved': 'May mga pagbabagong hindi pa naka-save.',
+    'tmEmpty': 'Wala pang patakaran. Magdagdag ng kahit isa.',
+    'tmNotSetUp': 'Hindi pa naka-set up ang Pool Agreement sa database. Patakbuhin ang supabase/terms_setup.sql sa Supabase SQL Editor, saka subukan ulit.',
     // Common
     'language': 'Wika',
     'cancel': 'Kanselahin',

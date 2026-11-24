@@ -376,6 +376,7 @@ class _BookingsPageState extends State<BookingsPage> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: noteController,
+                    maxLength: 300,
                     maxLines: 2,
                     decoration: InputDecoration(labelText: tr('reasonOptional')),
                   ),
@@ -425,6 +426,8 @@ class _BookingsPageState extends State<BookingsPage> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: amountController,
+                  maxLength: 10,
+                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     labelText: tr('amountReceived'),
@@ -1508,6 +1511,7 @@ class _BookingDetailsDialogState extends State<_BookingDetailsDialog> {
                     _section(tr('adminNotes')),
                     TextField(
                       controller: _notes,
+                      maxLength: 1000,
                       minLines: 2,
                       maxLines: 4,
                       decoration: InputDecoration(hintText: tr('adminNotesHint')),
@@ -1688,6 +1692,8 @@ class _AddChargeDialogState extends State<_AddChargeDialog> {
           children: [
             TextField(
               controller: _pax,
+              maxLength: 3,
+              buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: deco(tr('chExtraPax'), helper: tr('chExtraPaxHelp', {'rate': peso(extraPaxRate)})),
@@ -1696,6 +1702,8 @@ class _AddChargeDialogState extends State<_AddChargeDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _hours,
+              maxLength: 2,
+              buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: deco(tr('chExtensionHours'), helper: tr('chExtensionHelp', {'rate': peso(extensionRate)})),
@@ -1704,13 +1712,15 @@ class _AddChargeDialogState extends State<_AddChargeDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _other,
+              maxLength: 8,
+              buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
               decoration: deco(tr('chOtherAmount'), prefix: '₱ '),
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 12),
-            TextField(controller: _note, decoration: deco(tr('chOtherNote'))),
+            TextField(controller: _note, maxLength: 100, decoration: deco(tr('chOtherNote'))),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(14),

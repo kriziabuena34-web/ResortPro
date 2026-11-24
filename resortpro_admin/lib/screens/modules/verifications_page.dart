@@ -64,6 +64,7 @@ class _VerificationsPageState extends State<VerificationsPage> {
               const SizedBox(height: 12),
               TextField(
                 controller: controller,
+                maxLength: 300,
                 maxLines: 2,
                 decoration: InputDecoration(labelText: tr('reasonForClient')),
               ),

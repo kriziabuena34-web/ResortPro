@@ -9,6 +9,7 @@ import '../widgets/admin_widgets.dart';
 import '../services/app_router.dart';
 import 'modules/analytics_page.dart';
 import 'modules/expenses_page.dart';
+import 'modules/terms_page.dart';
 import 'modules/availability_page.dart';
 import 'modules/bookings_page.dart';
 import 'modules/calendar_page.dart';
@@ -63,12 +64,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     (icon: Icons.qr_code_scanner_outlined, selectedIcon: Icons.qr_code_scanner, label: 'navCheckin'),
     (icon: Icons.forum_outlined, selectedIcon: Icons.forum, label: 'navMessages'),
     (icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long, label: 'navExpenses'),
+    (icon: Icons.gavel_outlined, selectedIcon: Icons.gavel, label: 'navTerms'),
   ];
 
   /// Bahagi ng URL ng bawat module (kapareho ang pagkakasunod ng [_modules]).
   static const _slugs = [
     'dashboard', 'bookings', 'calendar', 'clients', 'verifications', 'payments', 'packages',
-    'gallery', 'availability', 'reports', 'analytics', 'checkin', 'messages', 'expenses',
+    'gallery', 'availability', 'reports', 'analytics', 'checkin', 'messages', 'expenses', 'terms',
   ];
 
   static int _indexOfPath(String path) {
@@ -94,7 +96,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     super.initState();
     _index = _indexOfPath(adminPath.value);
     adminPath.addListener(_onPathChanged);
-    if (adminPath.value == '/') {
+    if (!_slugs.contains(adminPath.value.replaceAll('/', ''))) {
       WidgetsBinding.instance.addPostFrameCallback((_) => adminPath.value = '/${_slugs[_index]}');
     }
     _fetchData();
@@ -214,18 +216,24 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 const SizedBox(height: 14),
                 TextField(
                   controller: first,
+                  maxLength: 50,
+                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                   textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(labelText: tr('firstName')),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: last,
+                  maxLength: 50,
+                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                   textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(labelText: tr('lastName')),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: title,
+                  maxLength: 60,
+                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
                   textCapitalization: TextCapitalization.words,
                   decoration: InputDecoration(labelText: tr('staffTitle')),
                 ),
@@ -363,6 +371,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     if (ok != true) return;
 
     await supabase.auth.signOut();
+    adminPath.value = '/dashboard';
     adminSignedIn.value = false;
   }
 
@@ -563,6 +572,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           initialClientId: (_bookingFilter ?? '').startsWith('chat:') ? _bookingFilter!.substring(5) : null,
         ),
       13 => ExpensesPage(data: data, onChanged: _fetchData),
+      14 => const TermsPage(),
       _ => AnalyticsPage(data: data),
     };
 
@@ -612,7 +622,7 @@ class _Sidebar extends StatelessWidget {
   static const _groups = [
     ('navGroupMain', [0, 1, 11, 2]),
     ('navGroupGuests', [3, 12, 4, 5]),
-    ('navGroupResort', [6, 7, 8]),
+    ('navGroupResort', [6, 7, 8, 14]),
     ('navGroupInsights', [9, 10, 13]),
   ];
 

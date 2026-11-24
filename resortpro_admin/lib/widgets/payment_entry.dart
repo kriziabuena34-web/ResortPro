@@ -111,6 +111,8 @@ class _PaymentEntryState extends State<PaymentEntry> {
         if (details.isCash) ...[
           TextField(
             controller: _cash,
+            maxLength: 10,
+            buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
             decoration: InputDecoration(
@@ -197,6 +199,8 @@ class _PaymentEntryState extends State<PaymentEntry> {
           TextField(
             key: ValueKey('ref-$_method'),
             controller: _reference,
+            maxLength: 30,
+            buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
             keyboardType: RefFormat.of(_method).digitsOnly ? TextInputType.number : TextInputType.visiblePassword,
             textCapitalization: TextCapitalization.characters,
             autocorrect: false,
